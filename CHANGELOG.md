@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Accessibility, for every player** (2026-10-06): the README,
+  `CLAUDE.md`, `CONTRIBUTING.md` and `docs/accessibility.md` no longer
+  speak of blind and visually impaired players alone. Accessible first
+  now means the most immersive game for everyone, sighted or not:
+  heard as well as read, what serves a screen reader making it richer
+  for all.
+
 - **The Mac app opens on any Mac** (2026-10-06):
   `scripts/build-release.sh` builds it universal (Apple Silicon and
   Intel), signs it with the Developer ID and the hardened runtime, has

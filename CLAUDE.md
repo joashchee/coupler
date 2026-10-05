@@ -97,8 +97,10 @@ and its order is in the roadmap's phase 2.
    path.
 9. **macOS first.** Add a `docs/platform-parity.md` row for every
    macOS-specific mechanism.
-10. **Accessible first, especially to blind and visually impaired
-    players.** Coupler should be their easiest way into CoffeeMUD.
+10. **Accessible first: an immersive game for every player.** Coupler
+    should be the most immersive way into CoffeeMUD for everyone,
+    sighted or not: a game heard as well as read, where what serves a
+    screen reader, low vision or play by ear makes it richer for all.
     Every UI element and feature is run through `docs/accessibility.md`'s
     six questions before it's called done: keyboard alone; named and
     announced for VoiceOver; nothing said only by a picture, color or

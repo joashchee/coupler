@@ -1,8 +1,10 @@
 # Coupler
 
 A dedicated client for [CoffeeMUD](http://www.coffeemud.net/), and for
-nothing else. Coupler is built to be the easiest way into CoffeeMUD for
-blind and visually impaired players, and a good one for everyone.
+nothing else. Coupler is built to be the most immersive way to play
+CoffeeMUD, for every player, sighted or not: a game you hear as well as
+read, in sounds, voices and words, played on the screen, through a
+screen reader or with your eyes closed.
 
 Named for the acoustic coupler, the cradle a phone handset sat in to
 carry a modem's data. Part of the ansiapps family. Free and open

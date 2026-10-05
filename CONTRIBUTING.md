@@ -27,7 +27,8 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 6. **The protocol lives in Rust** (`telnet.rs`, `ansi.rs`), pure and
    unit-tested. A bug about garbled output starts as a byte-level
    regression test there.
-7. **Accessible first.** Every control and feature answers six
+7. **Accessible first: an immersive game for every player**, sighted
+   or not, heard as well as read. Every control and feature answers six
    questions (`docs/accessibility.md`): it works from the keyboard
    alone; it's named and announced for VoiceOver; nothing is said only
    by a picture, color or position; it doesn't speak too much; it's

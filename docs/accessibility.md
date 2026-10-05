@@ -1,16 +1,22 @@
 # Accessibility
 
 **A high-priority convention, adopted 2026-09-30 (CLAUDE.md rule 10).**
-Coupler should be the easiest way for a blind or visually impaired
-person to play CoffeeMUD. MUDs are text, which makes them one of the few
-game genres a screen reader can play at all, and blind players are a
-real part of every MUD's community. Most clients treat them as an
-afterthought. Coupler treats them as the first reader of every screen.
+Coupler should be the most immersive way to play CoffeeMUD, for every
+player, sighted or not. MUDs are text, which makes them one of the few
+game genres that can be played fully by ear as well as by eye: through
+a screen reader, through a voice of the client's own, or on the screen.
+Most clients treat anything past the screen as an afterthought. Coupler
+treats the game as one experience of sound, speech and words that
+carries it whether the player watches, listens or both. What a player
+who can't see the screen needs (the facts in words, sounds that tell,
+speech that never floods) is what makes the game more immersive for
+everyone.
 
 ## The rule
 
-**Every UI element and every feature is designed for someone who can't
-see it, before it's drawn for someone who can.** For each change, ask
+**Every UI element and every feature is designed to be heard and used
+without sight, before it's drawn for the eye, so it works for every
+player.** For each change, ask
 the questions below. A feature that fails one isn't done.
 
 1. **Can it be done with the keyboard alone?** Every control is reached
@@ -49,7 +55,7 @@ add their own items to it. When Windows arrives: NVDA first, then JAWS.
 
 ## What's in place (2026-09-30)
 
-| Area | How it works for a blind or low-vision player |
+| Area | How it works by ear, by keyboard and at low vision |
 |---|---|
 | Launch | Focus starts on the first way to play; Return connects. The button's description (what's different about that game) is read with it (`aria-describedby`). |
 | Game output | `role="log"`, focusable, so arrow keys scroll it, but not itself live. New lines are read as they arrive, without moving focus from the command line, through a hidden live region of their own (`aria-live="polite"`, additions only, "Game output, as read") that's given only the kinds of line the player keeps on: the game's lines, talk, lines during a fight, the prompt, their own commands, Coupler's messages (gear → Speech…, `lib/speech.ts`; the kinds come from `src-tauri/src/speech.rs`). Own commands are off by default (the screen reader read them as they were typed). The prompt is read only when it changes, and a finished prompt never. Off while Coupler's own voice speaks and while reviewing. |
@@ -86,10 +92,10 @@ add their own items to it. When Windows arrives: NVDA first, then JAWS.
 These are scheduled on the roadmap. They're listed here so
 nobody mistakes "in place" for "finished".
 
-1. **Not yet tested with a screen reader by a blind player.** Everything
-   above is built to the standard and unverified in use. Finding two or
-   three blind CoffeeMUD players to try it is the most valuable thing
-   on this list.
+1. **Not yet tested by players who play by screen reader every day.**
+   Everything above is built to the standard and unverified in use.
+   Finding two or three CoffeeMUD players who play that way to try it
+   is the most valuable thing on this list.
 2. **Speech control.** A busy room floods a live region. Needed: a key
    to stop speech (VoiceOver's Control works, but a client-level
    "quiet" is better), a review mode to step back through output line
@@ -112,13 +118,13 @@ nobody mistakes "in place" for "finished".
    (`docs/coffeemud-gmcp.md` section 7); use GMCP to offer the same
    facts as words (vitals, room, group).
 6. **Sound as information.** Earcons for tells, low health, a walk
-   arriving, a failed move: many blind players rely on sound cues more
-   than speech. Comes with the sound phase.
+   arriving, a failed move: a sound is quicker than words for every
+   player, and anyone playing by ear relies on cues more than speech. Comes with the sound phase.
 7. **The prompt.** It's re-rendered as the unfinished last line, and a
    live region may re-read it. With GMCP vitals on a key ("say my
    health"), the prompt can be left out of speech. Built (2026-10-03):
    read only when it changes, and a kind that can be turned off.
-8. **Self-voicing.** Some blind players prefer a client that speaks
+8. **Self-voicing.** Many players prefer a client that speaks
    through the system voice itself (as VIP Mud does) over a screen
    reader reading a web view, because it can queue, interrupt and
    prioritize. Prototyped through WebKit's `speechSynthesis`
@@ -145,9 +151,9 @@ nobody mistakes "in place" for "finished".
 
 ## Reference clients for accessibility
 
-From a survey of MUD clients: **VIP Mud** (built for blind
-players; self-voicing, sound packs), **MUSHclient with the MushReader
-plugin** and **Mudlet's screen-reader support** (what most blind
-Windows players use today), **TinTin++** in a terminal with a screen
+From a survey of MUD clients: **VIP Mud** (built to be played
+by ear; self-voicing, sound packs), **MUSHclient with the MushReader
+plugin** and **Mudlet's screen-reader support** (what most Windows
+players with a screen reader use today), **TinTin++** in a terminal with a screen
 reader, and **MUDRammer** on iOS with VoiceOver. What they share: speech
 interrupt, output review, sound triggers, and staying out of the way.
