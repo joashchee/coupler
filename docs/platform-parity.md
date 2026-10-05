@@ -6,7 +6,7 @@ milestone. Unresearched beyond naming the mechanism.
 
 | Feature | macOS | Windows | Linux |
 |---|---|---|---|
-| Release build | `scripts/build-release.sh` on the maintainer's Mac | GitHub Actions, `.github/workflows/windows.yml` (NSIS and MSI, unsigned) | Not yet |
+| Release build | `scripts/build-release.sh` on the maintainer's Mac | GitHub Actions, `.github/workflows/windows.yml` (NSIS and MSI, unsigned) | GitHub Actions, `.github/workflows/linux.yml` (.deb and .rpm on Ubuntu 22.04; no AppImage, which would bundle LGPL WebKitGTK) |
 | Install location for local release builds | `~/Applications/Coupler.app` via `ditto` (`scripts/build-release.sh`) | n/a (installer) | n/a (package) |
 | Full screen | Native full screen (its own Space) through Tauri's `set_fullscreen`; tao makes the fixed-size window resizable for the switch and restores it after. Key ⌃⌘F | Borderless full screen through the same call. Key should be F11 or Alt+Enter | Same call; depends on the window manager. Key F11 |
 | Immersive's voice | WebKit's `speechSynthesis` (the system voices, AVSpeechSynthesizer); `lib/voice.ts`. Planned: `AVSpeechSynthesizer` from Rust, its audio through the mixer | WebView2's `speechSynthesis` (SAPI/OneCore voices); natively SAPI or OneCore | WebKitGTK may have no `speechSynthesis`: Speech Dispatcher (check its client library's license: LGPL rules it out of the binary) or bundled Flite (BSD-style). Not eSpeak NG (GPL-3) |

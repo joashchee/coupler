@@ -84,7 +84,7 @@ PUBLIC_DOMAIN = {
 
 
 def host_target() -> str:
-    out = subprocess.run(["rustc", "-vV"], check=True, capture_output=True, text=True).stdout
+    out = subprocess.run(["rustc", "-vV"], check=True, capture_output=True, text=True, encoding="utf-8").stdout
     return next(line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("host: "))
 
 
@@ -101,9 +101,9 @@ def rust(target: str):
     """(name version (license), [texts]) for each crate the app links."""
     command = ["cargo", "metadata", "--format-version", "1", "--manifest-path", str(ROOT / "src-tauri/Cargo.toml"), "--filter-platform", target]
     # Offline first: every crate the build needs is already fetched.
-    run = subprocess.run(command + ["--offline"], capture_output=True, text=True)
+    run = subprocess.run(command + ["--offline"], capture_output=True, text=True, encoding="utf-8")
     if run.returncode != 0:
-        run = subprocess.run(command, check=True, capture_output=True, text=True)
+        run = subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8")
     out = run.stdout
     meta = json.loads(out)
     nodes = {n["id"]: n for n in meta["resolve"]["nodes"]}
@@ -158,7 +158,7 @@ def rust(target: str):
 
 
 def npm():
-    lock = json.loads((ROOT / "package-lock.json").read_text())
+    lock = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
     missing = []
     for path, info in lock.get("packages", {}).items():
         if not path or info.get("dev"):
@@ -199,7 +199,7 @@ def main():
     ]
     for names, text in groups:
         parts.append(f"{rule}\n" + "\n".join(names) + f"\n{'-' * 72}\n\n{text}\n")
-    OUT.write_text("\n".join(parts), encoding="utf-8")
+    OUT.write_text("\n".join(parts), encoding="utf-8", newline="\n")
     home = str(Path.home())
     if home in OUT.read_text(encoding="utf-8"):
         sys.exit(f"{OUT} contains {home}: a license text named a local path.")

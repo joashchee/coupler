@@ -2,12 +2,15 @@
 
 ## Unreleased
 
-- **A Windows build on GitHub Actions** (2026-10-05):
+- **Windows and Linux builds on GitHub Actions** (2026-10-05):
   `.github/workflows/windows.yml` builds the NSIS installer and the MSI
-  on `windows-latest` (by hand, on a `v*` tag, or when the workflow
-  changes), fetching Pocket TTS's files and writing the licenses file
-  for what the Windows build links, as `build-release.sh` does on the
-  Mac. Unsigned for now.
+  on `windows-latest`, and `.github/workflows/linux.yml` the .deb and
+  .rpm on Ubuntu 22.04 (no AppImage: it would bundle WebKitGTK and GTK,
+  LGPL). Each runs by hand, on a `v*` tag, or when its workflow
+  changes, fetching Pocket TTS's files and writing the licenses file
+  for what that build links, as `build-release.sh` does on the Mac.
+  Unsigned for now. `third-party-licenses.py` reads and writes UTF-8
+  everywhere (Windows' Python defaulted to cp1252).
 - **Ready for a public repository** (2026-10-05): the maintainer's
   planning and research docs moved to a private notes repository
   (linked back in as a gitignored `CLAUDE.local.md`), and every comment

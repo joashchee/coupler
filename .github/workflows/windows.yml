@@ -25,6 +25,9 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 120
+    env:
+      # Python on Windows reads and writes cp1252 unless told otherwise.
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
 

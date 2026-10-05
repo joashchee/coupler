@@ -1,0 +1,87 @@
+# Builds Coupler for Linux: the .deb and the .rpm, uploaded as the run's
+# artifact. By hand (Actions -> Linux build -> Run workflow), on a version
+# tag, and on a change to this file. Ubuntu 22.04, so the packages run on
+# its glibc and newer.
+# No AppImage: it would ship WebKitGTK and GTK inside it, both LGPL, and
+# Coupler bundles no GPL/LGPL code (CLAUDE.md rule 5). The .deb and .rpm
+# use the system's own.
+name: Linux build
+
+on:
+  workflow_dispatch:
+  push:
+    # Path filters don't apply to tags: every v* tag builds.
+    branches: ["**"]
+    tags: ["v*"]
+    paths: [".github/workflows/linux.yml"]
+  pull_request:
+    paths: [".github/workflows/linux.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri's system libraries; cmake builds libopus and WavPack.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev \
+            libxdo-dev patchelf cmake rpm
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pocket TTS's weights and voices (~250 MB, not in git), pinned and
+      # checked by the script; kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: src-tauri/target/pocket-tts-download
+          key: pocket-tts-${{ hashFiles('scripts/pocket-tts-fetch.py') }}
+
+      - run: npm ci
+
+      # What build-release.sh does before building: the voices' files,
+      # and the licenses of what this (Linux) build links, for About.
+      - run: python scripts/pocket-tts-fetch.py
+      - run: python scripts/third-party-licenses.py
+
+      # Keep the runner's paths out of the binary, as build-release.sh
+      # does on the Mac (rustc's panics, and the C libraries' __FILE__).
+      - name: Remap source paths
+        run: |
+          echo "RUSTFLAGS=--remap-path-prefix=$HOME=~ --remap-path-prefix=$GITHUB_WORKSPACE=." >> "$GITHUB_ENV"
+          echo "CFLAGS=-ffile-prefix-map=$HOME=~ -ffile-prefix-map=$GITHUB_WORKSPACE=." >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-ffile-prefix-map=$HOME=~ -ffile-prefix-map=$GITHUB_WORKSPACE=." >> "$GITHUB_ENV"
+
+      - run: npm run tauri build -- --bundles deb,rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coupler-linux
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
