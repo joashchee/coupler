@@ -583,6 +583,15 @@
 :root[data-theme="ansiapps"] .asset-preview.create-asset-picture { height: 288px; margin-top: 16px; }
 :root[data-theme="ansiapps"] .hooks-search .create-asset-size { flex: 0 0 176px; width: 176px; }
 :root[data-theme="ansiapps"] .dialog-box p.create-asset-made { color: var(--dos-black); }
+/* Create Asset's music choices: three pairs a row, a label (10 cells)
+   and its menu (19), a cell between; rows a line apart. What was written
+   is a list under it, each sentence hung after a dash. */
+:root[data-theme="ansiapps"] .create-music-grid { grid-template-columns: 80px 152px 80px 152px 80px 152px; gap: 16px 8px; align-items: start; font-size: inherit; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box p:last-of-type + .create-music { margin-top: 16px; }
+:root[data-theme="ansiapps"] .dialog-box p.create-asset-rules-head { margin: 16px 0 0; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .create-asset-rules { margin: 0; padding: 0 0 0 16px; list-style: none; font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .create-asset-rules li { margin: 0; text-indent: -16px; }
+:root[data-theme="ansiapps"] .create-asset-rules li::before { content: "- " / ""; }
 :root[data-theme="ansiapps"] .asset-dot { background: var(--dos-black); color: var(--dos-lightgreen); }
 /* The Journal and the Log: a row is the bullet's cell, when (12 cells),
    who or the channel (20), what was said (the rest) and Play (6), two

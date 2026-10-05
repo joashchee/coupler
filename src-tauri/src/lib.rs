@@ -463,6 +463,9 @@ struct Made {
     #[serde(flatten)]
     asset: assets::Asset,
     about: String,
+    /// How music was written, a sentence for each decision (none for a picture).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    rules: Vec<String>,
 }
 
 /// Paints a picture from the player's words with Coupler's painter and
@@ -477,25 +480,28 @@ async fn asset_create_art(app: AppHandle, prompt: String, columns: usize, rows: 
             about = said;
             create::to_ansi(&painter::paint(&scene, style, columns, rows, take), &prompt)
         })?;
-        Ok(Made { asset, about })
+        Ok(Made { asset, about, rules: Vec::new() })
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Composes a short loop from the player's words for Neumetik and saves
-/// it in the Assets folder as MIDI.
+/// Composes a short piece from the player's words and Create Asset's
+/// options for Neumetik and saves it in the Assets folder as MIDI.
 #[tauri::command]
-async fn asset_create_music(app: AppHandle, prompt: String) -> Result<Made, String> {
+async fn asset_create_music(app: AppHandle, prompt: String, options: Option<compose::Options>) -> Result<Made, String> {
     let root = assets_dir(&app)?;
+    let options = options.unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || {
         let mut about = String::new();
+        let mut rules = Vec::new();
         let asset = assets::add_made(&root, "mid", &create::file_stem(&prompt, "music"), |take| {
-            let piece = compose::compose(&prompt, take);
+            let piece = compose::compose(&prompt, take, &options);
             about = piece.about;
+            rules = piece.rules;
             piece.midi
         })?;
-        Ok(Made { asset, about })
+        Ok(Made { asset, about, rules })
     })
     .await
     .map_err(|e| e.to_string())?

@@ -525,6 +525,11 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .asset-preview-image { display: block; max-width: 100%; max-height: 100%; object-fit: contain; object-position: left top; image-rendering: pixelated; }
 .hooks-search .create-asset-size { flex: 0 0 176px; width: 176px; }
 .dialog-box p.create-asset-made { color: var(--text); }
+/* Create Asset's music choices: three label and menu pairs a row. */
+.create-music-grid { display: grid; grid-template-columns: 80px 140px 80px 140px 80px 140px; gap: 8px; align-items: center; font-size: 13px; color: var(--text); }
+.dialog-box p:last-of-type + .create-music { margin-top: 10px; }
+.dialog-box p.create-asset-rules-head { margin: 10px 0 4px; color: var(--text); }
+.create-asset-rules { margin: 0; padding: 0 0 0 18px; font-size: 13px; line-height: 1.5; color: var(--text); }
 .asset-dot { color: var(--good); text-align: center; }
 .hooks-add { flex: 0 0 auto; }
 /* Characters' Voices (CastDialog.tsx): name, NPC or player, the voice in

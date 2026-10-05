@@ -5,9 +5,12 @@
  * - ART: a picture by Coupler's painter (src-tauri/src/create.rs reads
  *   the words for a place, the weather, the time of day and "epic"),
  *   saved as ANSI art at one of three sizes.
- * - BGM: a short loop of music by Coupler's composer for Neumetik
+ * - BGM: a short piece of music by Coupler's composer for Neumetik
  *   (src-tauri/src/compose.rs reads a mood, an instrument, slow or fast,
- *   a number of beats a minute), saved as MIDI.
+ *   a number of beats a minute, a key, a scale...), saved as MIDI. Its
+ *   twelve choices (`MUSIC`) each start at Automatic, which follows the
+ *   words and then the mood; one chosen wins over the words. What was
+ *   written is listed in words under it, a sentence a decision.
  *
  * Create saves it in the Assets folder under a name from the words; the
  * same words again make another take (`name (2)`). What was made is
@@ -15,7 +18,7 @@
  * 10), and music plays here in a loop, over and over until Stop (or
  * closing). Enter in the words creates.
  */
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useId, useState, type FormEvent } from "react";
 import type { ActivityUpdate } from "../lib/activity";
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
@@ -37,9 +40,53 @@ const KINDS: { id: Kind; name: string; summary: string; placeholder: string; hin
     name: "BGM",
     summary: "a short loop of music for Neumetik",
     placeholder: "a merry tavern jig with a fiddle",
-    hint: "It understands moods (peaceful, tavern, dark, battle, heroic, magic, sad, sea, forest, desert, winter, night, synth, holy), instruments (harp, flute, piano...), slow, fast, soft, loud, major, minor, waltz, jig, march and a tempo (90 bpm).",
+    hint: "It understands moods (peaceful, tavern, dark, battle, heroic, magic, sad, sea, forest, desert, winter, night, synth, holy, boss, court, chiptune, celtic, blues, jazz, suspense, cave), instruments (harp, flute, piano...), slow, fast, soft, loud, a key (in D minor), a scale (dorian), waltz, jig, march, a tempo (90 bpm), a length (16 bars), with an ending, rising, fading, swing, loose, bright, driving, tense, no drums and duet.",
   },
 ];
+
+/** The music's choices: each starts at Automatic (""), the words' and then the mood's. */
+const MUSIC: { id: keyof mud.MusicOptions; label: string; choices: [string, string][] }[] = [
+  { id: "key", label: "Key", choices: ["C", "D flat", "D", "E flat", "E", "F", "F sharp", "G", "A flat", "A", "B flat", "B"].map((n, i) => [String(i), n]) },
+  {
+    id: "scale",
+    label: "Scale",
+    choices: [
+      ["major", "Major"],
+      ["minor", "Minor"],
+      ["dorian", "Dorian"],
+      ["phrygian", "Phrygian"],
+      ["lydian", "Lydian"],
+      ["mixolydian", "Mixolydian"],
+      ["harmonicMinor", "Harmonic minor"],
+      ["melodicMinor", "Melodic minor"],
+      ["harmonicMajor", "Harmonic major"],
+      ["phrygianDominant", "Phrygian dominant"],
+      ["lydianDominant", "Lydian dominant"],
+      ["hungarianMinor", "Hungarian minor"],
+      ["doubleHarmonic", "Double harmonic"],
+    ],
+  },
+  { id: "bars", label: "Length", choices: ["4", "8", "12", "16", "32"].map((n) => [n, `${n} bars`]) },
+  { id: "form", label: "Form", choices: [["loop", "A loop"], ["piece", "With an ending"]] },
+  { id: "arc", label: "Arc", choices: [["steady", "Steady"], ["arch", "Arch"], ["rise", "Rise"], ["dissolve", "Fade away"], ["waves", "Two swells"]] },
+  { id: "parts", label: "Parts", choices: [["all", "Everything"], ["bed", "A bed, no tune"], ["rhythm", "Bass and drums"], ["drums", "Drums only"], ["noDrums", "No drums"], ["tune", "The tune alone"], ["duet", "Tune and 2nd line"]] },
+  { id: "brightness", label: "Brightness", choices: [["less", "Darker"], ["more", "Brighter"]] },
+  { id: "drive", label: "Drive", choices: [["less", "Less"], ["more", "More"]] },
+  { id: "tension", label: "Tension", choices: [["less", "Less"], ["more", "More"]] },
+  { id: "swing", label: "Swing", choices: [["50", "Straight"], ["57", "Light, 57%"], ["62", "Medium, 62%"], ["67", "Triplet, 67%"], ["72", "Heavy, 72%"]] },
+  { id: "humanize", label: "Timing", choices: [["0", "On the grid"], ["25", "A little loose"], ["50", "Loose"], ["80", "Very loose"]] },
+  { id: "fills", label: "Fills", choices: [["every", "Every 4 bars"], ["end", "At the end"], ["none", "None"]] },
+];
+const NUMERIC = new Set<keyof mud.MusicOptions>(["key", "bars", "swing", "humanize"]);
+
+/** The options as compose.rs takes them, Automatic left out. */
+function musicOptions(chosen: Partial<Record<keyof mud.MusicOptions, string>>): mud.MusicOptions {
+  const out: Record<string, string | number> = {};
+  for (const [id, value] of Object.entries(chosen) as [keyof mud.MusicOptions, string][]) {
+    if (value) out[id] = NUMERIC.has(id) ? Number(value) : value;
+  }
+  return out as mud.MusicOptions;
+}
 
 /** The picture's sizes, in characters. */
 const SIZES = [
@@ -63,6 +110,7 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
   const [kind, setKind] = useState<Kind>("art");
   const [words, setWords] = useState("");
   const [size, setSize] = useState<(typeof SIZES)[number]["id"]>("large");
+  const [music, setMusic] = useState<Partial<Record<keyof mud.MusicOptions, string>>>({});
   const [busy, setBusy] = useState(false);
   /** What was made last, and its picture once read. */
   const [made, setMade] = useState<mud.Made | null>(null);
@@ -86,7 +134,7 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
     try {
       const done = await runActivity(
         kind === "art" ? `Painting ${prompt}…` : `Composing ${prompt}…`,
-        () => (kind === "art" ? mud.assetCreateArt(prompt, columns, rows) : mud.assetCreateMusic(prompt)),
+        () => (kind === "art" ? mud.assetCreateArt(prompt, columns, rows) : mud.assetCreateMusic(prompt, musicOptions(music))),
         "create-asset",
       );
       setMade(done);
@@ -165,6 +213,35 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
         )}
       </form>
       <p id={`${id}-hint`}>{chosen.hint} Nothing is fetched: it's all made on this computer.</p>
+      {kind === "bgm" && (
+        <fieldset className="radio-group create-music" data-testid="create-music-options">
+          <legend>Shape and feel (Automatic follows the words, then the mood)</legend>
+          <div className="create-music-grid">
+            {MUSIC.map((m) => (
+              <Fragment key={m.id}>
+                <label htmlFor={`${id}-${m.id}`}>{m.label}</label>
+                <select
+                  id={`${id}-${m.id}`}
+                  className="hook-asset"
+                  data-testid={`create-music-${m.id}`}
+                  value={music[m.id] ?? ""}
+                  onChange={(e) => {
+                    const value = e.currentTarget.value;
+                    setMusic((was) => ({ ...was, [m.id]: value }));
+                  }}
+                >
+                  <option value="">Automatic</option>
+                  {m.choices.map(([value, name]) => (
+                    <option key={value} value={value}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </Fragment>
+            ))}
+          </div>
+        </fieldset>
+      )}
       {made && (
         <p className="create-asset-made" data-testid="create-asset-made">
           {made.name}: {made.about}
@@ -175,6 +252,18 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
         <button type="button" data-testid="create-asset-play" aria-label={`${playing ? "Stop" : "Play"} ${mud.assetTitle(made.path)}`} onClick={playOrStop}>
           {playing ? "Stop" : "Play"}
         </button>
+      )}
+      {made?.kind === "bgm" && made.rules && made.rules.length > 0 && (
+        <>
+          <p className="create-asset-rules-head" id={`${id}-rules`}>
+            How it was written:
+          </p>
+          <ul className="create-asset-rules" aria-labelledby={`${id}-rules`} data-testid="create-asset-rules">
+            {made.rules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </>
       )}
     </Dialog>
   );

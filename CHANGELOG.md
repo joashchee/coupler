@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.27.0 (2026-10-06)
+
+- **The composer learns a generator's controls** (2026-10-06): Create
+  Asset → BGM gets twelve menus, each Automatic (the words, then the
+  mood) or a choice: key, scale (13, from major to double harmonic),
+  length (4 to 32 bars), a loop or a piece that ends on home, an arc
+  (rise, fade away, arch, two swells), the parts (a bed with no tune,
+  bass and drums, the tune and a second line...), brightness, drive
+  and tension leaning on the mood, swing, timing off the grid, and
+  drum fills. The words understand them too ("in D minor", "dorian",
+  "16 bars", "with an ending", "rising", "swing", "no drums", "duet").
+  New: a second line written against the tune by counterpoint rules, a
+  bass that follows the kick, eight fills, a jazz kit and half-time
+  drums, sevenths, and eight moods (boss, court, chiptune, celtic,
+  blues with its twelve bars, jazz, suspense, cave). Every piece lists
+  how it was written, a sentence a decision, under it. The files now
+  carry their time and key signatures, so the Music Editor shows a
+  jig's bars in 6/8. Modeled on notebin.fm's generator, studied for its
+  features; its code isn't published, and none of it is used.
 - **GitHub Actions stays free** (2026-10-06): a convention in
   `CLAUDE.md` and `CONTRIBUTING.md`: workflows only in this public
   repository, on standard GitHub-hosted runners, no larger or

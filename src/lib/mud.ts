@@ -656,6 +656,29 @@ export interface AssetsListing {
 /** An asset Coupler made from the player's words, and what it is in words. */
 export interface Made extends Asset {
   about: string;
+  /** How music was written, a sentence for each decision (compose.rs's `Piece::rules`). */
+  rules?: string[];
+}
+
+/** A feel control's lean on the mood. */
+export type Lean = "less" | "more";
+/** Create Asset's music options (compose.rs's `Options`); each left out follows the words, then the mood. */
+export interface MusicOptions {
+  /** The key's note, C 0 to B 11. */
+  key?: number;
+  scale?: string;
+  bars?: number;
+  form?: "loop" | "piece";
+  arc?: "steady" | "arch" | "rise" | "dissolve" | "waves";
+  /** 50 straight, 67 a triplet. */
+  swing?: number;
+  /** How far off the grid, 0 to 100. */
+  humanize?: number;
+  brightness?: Lean;
+  drive?: Lean;
+  tension?: Lean;
+  fills?: "every" | "end" | "none";
+  parts?: "all" | "bed" | "rhythm" | "drums" | "noDrums" | "tune" | "duet";
 }
 
 /** A file an import took: copied in (`new`), under a new name because its own was taken (`renamed`), or already there (`already`). */
@@ -782,8 +805,8 @@ export const assetsKeep = (paths: string[]) => invoke<void>("assets_keep", { pat
 export const assetSetFont = (path: string, font: string | null) => invoke<void>("asset_set_font", { path, font });
 /** Paints a picture from the words with Coupler's painter, at a size in characters, and saves it as ANSI art. */
 export const assetCreateArt = (prompt: string, columns: number, rows: number) => invoke<Made>("asset_create_art", { prompt, columns, rows });
-/** Composes a short loop from the words for Neumetik, and saves it as MIDI. */
-export const assetCreateMusic = (prompt: string) => invoke<Made>("asset_create_music", { prompt });
+/** Composes a short piece from the words and options for Neumetik, and saves it as MIDI. */
+export const assetCreateMusic = (prompt: string, options: MusicOptions = {}) => invoke<Made>("asset_create_music", { prompt, options });
 /** Whether an asset is MIDI music, which a SoundFont can play instead of Neumetik. */
 export const isMidi = (path: string) => path.startsWith("mid/") || path.startsWith("midi/");
 /** A sound or piece of music as WAV or MP3 bytes, rendered first if the WebView can't play it (a SoundFont: its sample tune). */

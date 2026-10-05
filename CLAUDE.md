@@ -230,11 +230,21 @@ and its order is in the roadmap's phase 2.
   day, high fantasy; the rest only the seed) and the painting written
   as UTF-8 ANSI art with SAUCE (`asset_create_art`, rule 11).
   `src-tauri/src/compose.rs`, pure and unit-tested: **Coupler's
-  composer**, the words read for a mood (`MOODS`: mode, tempo, meter,
-  instruments, drums), an instrument, slow or fast, a tempo; eight
-  seeded bars of chords, bass, pad, tune and broken chord written as
-  MIDI for Neumetik, an exact loop (`asset_create_music`). The same
-  words make the same asset; again, the next take (`name (2)`).
+  composer**, the words read for a mood (`MOODS`, 22: mode, tempo,
+  meter, instruments, drums, swing, sevenths, length), an instrument,
+  a key, a scale (13), slow or fast, a tempo, bars; then `Options`
+  (Create Asset's twelve menus, each Automatic or a choice that wins
+  over the words): key, scale, length, loop or piece, arc, parts,
+  brightness, drive and tension (leaning on the mood), swing, timing,
+  fills. Drums first, the bass after them (on the kick for some), held
+  chords, a tune in two-bar phrases, a broken chord and a second line
+  in counterpoint, each part its own seeded hand; written as MIDI with
+  its time and key signatures for Neumetik, a loop exact
+  (`asset_create_music`). `Piece::rules` says every decision in words,
+  listed under the music made. Its features follow notebin.fm's
+  rule-based generator (its code isn't published; this is Coupler's
+  own). The same words make the same asset; again, the next take
+  (`name (2)`).
 - `src-tauri/vendor/neumetik/`: **Neumetik**, Coupler's own synthesizer,
   its own crate (standard library only), pure and unit-tested: GM and
   GS MIDI without a SoundFont, no samples. **The original is ansiapps'
