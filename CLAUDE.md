@@ -680,18 +680,32 @@ and its order is in the roadmap's phase 2.
 
 - **"Build the macOS app" means the `.app` only**:
   `scripts/build-release.sh --bundles app`. DMG only when asked. The
-  script strips `$HOME` paths, fails if any survive, then installs to
-  `~/Applications/Coupler.app` (skipped with `CI` or
-  `COUPLER_NO_INSTALL`). Never a bare `tauri build`.
+  script builds universal (Apple Silicon and Intel), signs with the
+  maintainer's Developer ID and the hardened runtime, notarizes with
+  notarytool's keychain profile (`coupler`, or
+  `COUPLER_NOTARY_PROFILE`) and staples, so a download opens on any
+  Mac; it strips `$HOME` paths, fails if any survive or if any of
+  universal, signed, notarized or Gatekeeper's yes is missing, zips the
+  app for the release (`Coupler_<version>_universal.app.zip`, beside
+  the app) and installs to `~/Applications/Coupler.app` (skipped with
+  `CI` or `COUPLER_NO_INSTALL`). The one-time setup is in its header;
+  `COUPLER_UNSIGNED=1` tries a build without it, never for a release.
+  No Apple credential is ever in the repo or the environment. Never a
+  bare `tauri build`.
 - **Windows and Linux**: GitHub Actions, `.github/workflows/windows.yml`
   (NSIS and MSI) and `linux.yml` (.deb and .rpm; never an AppImage, it
   bundles LGPL WebKitGTK), by Run workflow or a `v*` tag, each run's
   artifact, unsigned. Every successful run on `main` or a `v*` tag is
   published to a release by `scripts/publish-release.sh`: the version's
   own (`v` + `tauri.conf.json`'s version, made at that commit if
-  missing: bumping the version and running both is releasing it), or
+  missing), or
   the `dev` prerelease once that tag marks an earlier commit. The Mac's
-  `.app.zip` is uploaded to the version's release by hand.
+  notarized `.app.zip` is uploaded to the version's release by hand.
+  **Releasing is pushing the tag**: a push to a branch runs a workflow
+  only when its own file changed (the path filter), so a version bump
+  on `main` builds nothing. Bump, commit, push, then push `v<version>`
+  on that commit (`git tag -a v0.27.0 -m ...`); both workflows build
+  and publish the release, and the Mac's zip joins it.
 - **The web build**: `npm run build:web` (`scripts/web-build.sh`) makes
   `dist-web/`; `scripts/web-publish.sh` mirrors this Mac's hooks and
   assets, builds, and uploads to Cloudflare Pages after a yes. Only when

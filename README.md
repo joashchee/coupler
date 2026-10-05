@@ -51,7 +51,10 @@ scripts/build-release.sh --bundles app   # a release Coupler.app
 ```
 
 Always build releases with `scripts/build-release.sh`: it keeps your
-machine's paths out of the app.
+machine's paths out of the app, and on a Mac builds it universal,
+signed and notarized. Signing needs an Apple Developer ID (the
+script's header says how to set it up); `COUPLER_UNSIGNED=1` builds
+without one, for your own Mac only.
 
 The web build (`npm run build:web`) is a slimmer Coupler that runs in a
 browser.

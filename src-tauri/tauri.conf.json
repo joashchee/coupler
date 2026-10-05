@@ -40,6 +40,9 @@
     ],
     "resources": {
       "resources/pocket-tts/": "pocket-tts/"
+    },
+    "macOS": {
+      "hardenedRuntime": true
     }
   }
 }

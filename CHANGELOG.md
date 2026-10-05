@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **The Mac app opens on any Mac** (2026-10-06):
+  `scripts/build-release.sh` builds it universal (Apple Silicon and
+  Intel), signs it with the Developer ID and the hardened runtime, has
+  Apple notarize it and staples the ticket, then checks each of those
+  and Gatekeeper's verdict before zipping it for the release. Before,
+  the app was Apple Silicon only and signed ad hoc, so Gatekeeper
+  blocked a download as damaged. The Apple credentials stay in the
+  keychain (a notarytool profile); `COUPLER_UNSIGNED=1` builds without
+  them, for trying only.
+
+- **The licenses file stops changing by itself** (2026-10-06):
+  `scripts/third-party-licenses.py` walked the crates in a set's order,
+  which Python changes each run, so a license text many crates share
+  was written from a different crate's copy each build. Now in name
+  order: the same build writes the same file.
+
 ## 0.27.0 (2026-10-06)
 
 - **The composer learns a generator's controls** (2026-10-06): Create

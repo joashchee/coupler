@@ -119,7 +119,9 @@ def rust(target: str):
             if any(k["kind"] is None for k in dep["dep_kinds"]):
                 stack.append(dep["pkg"])
     missing = []
-    for pid in seen:
+    # In a fixed order: a set's changes from run to run (Python salts string
+    # hashes), and the first package to bring a shared text is the copy written.
+    for pid in sorted(seen, key=lambda i: (pkgs[i]["name"], pkgs[i]["version"], i)):
         p = pkgs[pid]
         if pid == meta["resolve"]["root"] or p["name"] in OWN:
             continue  # Coupler itself; a vendored crate (vendor/) is listed like any other

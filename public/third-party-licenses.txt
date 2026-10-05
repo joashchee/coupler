@@ -335,84 +335,20 @@ Creator: Person: Daniel Thompson-Yvetot
 
 ========================================================================
 adler2 2.0.1 (0BSD OR MIT OR Apache-2.0)
-allocator-api2 0.2.21 (MIT OR Apache-2.0)
-anyhow 1.0.104 (MIT OR Apache-2.0)
-atomic-waker 1.1.2 (Apache-2.0 OR MIT)
-camino 1.2.6 (MIT OR Apache-2.0)
-cargo-platform 0.1.9 (MIT OR Apache-2.0)
-cargo_metadata 0.19.2 (MIT)
-ctor 1.0.13 (Apache-2.0 OR MIT)
-dary_heap 0.3.9 (MIT OR Apache-2.0)
-displaydoc 0.2.7 (MIT OR Apache-2.0)
-dtoa 1.0.11 (MIT OR Apache-2.0)
-dyn-clone 1.0.20 (MIT OR Apache-2.0)
-erased-serde 0.4.10 (MIT OR Apache-2.0)
-fastrand 2.5.0 (Apache-2.0 OR MIT)
-itoa 1.0.18 (MIT OR Apache-2.0)
-minimal-lexical 0.2.1 (MIT/Apache-2.0)
-monostate 0.1.18 (MIT OR Apache-2.0)
-monostate-impl 0.1.18 (MIT OR Apache-2.0)
-once_cell 1.21.4 (MIT OR Apache-2.0)
-paste 1.0.15 (MIT OR Apache-2.0)
-pastey 0.2.3 (MIT OR Apache-2.0)
-pin-project-lite 0.2.17 (Apache-2.0 OR MIT)
-proc-macro2 1.0.107 (MIT OR Apache-2.0)
-quote 1.0.47 (MIT OR Apache-2.0)
-ref-cast 1.0.27 (MIT OR Apache-2.0)
-ref-cast-impl 1.0.27 (MIT OR Apache-2.0)
-rustc-hash 2.1.3 (Apache-2.0 OR MIT)
-rustix 1.1.5 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT)
-rustversion 1.0.23 (MIT OR Apache-2.0)
-semver 1.0.28 (MIT OR Apache-2.0)
-seq-macro 0.3.6 (MIT OR Apache-2.0)
-serde 1.0.229 (MIT OR Apache-2.0)
-serde-untagged 0.1.9 (MIT OR Apache-2.0)
-serde_core 1.0.229 (MIT OR Apache-2.0)
-serde_derive 1.0.229 (MIT OR Apache-2.0)
-serde_derive_internals 0.29.1 (MIT OR Apache-2.0)
-serde_json 1.0.151 (MIT OR Apache-2.0)
-serde_repr 0.1.21 (MIT OR Apache-2.0)
-serde_yaml 0.9.34+deprecated (MIT OR Apache-2.0)
-servo_arc 0.4.3 (MIT OR Apache-2.0)
-siphasher 1.0.4 (MIT OR Apache-2.0)
-syn 2.0.119 (MIT OR Apache-2.0)
-syn 3.0.6 (MIT OR Apache-2.0)
-thiserror 1.0.69 (MIT OR Apache-2.0)
-thiserror 2.0.21 (MIT OR Apache-2.0)
-thiserror-impl 1.0.69 (MIT OR Apache-2.0)
-thiserror-impl 2.0.21 (MIT OR Apache-2.0)
-tinyvec 1.13.3 (Zlib OR Apache-2.0 OR MIT)
-typed-path 0.12.3 (MIT OR Apache-2.0)
-typeid 1.0.3 (MIT OR Apache-2.0)
-unicode-ident 1.0.26 ((MIT OR Apache-2.0) AND Unicode-3.0)
-unsafe-libyaml 0.2.11 (MIT)
-winnow 1.0.4 (MIT)
-zmij 1.0.23 (MIT)
 ------------------------------------------------------------------------
 
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
+Copyright (C) Jonas Schievink <jonasschievink@gmail.com>
 
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ========================================================================
 adler2 2.0.1 (0BSD OR MIT OR Apache-2.0)
@@ -623,20 +559,84 @@ limitations under the License.
 
 ========================================================================
 adler2 2.0.1 (0BSD OR MIT OR Apache-2.0)
+allocator-api2 0.2.21 (MIT OR Apache-2.0)
+anyhow 1.0.104 (MIT OR Apache-2.0)
+atomic-waker 1.1.2 (Apache-2.0 OR MIT)
+camino 1.2.6 (MIT OR Apache-2.0)
+cargo-platform 0.1.9 (MIT OR Apache-2.0)
+cargo_metadata 0.19.2 (MIT)
+ctor 1.0.13 (Apache-2.0 OR MIT)
+dary_heap 0.3.9 (MIT OR Apache-2.0)
+displaydoc 0.2.7 (MIT OR Apache-2.0)
+dtoa 1.0.11 (MIT OR Apache-2.0)
+dyn-clone 1.0.20 (MIT OR Apache-2.0)
+erased-serde 0.4.10 (MIT OR Apache-2.0)
+fastrand 2.5.0 (Apache-2.0 OR MIT)
+itoa 1.0.18 (MIT OR Apache-2.0)
+minimal-lexical 0.2.1 (MIT/Apache-2.0)
+monostate 0.1.18 (MIT OR Apache-2.0)
+monostate-impl 0.1.18 (MIT OR Apache-2.0)
+once_cell 1.21.4 (MIT OR Apache-2.0)
+paste 1.0.15 (MIT OR Apache-2.0)
+pastey 0.2.3 (MIT OR Apache-2.0)
+pin-project-lite 0.2.17 (Apache-2.0 OR MIT)
+proc-macro2 1.0.107 (MIT OR Apache-2.0)
+quote 1.0.47 (MIT OR Apache-2.0)
+ref-cast 1.0.27 (MIT OR Apache-2.0)
+ref-cast-impl 1.0.27 (MIT OR Apache-2.0)
+rustc-hash 2.1.3 (Apache-2.0 OR MIT)
+rustix 1.1.5 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT)
+rustversion 1.0.23 (MIT OR Apache-2.0)
+semver 1.0.28 (MIT OR Apache-2.0)
+seq-macro 0.3.6 (MIT OR Apache-2.0)
+serde 1.0.229 (MIT OR Apache-2.0)
+serde-untagged 0.1.9 (MIT OR Apache-2.0)
+serde_core 1.0.229 (MIT OR Apache-2.0)
+serde_derive 1.0.229 (MIT OR Apache-2.0)
+serde_derive_internals 0.29.1 (MIT OR Apache-2.0)
+serde_json 1.0.151 (MIT OR Apache-2.0)
+serde_repr 0.1.21 (MIT OR Apache-2.0)
+serde_yaml 0.9.34+deprecated (MIT OR Apache-2.0)
+servo_arc 0.4.3 (MIT OR Apache-2.0)
+siphasher 1.0.4 (MIT OR Apache-2.0)
+syn 2.0.119 (MIT OR Apache-2.0)
+syn 3.0.6 (MIT OR Apache-2.0)
+thiserror 1.0.69 (MIT OR Apache-2.0)
+thiserror 2.0.21 (MIT OR Apache-2.0)
+thiserror-impl 1.0.69 (MIT OR Apache-2.0)
+thiserror-impl 2.0.21 (MIT OR Apache-2.0)
+tinyvec 1.13.3 (Zlib OR Apache-2.0 OR MIT)
+typed-path 0.12.3 (MIT OR Apache-2.0)
+typeid 1.0.3 (MIT OR Apache-2.0)
+unicode-ident 1.0.26 ((MIT OR Apache-2.0) AND Unicode-3.0)
+unsafe-libyaml 0.2.11 (MIT)
+winnow 1.0.4 (MIT)
+zmij 1.0.23 (MIT)
 ------------------------------------------------------------------------
 
-Copyright (C) Jonas Schievink <jonasschievink@gmail.com>
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
 
-Permission to use, copy, modify, and/or distribute this software for
-any purpose with or without fee is hereby granted.
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
-AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
-OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 ahash 0.8.12 (MIT OR Apache-2.0)
@@ -1371,6 +1371,21 @@ SOFTWARE.
 ========================================================================
 bytemuck 1.25.2 (Zlib OR Apache-2.0 OR MIT)
 bytemuck_derive 1.12.1 (Zlib OR Apache-2.0 OR MIT)
+------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2019 Daniel "Lokathor" Gee.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+========================================================================
+bytemuck 1.25.2 (Zlib OR Apache-2.0 OR MIT)
+bytemuck_derive 1.12.1 (Zlib OR Apache-2.0 OR MIT)
 tinyvec 1.13.3 (Zlib OR Apache-2.0 OR MIT)
 ------------------------------------------------------------------------
 
@@ -1385,21 +1400,6 @@ Permission is granted to anyone to use this software for any purpose, including 
 2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
-
-========================================================================
-bytemuck 1.25.2 (Zlib OR Apache-2.0 OR MIT)
-bytemuck_derive 1.12.1 (Zlib OR Apache-2.0 OR MIT)
-------------------------------------------------------------------------
-
-MIT License
-
-Copyright (c) 2019 Daniel "Lokathor" Gee.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 bytes 1.12.1 (MIT)
@@ -4568,23 +4568,29 @@ ident_case 1.0.1 (MIT/Apache-2.0)
 
 MIT License
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 fern 0.7.1 (MIT)
@@ -10522,42 +10528,6 @@ published under these same licenses.
 ========================================================================
 rand 0.8.8 (MIT OR Apache-2.0)
 rand 0.9.5 (MIT OR Apache-2.0)
-rand_chacha 0.3.1 (MIT OR Apache-2.0)
-rand_chacha 0.9.0 (MIT OR Apache-2.0)
-rand_core 0.6.4 (MIT OR Apache-2.0)
-rand_core 0.9.5 (MIT OR Apache-2.0)
-------------------------------------------------------------------------
-
-Copyright 2018 Developers of the Rand project
-Copyright (c) 2014 The Rust Project Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-========================================================================
-rand 0.8.8 (MIT OR Apache-2.0)
-rand 0.9.5 (MIT OR Apache-2.0)
 rand_chacha 0.9.0 (MIT OR Apache-2.0)
 ------------------------------------------------------------------------
 
@@ -10737,6 +10707,42 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    of your accepting any such warranty or additional liability.
 
 END OF TERMS AND CONDITIONS
+
+========================================================================
+rand 0.8.8 (MIT OR Apache-2.0)
+rand 0.9.5 (MIT OR Apache-2.0)
+rand_chacha 0.3.1 (MIT OR Apache-2.0)
+rand_chacha 0.9.0 (MIT OR Apache-2.0)
+rand_core 0.6.4 (MIT OR Apache-2.0)
+rand_core 0.9.5 (MIT OR Apache-2.0)
+------------------------------------------------------------------------
+
+Copyright 2018 Developers of the Rand project
+Copyright (c) 2014 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 rand_core 0.6.4 (MIT OR Apache-2.0)
