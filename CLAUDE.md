@@ -644,6 +644,9 @@ and its order is in the roadmap's phase 2.
   script strips `$HOME` paths, fails if any survive, then installs to
   `~/Applications/Coupler.app` (skipped with `CI` or
   `COUPLER_NO_INSTALL`). Never a bare `tauri build`.
+- **Windows**: GitHub Actions, `.github/workflows/windows.yml` (Run
+  workflow, or a `v*` tag): NSIS and MSI as the run's artifact,
+  unsigned.
 - **The web build**: `npm run build:web` (`scripts/web-build.sh`) makes
   `dist-web/`; `scripts/web-publish.sh` mirrors this Mac's hooks and
   assets, builds, and uploads to Cloudflare Pages after a yes. Only when

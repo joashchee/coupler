@@ -1,0 +1,75 @@
+# Builds Coupler for Windows: the NSIS installer (.exe) and the MSI,
+# uploaded as the run's artifact. By hand (Actions -> Windows build ->
+# Run workflow), on a version tag, and on a change to this file.
+# Unsigned: SmartScreen warns until the installers are code-signed.
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    # Path filters don't apply to tags: every v* tag builds.
+    branches: ["**"]
+    tags: ["v*"]
+    paths: [".github/workflows/windows.yml"]
+  pull_request:
+    paths: [".github/workflows/windows.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pocket TTS's weights and voices (~250 MB, not in git), pinned and
+      # checked by the script; kept between runs.
+      - uses: actions/cache@v4
+        with:
+          path: src-tauri/target/pocket-tts-download
+          key: pocket-tts-${{ hashFiles('scripts/pocket-tts-fetch.py') }}
+
+      - run: npm ci
+
+      # What build-release.sh does before building: the voices' files,
+      # and the licenses of what this (Windows) build links, for About.
+      - run: python scripts/pocket-tts-fetch.py
+      - run: python scripts/third-party-licenses.py
+
+      # Keep the runner's paths out of panic messages, as
+      # build-release.sh does on the Mac.
+      - name: Remap source paths
+        shell: pwsh
+        run: |
+          "RUSTFLAGS=--remap-path-prefix=$env:USERPROFILE=~ --remap-path-prefix=$env:GITHUB_WORKSPACE=." >> $env:GITHUB_ENV
+
+      - run: npm run tauri build -- --bundles nsis,msi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coupler-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error

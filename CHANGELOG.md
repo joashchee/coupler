@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A Windows build on GitHub Actions** (2026-10-05):
+  `.github/workflows/windows.yml` builds the NSIS installer and the MSI
+  on `windows-latest` (by hand, on a `v*` tag, or when the workflow
+  changes), fetching Pocket TTS's files and writing the licenses file
+  for what the Windows build links, as `build-release.sh` does on the
+  Mac. Unsigned for now.
 - **Ready for a public repository** (2026-10-05): the maintainer's
   planning and research docs moved to a private notes repository
   (linked back in as a gitignored `CLAUDE.local.md`), and every comment
