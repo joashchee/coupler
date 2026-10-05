@@ -34,7 +34,9 @@ source under the Apache License 2.0.
 
 Coupler talks to CoffeeMUD and to nothing else: no accounts, no
 telemetry, no server of ours. Nothing about you or your play leaves
-your computer except what you send the game.
+your computer except what you send the game. The one exception is
+yours to turn on: checking for updates (gear menu) asks GitHub which
+Coupler release is the latest, sending nothing but Coupler's version.
 
 ## Building
 

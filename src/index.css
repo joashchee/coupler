@@ -20,7 +20,7 @@
   --muted: #8b93a1;
   /* Coupler's identity color: modem-lamp amber, distinct from Diskette's
      blue, Crunchy's orange, Floppy's green and Stylus's fuchsia.
-     Provisional (Diskette's docs/coupler-notes.md); maps to yellow in the
+     Provisional (the maintainer's notes); maps to yellow in the
      ANSIapps theme. */
   --accent: #facc15;
   --accent-dim: #6b5a10;

@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **GitHub Actions stays free** (2026-10-06): a convention in
+  `CLAUDE.md` and `CONTRIBUTING.md`: workflows only in this public
+  repository, on standard GitHub-hosted runners, no larger or
+  self-hosted runners, paid actions or raised cache. Both workflows
+  already qualify.
+- **Check for updates** (2026-10-06): gear → Check for Updates Now,
+  and Check for updates automatically (off until turned on; then once a
+  day at most, with the greeting at launch). Coupler asks GitHub for
+  its latest release (`update.rs`, one GET, only Coupler's version in
+  the User-Agent; prereleases never count), says what it found in the
+  status bar and by the narrator, and Get Coupler X… in the gear menu
+  opens the release's page. Nothing is downloaded or installed. The one
+  exception to talking only to CoffeeMUD, recorded in rules 1 and 2.
+  reqwest (already in the tree) with the system's own TLS.
+- **Every successful Windows and Linux build is published to a
+  release** (2026-10-06): a `publish` job in both workflows, on `main`
+  and `v*` tags, runs `scripts/publish-release.sh`: the version's own
+  release (made at that commit if missing, its notes this file's
+  section) or, once the version's tag marks an earlier commit, the
+  `dev` prerelease, moved along. The two workflows share a concurrency
+  group so they don't race.
+- **`.cargo/config.toml` moved to the repo's root** (2026-10-06), so
+  `cargo test --manifest-path src-tauri/Cargo.toml` from the root finds
+  its CMake policy line for WavPack too.
 - **Windows and Linux builds on GitHub Actions** (2026-10-05):
   `.github/workflows/windows.yml` builds the NSIS installer and the MSI
   on `windows-latest`, and `.github/workflows/linux.yml` the .deb and
@@ -17,7 +41,10 @@
   that cited them now says what it meant. A README for players and
   contributors, `CONTRIBUTING.md` (the rules a change keeps, the
   checks, sign-off by the Developer Certificate of Origin),
-  `SECURITY.md`, and issue and pull request templates.
+  `SECURITY.md`, and issue and pull request templates. Two comments
+  that still named a private notes file by name (`telnet.rs`,
+  `index.css`) and a test character named after the maintainer
+  (`journal.rs`) fixed (2026-10-06).
 - **Neumetik is its own crate** (2026-10-05): moved from
   `src-tauri/src/neumetik/` to `src-tauri/vendor/neumetik/`, standard
   library only. The original is now ansiapps' private `neumetik`

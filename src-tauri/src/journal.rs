@@ -374,7 +374,7 @@ impl Journal {
 mod tests {
     use super::*;
 
-    const HERE: Scope = Scope { world: "standard", character: "joash" };
+    const HERE: Scope = Scope { world: "standard", character: "tester" };
 
     fn talk(kind: TalkKind, channel: &str, from: &str, text: &str) -> Talk {
         Talk { kind, channel: channel.into(), from: from.into(), text: text.into(), mine: false }

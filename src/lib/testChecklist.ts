@@ -19,6 +19,11 @@ export interface ChecklistItem {
 }
 
 export const CHECKLIST_DATA: ChecklistItem[] = [
+  // The update check (2026-10-06)
+  { id: "update-off", section: "Updates", label: "A fresh install: gear → Check for updates automatically is off, and launching asks nothing of GitHub (Little Snitch or the like shows only coffeemud.net)", selector: '[data-testid="gear-button"]' },
+  { id: "update-now", section: "Updates", label: "Gear → Check for Updates Now: the bar says Checking for a newer Coupler…, then the status says Coupler 0.26.0 is the latest. (or names a newer one and Get Coupler X… appears in the gear menu, opening the release page in the browser). Offline: an error in the status bar, nothing else", selector: '[data-testid="gear-button"]' },
+  { id: "update-auto", section: "Updates", label: "Turn on Check for updates automatically: the status says so; relaunch: with a newer release out, the greeting ends with Coupler X is out…; a second launch the same day doesn't ask again. It survives a relaunch" },
+  { id: "a11y-update", section: "Accessibility", label: "VoiceOver on: the checkbox reads Check for updates automatically, checkbox, and its state; the check's answer is read from the status bar (and said by the narrator with the voice on); Get Coupler X… reads as a button. ANSIapps theme: Check the Grid passes with the gear menu open, with and without Get Coupler X…" },
   // Artisan Skills and the mentor (2026-10-04)
   { id: "artisan-open", section: "Artisan Skills", label: "Gear → Artisan Skills and Mentor… (and Cmd+Shift+A, connected or not): the dialog opens with the cursor in Ask the mentor; the tree shows 8 steps, every line in dark gray, names in light gray (crafts) or light magenta (not a craft), (30) after the level-30 skills", selector: '[data-testid="gear-button"]' },
   { id: "artisan-ask", section: "Artisan Skills", label: "Ask blacksmithing: First Fire Building and Mining to 75%. Then Smelting to 75%. Then gain Blacksmithing. Base stat: Strength 9 for Mining. It opens up …; the tree scrolls to Blacksmithing in yellow, its needs in light cyan (◄), what it opens in light green (►), only their lines drawn. Try how do I get legendary weaponsmithing?, blaksmithing (a typo), mbake (the game's word), smith (Which one? …), xyzzy" },

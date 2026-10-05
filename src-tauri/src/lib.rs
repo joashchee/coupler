@@ -45,6 +45,7 @@ mod speech;
 mod stretch;
 mod synth;
 mod telnet;
+mod update;
 #[doc(hidden)]
 pub mod trigger;
 mod voicecache;
@@ -106,6 +107,19 @@ async fn launch_counts(app: AppHandle, port_id: String) -> Result<LaunchCounts, 
         });
     let fit = version.as_deref().map(mssp::fit);
     Ok(LaunchCounts { played, online, version, built_for: mssp::BUILT_FOR, fit })
+}
+
+/// Asks GitHub whether a newer Coupler is out (update.rs). Only when the
+/// player asks: the check button, or automatic checks they turned on.
+#[tauri::command]
+async fn update_check(app: AppHandle) -> Result<update::Check, String> {
+    update::check(&app.package_info().version.to_string()).await
+}
+
+/// Shows Coupler's latest release page in the player's browser.
+#[tauri::command]
+fn update_open() -> Result<(), String> {
+    update::open()
 }
 
 #[tauri::command]
@@ -739,6 +753,8 @@ pub fn run() {
             server_info,
             mud_connect,
             launch_counts,
+            update_check,
+            update_open,
             mud_send,
             mud_disconnect,
             mud_resize,

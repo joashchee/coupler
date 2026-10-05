@@ -10,7 +10,7 @@
 export const EXTENSION = "coupler";
 
 /** Kept out of a backup: the dev-only App Testing results, the restore's own mark, the web build's welcome. */
-const LEFT_OUT = new Set(["coupler.appTestingResults", "coupler.restored", "coupler.web.accepted"]);
+const LEFT_OUT = new Set(["coupler.appTestingResults", "coupler.restored", "coupler.web.accepted", "coupler.updates.last"]);
 
 /** Every setting Coupler keeps, as JSON: an object of strings. */
 export function settings(): string {

@@ -44,6 +44,7 @@ import * as earcons from "./lib/earcons";
 import * as echoes from "./lib/echoes";
 import { useImmersive } from "./lib/immersive";
 import * as mud from "./lib/mud";
+import * as updates from "./lib/updates";
 import { checkGrid, installRowSnap } from "./lib/grid";
 import { loadDisplay, saveDisplay, type Display, type TextSize } from "./lib/display";
 import { loadSpoken, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
@@ -369,6 +370,9 @@ function App() {
   const [serverEchoes, setServerEchoes] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** Checking for a newer Coupler by itself (lib/updates.ts), off until turned on; and the newer version found, offered in the gear menu. */
+  const [autoUpdates, setAutoUpdates] = useState(updates.loadAuto);
+  const [newRelease, setNewRelease] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(() => stored(MAP_KEY) !== "off");
   const [snapshot, setSnapshot] = useState<mud.MapSnapshot | null>(null);
@@ -675,7 +679,8 @@ function App() {
    * The greeting, once the launch screen is gone: the times played with
    * Coupler on this Mac, and how many are online now in the game last
    * chosen (asked of the game itself, by MSSP), and a warning when the
-   * game runs another CoffeeMUD version than Coupler was made for. In the status bar, where
+   * game runs another CoffeeMUD version than Coupler was made for, and a
+   * newer Coupler when the player has it checked for. In the status bar, where
    * the screen reader reads it, and said by the narrator when Coupler's
    * voice is on. Not once a game's under way: it'd talk over the login.
    */
@@ -685,23 +690,47 @@ function App() {
   useEffect(() => {
     if (!startupDone || greeted.current || WEB) return;
     greeted.current = true;
-    mud
-      .launchCounts(portId ?? "standard")
-      .then((counts) => {
-        if (connectedRef.current) return;
-        const text = mud.describeLaunchCounts(counts);
-        setStatus(text);
-        // Another CoffeeMUD than the one Coupler was made for: a warning
-        // in the status bar (an alert, so the screen reader says it too),
-        // until the next connect clears it.
-        const warning = mud.describeVersionFit(counts);
-        if (warning) setError(warning);
-        if (voicedRef.current) voice.speak(warning ? `${text} ${warning}` : text);
-      })
-      .catch(() => {
-        // No greeting, then: playing doesn't need it.
-      });
+    // Only asked of GitHub when the player turned automatic checks on,
+    // once a day at most; a failed check says nothing.
+    const release = updates.autoDue() ? updates.check().catch(() => null) : Promise.resolve(null);
+    // No counts, no greeting: playing doesn't need it.
+    void Promise.all([mud.launchCounts(portId ?? "standard").catch(() => null), release]).then(([counts, found]) => {
+      const newer = found?.newer ? updates.describe(found) : null;
+      if (found?.newer) setNewRelease(found.latest);
+      if (connectedRef.current) return;
+      const text = [counts && mud.describeLaunchCounts(counts), newer].filter(Boolean).join(" ");
+      if (text) setStatus(text);
+      // Another CoffeeMUD than the one Coupler was made for: a warning
+      // in the status bar (an alert, so the screen reader says it too),
+      // until the next connect clears it.
+      const warning = counts && mud.describeVersionFit(counts);
+      if (warning) setError(warning);
+      const said = [text, warning].filter(Boolean).join(" ");
+      if (said && voicedRef.current) voice.speak(said);
+    });
   }, [startupDone, portId]);
+
+  /** Gear → Check for Updates Now: asks GitHub whether a newer Coupler is out. */
+  async function checkUpdates() {
+    setError(null);
+    try {
+      const found = await runActivity("Checking for a newer Coupler…", () => updates.check(), "update");
+      setNewRelease(found.newer ? found.latest : null);
+      const text = updates.describe(found);
+      setStatus(text);
+      if (voicedRef.current) voice.speak(text);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** Gear → Check for Updates Automatically. */
+  function toggleAutoUpdates(on: boolean) {
+    updates.saveAuto(on);
+    setAutoUpdates(on);
+    setError(null);
+    setStatus(on ? "Coupler will ask GitHub for a newer version once a day, at launch." : "Coupler won't check for updates by itself.");
+  }
 
   // Once the launch screen is gone, the keyboard starts on the first way
   // to play, so Return connects without hunting for it.
@@ -1819,6 +1848,42 @@ function App() {
                     <ChecklistIcon aria-hidden="true" />
                     <span>Restore Coupler Backup…</span>
                   </button>
+                  <div className="menu-sep" />
+                  {/* A newer Coupler (lib/updates.ts): asked of GitHub only by the button or once turned on. */}
+                  <label className="menu-item menu-item-checkbox">
+                    <input type="checkbox" data-testid="auto-updates-toggle" checked={autoUpdates} onChange={(e) => toggleAutoUpdates(e.currentTarget.checked)} />
+                    <span>Check for updates automatically</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    data-testid="update-check"
+                    disabled={isBusy("update")}
+                    onClick={() => {
+                      setGearOpen(false);
+                      void checkUpdates();
+                    }}
+                  >
+                    <ChecklistIcon aria-hidden="true" />
+                    <span>Check for Updates Now</span>
+                  </button>
+                  {newRelease && (
+                    <button
+                      type="button"
+                      className="menu-item"
+                      data-testid="update-get"
+                      onClick={() => {
+                        setGearOpen(false);
+                        updates
+                          .openPage()
+                          .then(() => setStatus(`Coupler ${newRelease}'s page is open in your browser.`))
+                          .catch((e) => setError(String(e)));
+                      }}
+                    >
+                      <ChecklistIcon aria-hidden="true" />
+                      <span>{`Get Coupler ${newRelease}… (opens the browser)`}</span>
+                    </button>
+                  )}
                   <div className="menu-sep" />
                 </>
               )}

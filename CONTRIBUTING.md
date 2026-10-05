@@ -9,28 +9,34 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 
 1. **CoffeeMUD only.** Coupler connects to coffeemud.net's games and
    nowhere else. No setting, command or file takes another host or
-   port, and no new network code without an issue first.
+   port, and no new network code without an issue first. The one
+   exception is the update check, which asks GitHub for Coupler's
+   latest release only when the player turns it on or asks.
 2. **No server, no telemetry, no accounts.** Nothing about the player
    leaves their computer except what they send the game.
 3. **Credentials stay local.** A password is never echoed, logged or
    kept in history.
-4. **No GPL, AGPL or LGPL dependencies**, so the license stays a
+4. **GitHub Actions only where it's free and unlimited**: standard
+   GitHub-hosted runners (`ubuntu-*`, `windows-*`, `macos-*`) in this
+   public repository. No larger or self-hosted runners, no paid
+   actions or services, no raised cache limit.
+5. **No GPL, AGPL or LGPL dependencies**, so the license stays a
    choice. When `Cargo.lock` or `package-lock.json` changes, run
    `scripts/license-scan.py` and `scripts/third-party-licenses.py` and
    commit what they write.
-5. **The protocol lives in Rust** (`telnet.rs`, `ansi.rs`), pure and
+6. **The protocol lives in Rust** (`telnet.rs`, `ansi.rs`), pure and
    unit-tested. A bug about garbled output starts as a byte-level
    regression test there.
-6. **Accessible first.** Every control and feature answers six
+7. **Accessible first.** Every control and feature answers six
    questions (`docs/accessibility.md`): it works from the keyboard
    alone; it's named and announced for VoiceOver; nothing is said only
    by a picture, color or position; it doesn't speak too much; it's
    readable at low vision; focus goes somewhere sensible. Test new UI
    with VoiceOver on.
-7. **A fixed screen on the ANSIapps grid.** The window is 1280 by 720.
+8. **A fixed screen on the ANSIapps grid.** The window is 1280 by 720.
    Lay out in stage pixels on the 8 by 16 grid (`docs/ansiapps-theme.md`)
    and run the dev gear menu's Check the Grid on what you changed.
-8. **Pictures are Coupler's painter's first** (`painter.rs`,
+9. **Pictures are Coupler's painter's first** (`painter.rs`,
    `portrait.rs`). Other sources are the player's choice, never the
    default.
 

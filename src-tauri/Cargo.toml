@@ -45,7 +45,7 @@ xmrs = { version = "0.15", default-features = false, features = ["std", "import_
 # offered smaller as one or the other. libopus (opusic-sys) and WavPack
 # (wavpack-sys) are built from their bundled C source with cmake, both
 # BSD-3-Clause; WavPack's CMakeLists predates CMake 4, see
-# .cargo/config.toml. Ogg pages for Opus (ogg, BSD-3-Clause), resampling
+# the root .cargo/config.toml. Ogg pages for Opus (ogg, BSD-3-Clause), resampling
 # to Opus's 48 kHz (rubato, MIT).
 opusic-sys = "0.7"
 ogg = "0.9"
@@ -66,6 +66,12 @@ pocket-tts = { path = "vendor/pocket-tts" }
 # (assets.rs, compose.rs, music.rs). ansiapps' original is a private
 # repository; this is its copy (vendor/neumetik/README.md).
 neumetik = { path = "vendor/neumetik" }
+# The update check (update.rs), only when the player asks for it: one
+# HTTPS GET of GitHub's latest Coupler release. reqwest is already in the
+# tree through Tauri; native-tls is the system's own TLS (Security
+# framework on macOS, SChannel on Windows, the system's OpenSSL on
+# Linux, linked, never bundled), so no TLS library is compiled in.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 
 # The free space on the disk (voicecache.rs's statvfs), so the voice
 # cache gives room back before the disk fills. Already in the tree

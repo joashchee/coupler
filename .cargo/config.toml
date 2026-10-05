@@ -1,3 +1,5 @@
+# At the repo's root so cargo finds it from here or any folder below
+# (src-tauri, src-web), whichever a command runs in.
 [env]
 # wavpack-sys builds WavPack with a CMakeLists.txt that asks for CMake < 3.5,
 # which CMake 4 refuses unless told the minimum policy to assume.

@@ -44,8 +44,9 @@ and its order is in the roadmap's phase 2.
 ## Non-negotiable rules
 
 1. **No server, no telemetry, no accounts of ours.** Coupler talks to the
-   game and to nothing else. Nothing about the user, their characters or
-   their play leaves the machine except what they send the game.
+   game and to nothing else, but for the update check the player turns
+   on (rule 2). Nothing about the user, their characters or their play
+   leaves the machine except what they send the game.
 2. **CoffeeMUD only.** The address is a constant in
    `src-tauri/src/ports.rs` (`HOST`, and `PORTS`: the games
    coffeemud.net runs, one per port); no command, setting or file takes
@@ -59,7 +60,11 @@ and its order is in the roadmap's phase 2.
   launch asks the game how many are online by MSSP on the same host
   and port list (`mssp.rs`), never logging in. Room pictures
    are made locally; their model files are the player's to download,
-   never Coupler's. This is Coupler's only network code.
+   never Coupler's. The one exception, decided 2026-10-06: **the update
+   check** (`update.rs`), off until the player turns it on or asks (gear
+   menu), one GET of GitHub's latest release of Coupler's own
+   repository, sending only Coupler's version as its User-Agent; it
+   downloads and installs nothing. This is Coupler's only network code.
 3. **Credentials stay local and protected.** When saved logins arrive,
    passwords go in the macOS Keychain (the OS store elsewhere), never in
    a plain file, localStorage or a log. A password typed while the
@@ -159,6 +164,20 @@ and its order is in the roadmap's phase 2.
   and captures hold other players' names and chat), and whether the
   network code could reach anywhere but CoffeeMUD. Report, then fix or
   proceed.
+- **GitHub Actions only where it's free and unlimited** (decided
+  2026-10-06): GitHub bills nothing for a **public** repository on
+  **standard GitHub-hosted runners** (`ubuntu-*`, `windows-*`,
+  `macos-*` by their plain labels), artifacts and caches included. So:
+  workflows live only in Coupler's public repository, never in a private
+  one (`coupler-notes`, `neumetik`: their minutes are metered); never a
+  larger runner (any label with cores, `-large`, `-xlarge`, GPU, or an
+  organization's runner group: billed even in public repositories) nor a
+  self-hosted one (GitHub announced a per-minute charge for those in
+  December 2025 and only postponed it); no paid marketplace action or
+  outside service; the cache stays at the free 10 GB default, never
+  raised (more is billed). If the repository ever goes private, the
+  workflows stop first. A new workflow or runner label is checked
+  against GitHub's Actions billing page before it lands.
 - **Suggest a checkpoint** (version bump, commit and push, `/clear`) once
   a meaningful batch lands. Never automatic.
 
@@ -242,7 +261,8 @@ and its order is in the roadmap's phase 2.
   `opusic-sys`, Ogg pages by `ogg`, `rubato` to 48 kHz) and WavPack
   (`wavpack-sys`) both ways, pure and unit-tested. Both C libraries
   build from bundled source with cmake; WavPack needs
-  `src-tauri/.cargo/config.toml`'s CMake policy line.
+  the root `.cargo/config.toml`'s CMake policy line (found
+  from the repo root or any folder in it).
   The hooks' triggers (`hooks.rs`, table `triggers`) name these files;
   `assets_list` first clears any asset whose file is gone from every
   trigger (`Hooks::clear_missing`) and counts each asset's uses (the
@@ -535,6 +555,14 @@ and its order is in the roadmap's phase 2.
   when the painter's sky is unknown (`Ambient::weather_wanted`, an area
   at most every 15 minutes, its answer hidden).
   The web build ticks it from `core.ts` (`who_tick`).
+- `src-tauri/src/update.rs`: **the update check**, the version
+  reading unit-tested: gear → Check for Updates Now, and Check for
+  Updates Automatically (`lib/updates.ts`, `coupler.updates`, off by
+  default; once a day at most, with the greeting at launch). GitHub's
+  `releases/latest` for `joashchee/coupler` (prereleases never count)
+  over reqwest with the system's TLS (`native-tls`); a newer version
+  puts Get Coupler X… in the gear menu, which opens the release page in
+  the browser by the system's opener (`open`). Desktop only.
 - `src-tauri/src/mssp.rs`: **the greeting at launch**, pure and
   unit-tested: MSSP's `PLAYERS` (how many are online) and `CODEBASE`
   (the game's CoffeeMUD version), read by a short probe
@@ -570,7 +598,8 @@ and its order is in the roadmap's phase 2.
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
-  (takes a port ID), `launch_counts` (takes a port ID), `mud_send`, `mud_disconnect`, `mud_resize`,
+  (takes a port ID), `launch_counts` (takes a port ID), `update_check`,
+  `update_open`, `mud_send`, `mud_disconnect`, `mud_resize`,
   `map_snapshot`, `map_find`, `map_directions`, `map_walk`, `map_stop`,
   `map_set_landmark`, `map_clear`, `who_now`, `echo_list`, `cast_list`, `cast_set_voice`,
   `cast_reset`, `cast_forget`, `journal_list`, `journal_unheard`,
@@ -647,7 +676,12 @@ and its order is in the roadmap's phase 2.
 - **Windows and Linux**: GitHub Actions, `.github/workflows/windows.yml`
   (NSIS and MSI) and `linux.yml` (.deb and .rpm; never an AppImage, it
   bundles LGPL WebKitGTK), by Run workflow or a `v*` tag, each run's
-  artifact, unsigned.
+  artifact, unsigned. Every successful run on `main` or a `v*` tag is
+  published to a release by `scripts/publish-release.sh`: the version's
+  own (`v` + `tauri.conf.json`'s version, made at that commit if
+  missing: bumping the version and running both is releasing it), or
+  the `dev` prerelease once that tag marks an earlier commit. The Mac's
+  `.app.zip` is uploaded to the version's release by hand.
 - **The web build**: `npm run build:web` (`scripts/web-build.sh`) makes
   `dist-web/`; `scripts/web-publish.sh` mirrors this Mac's hooks and
   assets, builds, and uploads to Cloudflare Pages after a yes. Only when

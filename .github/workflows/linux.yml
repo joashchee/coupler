@@ -1,10 +1,14 @@
 # Builds Coupler for Linux: the .deb and the .rpm, uploaded as the run's
-# artifact. By hand (Actions -> Linux build -> Run workflow), on a version
-# tag, and on a change to this file. Ubuntu 22.04, so the packages run on
+# artifact and published to a release (scripts/publish-release.sh). By
+# hand (Actions -> Linux build -> Run workflow), on a version tag, and on
+# a change to this file. Ubuntu 22.04, so the packages run on
 # its glibc and newer.
 # No AppImage: it would ship WebKitGTK and GTK inside it, both LGPL, and
 # Coupler bundles no GPL/LGPL code (CLAUDE.md rule 5). The .deb and .rpm
 # use the system's own.
+# Standard GitHub-hosted runners only, in this public repository, so it
+# stays free and unlimited (CLAUDE.md, "GitHub Actions only where it's
+# free and unlimited").
 name: Linux build
 
 on:
@@ -85,3 +89,31 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: error
+
+  # Every successful build on main or a v* tag goes to a release: the
+  # version's own, or the dev prerelease between versions
+  # (scripts/publish-release.sh says which). Not pull requests, nor other
+  # branches: they'd replace main's files.
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coupler-linux
+          path: dist
+
+      - name: Publish to a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s globstar
+          scripts/publish-release.sh dist/**/*.deb dist/**/*.rpm

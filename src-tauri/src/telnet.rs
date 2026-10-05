@@ -3,7 +3,7 @@
 //! Pure (no socket), so every rule here is unit-tested.
 //!
 //! What Coupler agrees to follows Sip, CoffeeMUD's own client
-//! (`js/telnetparser.js`; notes in Diskette's docs/coupler-notes.md),
+//! (`js/telnetparser.js`; studied in the maintainer's notes),
 //! with these differences on purpose:
 //! - NAWS sends 16-bit sizes and doubles any 0xFF byte (Sip sends one byte
 //!   and never escapes).
