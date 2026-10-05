@@ -1,0 +1,117 @@
+[package]
+name = "coupler"
+version = "0.26.0"
+description = "Coupler — a dedicated CoffeeMUD client"
+authors = ["ansiapps"]
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name
+# (https://github.com/rust-lang/cargo/issues/8519).
+name = "coupler_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# No GPL/AGPL/LGPL dependencies (CLAUDE.md rule 5). Check licenses with
+# scripts/license-scan.py whenever Cargo.lock or package-lock.json changes.
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+# MCCP2: CoffeeMUD compresses its output with zlib (telnet.rs). The
+# pure-Rust backend, so there's no C zlib to build or link.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# The hooks database (hooks.rs). "bundled" compiles SQLite (public domain)
+# in, so every platform gets the same one and none has to supply it.
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+# Coupler Backup (backup.rs): Brotli, pure Rust (MIT or BSD-3-Clause),
+# already in the tree through Tauri.
+brotli = "9"
+# Assets (assets.rs): what the WebView can't play itself, rendered to
+# WAV in pure Rust. Ogg Vorbis (lewton), MIDI through a SoundFont the
+# player adds (rustysynth), tracker modules: MOD, XM, S3M, IT (xmrsplayer).
+lewton = "0.10"
+rustysynth = "1.3"
+xmrsplayer = { version = "0.15", default-features = false, features = ["std", "import_mod", "import_xm", "import_s3m", "import_it"] }
+xmrs = { version = "0.15", default-features = false, features = ["std", "import_mod", "import_xm", "import_s3m", "import_it"] }
+# Opus and WavPack, played and made (codecs.rs): an imported WAV is
+# offered smaller as one or the other. libopus (opusic-sys) and WavPack
+# (wavpack-sys) are built from their bundled C source with cmake, both
+# BSD-3-Clause; WavPack's CMakeLists predates CMake 4, see
+# .cargo/config.toml. Ogg pages for Opus (ogg, BSD-3-Clause), resampling
+# to Opus's 48 kHz (rubato, MIT).
+opusic-sys = "0.7"
+ogg = "0.9"
+rubato = "0.16"
+wavpack-sys = "0.4"
+# Flite, the first bundled speech engine (synth.rs), for the characters'
+# voices: a pure-Rust, bit-identical rewrite of CMU's Flite (Apache-2.0),
+# its voice and models CMU's own permissive data, built into the binary.
+# No CLI (its default feature pulls in clap); kal16 adds the 16 kHz voice.
+flite-rs = { version = "0.2", default-features = false, features = ["kal16"] }
+# Pocket TTS (Kyutai), the neural engine for the characters' voices
+# (synth.rs): Candle's port, vendored and trimmed so it can't download
+# anything, needs no Intel MKL and can't clone a voice
+# (vendor/pocket-tts/README.md). Its weights and voices aren't in git:
+# scripts/pocket-tts-voices.py fetches them, pinned, into resources/.
+pocket-tts = { path = "vendor/pocket-tts" }
+# Neumetik, Coupler's own synthesizer: MIDI without a SoundFont
+# (assets.rs, compose.rs, music.rs). ansiapps' original is a private
+# repository; this is its copy (vendor/neumetik/README.md).
+neumetik = { path = "vendor/neumetik" }
+
+# The free space on the disk (voicecache.rs's statvfs), so the voice
+# cache gives room back before the disk fills. Already in the tree
+# (MIT OR Apache-2.0).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Rendering music is slow unoptimized; the dev build optimizes just these.
+[profile.dev.package.flite-rs]
+opt-level = 3
+# Neural speech is unusably slow unoptimized.
+[profile.dev.package.pocket-tts]
+opt-level = 3
+[profile.dev.package.candle-core]
+opt-level = 3
+[profile.dev.package.candle-nn]
+opt-level = 3
+[profile.dev.package.gemm]
+opt-level = 3
+[profile.dev.package.gemm-common]
+opt-level = 3
+[profile.dev.package.gemm-f32]
+opt-level = 3
+
+[profile.dev.package.rustysynth]
+opt-level = 3
+[profile.dev.package.neumetik]
+opt-level = 3
+[profile.dev.package.xmrsplayer]
+opt-level = 3
+[profile.dev.package.xmrs]
+opt-level = 3
+[profile.dev.package.lewton]
+opt-level = 3
+[profile.dev.package.rubato]
+opt-level = 3
+[profile.dev.package.rustfft]
+opt-level = 3
+[profile.dev.package.opusic-sys]
+opt-level = 3
+[profile.dev.package.wavpack-sys]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

@@ -1,0 +1,48 @@
+Coupler
+Copyright 2026 ansiapps
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Coupler is a client for CoffeeMUD (coffeemud.net), by Bo Zimmerman and
+its contributors. Its handling of the game's protocols follows Sip,
+CoffeeMUD's own client by Bo Zimmerman (Apache License 2.0); no Sip
+source is included.
+
+Coupler includes:
+
+- The Artisan class's skills, their levels and what each needs, taken
+  from CoffeeMUD's source (Artisan.java and its skills), Copyright
+  2003-2026 Bo Zimmerman (Apache License 2.0).
+- The race and class portraits from CoffeeMUD's web pages
+  (web/pub/images/mxp/race_*.jpg and web/pub/images/classes/), made
+  into ANSI art by scripts/creation-art.py into
+  public/creation-art.json and shown only when the player chooses them
+  over Coupler's own painter, and the races' facts from its Races/*.java,
+  Copyright 2000-2026 Bo Zimmerman (Apache License 2.0, as CoffeeMUD is
+  distributed).
+- IBM VGA 8x16 from The Ultimate Oldschool PC Font Pack by VileR
+  (int10h.org/oldschool-pc-fonts), CC BY-SA 4.0, included unmodified
+  with its license in public/fonts/ansiapps/.
+- libopus, Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
+  Jean-Marc Valin, Timothy B. Terriberry, CSIRO, Gregory Maxwell, Mark
+  Borgerding, Erik de Castro Lopo, Mozilla, Amazon (BSD 3-Clause).
+- WavPack, Copyright (c) 1998-2022 David Bryant (BSD 3-Clause).
+- flite-rs, a Rust implementation of CMU's Flite (Apache License 2.0),
+  with speech data developed by Carnegie Mellon University and, in
+  part, jointly by Carnegie Mellon University and the University of
+  Edinburgh (CMU's license, in full in the licenses file).
+- Pocket TTS by Kyutai (MIT), as ported to Rust by the Pocket TTS
+  contributors (MIT), vendored and changed in
+  src-tauri/vendor/pocket-tts (its README lists the changes). Its model
+  is Kyutai's, CC BY 4.0, without the parts that clone a voice; its
+  voices come from the VCTK corpus (University of Edinburgh) and Alba
+  MacKenna (both CC BY 4.0), and from LibriVox readers and Kyutai's
+  voice donations (CC0). The full credits ship with them, in the app's
+  Resources/pocket-tts/CREDITS.txt.
+- SQLite (public domain), and the Rust and npm libraries listed in
+  Cargo.lock and package-lock.json under their own licenses.
+
+Every third-party license text, in full, is in
+public/third-party-licenses.txt (written by
+scripts/third-party-licenses.py), and in the app under About ->
+Open-Source Licenses.

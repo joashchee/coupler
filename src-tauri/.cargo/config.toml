@@ -1,0 +1,4 @@
+[env]
+# wavpack-sys builds WavPack with a CMakeLists.txt that asks for CMake < 3.5,
+# which CMake 4 refuses unless told the minimum policy to assume.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"

@@ -1,0 +1,58 @@
+/* Coupler UI: tokens and base reset shared with Diskette (and through it
+   Fontastik), so the ansiapps apps read as one family, with Coupler's own
+   --accent. Fonts are self-hosted (public/fonts/) so the app needs the
+   network only for the game itself. These are the modern theme's tokens;
+   the ANSIapps theme overrides them (src/ansiapps-theme.css). */
+
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/ibm-plex-sans-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-sans-500.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/ibm-plex-sans-600.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2"); }
+
+:root {
+  --bg: #14161a;
+  --panel: #1b1e24;
+  --panel-2: #21252c;
+  --line: #2c313a;
+  --text: #e7e9ee;
+  --muted: #8b93a1;
+  /* Coupler's identity color: modem-lamp amber, distinct from Diskette's
+     blue, Crunchy's orange, Floppy's green and Stylus's fuchsia.
+     Provisional (Diskette's docs/coupler-notes.md); maps to yellow in the
+     ANSIapps theme. */
+  --accent: #facc15;
+  --accent-dim: #6b5a10;
+  --accent-tint: #2a2410;
+  --warn: #f2545b;
+  --good: #4ade80;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root { min-height: 100%; }
+
+h1, h2, p { margin: 0; }
+
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+input:focus,
+textarea:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  outline-offset: 1px;
+}

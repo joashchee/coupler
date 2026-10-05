@@ -1,0 +1,31 @@
+# Cloudflare Pages response headers for coupler.ansiapps.com, the web
+# build. scripts/web-build.sh fills in the hashes of
+# index.html's two inline blocks (the splash's style, the theme script)
+# and copies this into dist-web/. The CSP is CLAUDE.md rules 1 and 2 made
+# physical: the page can load only its own files and open only the game's
+# WebSocket (src-tauri/src/ports.rs, web_socket_url). Never loosen it to
+# make something work; fix the thing instead.
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval' {{SCRIPT_HASHES}}; style-src 'self' {{STYLE_HASHES}}; img-src 'self' blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' wss://coffeemud.net; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+
+# Vite's hashed output and the mirror's hashed files never change under
+# the same name.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/mirror/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The mirror's list of triggers and files changes with each publish.
+/mirror.json
+  Cache-Control: no-cache
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

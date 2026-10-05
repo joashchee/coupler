@@ -1,0 +1,45 @@
+Pocket TTS: the speech model and voices in this folder
+=======================================================
+
+Coupler speaks some characters' lines with Pocket TTS, by Kyutai
+(kyutai.org). Everything here is used as published except where noted.
+
+The model (model.safetensors, tokenizer.model)
+  Pocket TTS, by Manu Orsini, Simon Rouard, Gabriel De Marmiesse,
+  Vaclav Volhejn, Neil Zeghidour and Alexandre Defossez (Kyutai),
+  from huggingface.co/kyutai/pocket-tts-without-voice-cloning,
+  licensed under CC BY 4.0 (creativecommons.org/licenses/by/4.0/).
+  Changed by Coupler: the parts that make a voice from a recording (the
+  Mimi encoder, its transformer, the downsampler and the speaker
+  projection) are left out. Coupler offers these voices only, and
+  never copies anyone's voice.
+
+  Kyutai's terms for the model forbid, among other things, voice
+  impersonation or cloning without explicit and lawful consent, and
+  presenting generated speech as a genuine recording of a real person.
+
+The voices (voices/*.safetensors)
+  Kyutai's voice states for these presets, from the same place, stored
+  by Coupler as 16-bit numbers. Each is made from one recording:
+
+  CC BY 4.0 (creativecommons.org/licenses/by/4.0/):
+    alba            Alba MacKenna, "Casual" (kyutai/tts-voices, alba-mackenna)
+    anna            VCTK speaker p228
+    azelma          VCTK speaker p303
+    charles         VCTK speaker p254
+    eponine         VCTK speaker p262
+    eve             VCTK speaker p361
+    fantine         VCTK speaker p244
+    george          VCTK speaker p315
+    jane            VCTK speaker p339
+    mary            VCTK speaker p333
+    michael         VCTK speaker p360
+    paul            VCTK speaker p259
+    vera            VCTK speaker p229
+    VCTK: CSTR VCTK Corpus, the Centre for Speech Technology Research,
+    University of Edinburgh (datashare.ed.ac.uk/handle/10283/3443).
+
+  CC0 (no rights reserved):
+    bill_boerst, caro_davy, peter_yearsley, stuart_bell
+                    Voice-Zero, readers from LibriVox
+    javert, marius  Kyutai's Unmute voice donations

@@ -1,0 +1,51 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor/OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Rust build output
+target/
+
+
+# Game logs and captures made while testing stay outside the repo: they
+# hold character names and chat from other players.
+logs/
+*.log.txt
+
+# CoffeeMUD's source, unpacked for study (docs/coffeemud-gmcp.md). 93 MB
+# of someone else's repository: fetched, never committed.
+reference/
+
+# Pocket TTS weights and voices (scripts/pocket-tts-fetch.py): ~250 MB,
+# fetched and checked at build time, shipped in the app, never committed.
+src-tauri/resources/pocket-tts/*
+!src-tauri/resources/pocket-tts/CREDITS.txt
+
+# The web build: its output, its WebAssembly core
+# (copied from src-web's target/ by scripts/web-build.sh), and the
+# maintainer's mirror of their hooks and assets (scripts/web-publish.sh),
+# which is published with the site but never committed.
+dist-web/
+src/web/coupler.wasm
+web-mirror/
+
+# Tauri writes this when building on Linux (a cloud session); Coupler is macOS first.
+src-tauri/gen/schemas/linux-schema.json
+
+# Neumetik's own tests (scripts/neumetik-sync.sh) write a lockfile beside it;
+# Coupler's Cargo.lock is the one that counts.
+src-tauri/vendor/neumetik/Cargo.lock
+
+# The maintainer's private notes, linked in from the notes repository.
+CLAUDE.local.md

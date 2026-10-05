@@ -1,0 +1,783 @@
+/* ANSIapps theme — the old-school DOS look every ansiapps app offers
+   (docs/ansiapps-theme.md, copied from Diskette, the reference
+   implementation). Coupler opens in this theme (lib/theme.ts); modern is the gear-menu choice. Everything here is scoped to html[data-theme="ansiapps"],
+   so the modern theme is untouched.
+
+   Mostly token overrides: the 16-color CGA/VGA text-mode palette, one
+   bitmap font at its native 16px, square corners, double-line frames and
+   hard black drop shadows. Blue "desktop" panels in the Norton Commander
+   mold, and light-gray Turbo Vision-style menus and dialogs.
+
+   The 16-color rule covers the app's own screens, never the game output,
+   which always shows CoffeeMUD's own colors. Coupler's amber accent
+   becomes yellow (12.46:1 on blue, and black on it is 19.69:1;
+   docs/ansiapps-color-contrast.md), with brown as its dim.
+
+   Font: IBM VGA 8x16 from VileR's Ultimate Oldschool PC Font Pack
+   (int10h.org), CC BY-SA 4.0, shipped unmodified with its license in
+   public/fonts/ansiapps/ and credited in About. */
+
+@font-face {
+  font-family: "ansiapps VGA";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/ansiapps/WebPlus_IBM_VGA_8x16.woff") format("woff");
+}
+
+:root[data-theme="ansiapps"] {
+  /* CGA/VGA text-mode palette */
+  --dos-black: #000000;
+  --dos-blue: #0000aa;
+  --dos-green: #00aa00;
+  --dos-cyan: #00aaaa;
+  --dos-red: #aa0000;
+  --dos-magenta: #aa00aa;
+  --dos-brown: #aa5500;
+  --dos-lightgray: #aaaaaa;
+  --dos-darkgray: #555555;
+  --dos-lightgreen: #55ff55;
+  --dos-lightcyan: #55ffff;
+  --dos-lightred: #ff5555;
+  --dos-lightmagenta: #ff55ff;
+  --dos-yellow: #ffff55;
+  --dos-white: #ffffff;
+
+  --bg: var(--dos-blue);
+  --panel: var(--dos-blue);
+  --panel-2: var(--dos-blue);
+  --line: var(--dos-lightcyan);
+  --text: var(--dos-white);
+  --muted: var(--dos-lightgray);
+  /* Coupler's amber: yellow, with brown as its dim and tint. */
+  --accent: var(--dos-yellow);
+  --accent-dim: var(--dos-brown);
+  --accent-tint: var(--dos-brown);
+  --warn: var(--dos-lightred);
+  --good: var(--dos-lightgreen);
+  --font-ui: "ansiapps VGA", ui-monospace, monospace;
+  --font-mono: "ansiapps VGA", ui-monospace, monospace;
+  --dos-shadow: 16px 16px 0 var(--dos-black);
+  --dos-shadow-small: 8px 8px 0 var(--dos-black);
+}
+
+/* One size and weight: a bitmap font is only crisp at its native 16px, and
+   has no bold (synthesized bold smears it). */
+:root[data-theme="ansiapps"] body,
+:root[data-theme="ansiapps"] body * {
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  letter-spacing: 0 !important;
+  font-synthesis: none;
+  /* One row: every line of text is exactly one cell tall (the grid, below). */
+  line-height: 16px !important;
+  border-radius: 0 !important;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: auto;
+}
+
+/* THE GRID (the rule, docs/ansiapps-theme.md): every character sits in a
+   cell of the 8 by 16 grid, counted from the screen's top left. So, in
+   this file:
+   - every width, padding, margin and gap is a multiple of 8px across
+     and 16px down, and every line is 16px tall (above);
+   - nothing that holds text has a border, which would push the text a
+     few pixels off. A frame is drawn in its own cell by ::before, in a
+     ring of padding one cell wide and one row tall;
+   - text is never centered by the browser, which can land it half a
+     cell off. What's centered is centered by whole cells: left: 50% of
+     an even number of cells, then back by half its own width rounded
+     to a cell (the grid-centered rule below);
+   - buttons keep their text at the left, for the same reason;
+   - scrolling comes to rest on a whole row (lib/grid.ts);
+   - every character shown is one the font has, so none falls back to
+     a font of another width. It has no Mac key symbols: keys are
+     written as words (Cmd+Shift+L). */
+:root[data-theme="ansiapps"] .panel h2,
+:root[data-theme="ansiapps"] .dialog-box h2,
+:root[data-theme="ansiapps"] .startup-name,
+:root[data-theme="ansiapps"] .startup-label {
+  left: 50%;
+  width: max-content;
+  transform: translateX(-50%);
+}
+/* Separate, so a WebKit without round() keeps the plain centering above. */
+@supports (width: round(down, 1px, 8px)) {
+  :root[data-theme="ansiapps"] .panel h2,
+  :root[data-theme="ansiapps"] .dialog-box h2,
+  :root[data-theme="ansiapps"] .startup-name,
+  :root[data-theme="ansiapps"] .startup-label { transform: translateX(round(down, -50%, 8px)); }
+}
+/* A button, field or picture sitting in a line of text hangs from the
+   line's top. Left on the baseline, it makes room under itself for the
+   letters' descenders, the line grows past 16px, and whatever is
+   centered on that line (the gear button in the menu bar, and the menu
+   hung under it) ends up a couple of pixels off. */
+:root[data-theme="ansiapps"] button,
+:root[data-theme="ansiapps"] input,
+:root[data-theme="ansiapps"] textarea,
+:root[data-theme="ansiapps"] svg,
+:root[data-theme="ansiapps"] img { vertical-align: top; }
+:root[data-theme="ansiapps"] .gear-menu-wrap { display: flex; height: 16px; }
+/* A row of things lines up along its top, never its middle: beside text
+   that wraps to two rows, a centered button would sit half a row down. */
+:root[data-theme="ansiapps"] .map-results li,
+:root[data-theme="ansiapps"] .map-picked,
+:root[data-theme="ansiapps"] .map-walking,
+:root[data-theme="ansiapps"] .map-row,
+:root[data-theme="ansiapps"] .testing-item,
+:root[data-theme="ansiapps"] .testing-bug-draft { align-items: flex-start; }
+:root[data-theme="ansiapps"] th,
+:root[data-theme="ansiapps"] td { vertical-align: top; }
+/* Text fields and buttons: one row, no border, a cell of padding each side. */
+:root[data-theme="ansiapps"] input:not([type="checkbox"]):not([type="radio"]),
+:root[data-theme="ansiapps"] textarea {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  margin: 0;
+  padding: 0 8px;
+}
+:root[data-theme="ansiapps"] input:not([type="checkbox"]):not([type="radio"]) { height: 16px; }
+:root[data-theme="ansiapps"] input::-webkit-search-cancel-button,
+:root[data-theme="ansiapps"] input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+:root[data-theme="ansiapps"] textarea { resize: none; }
+:root[data-theme="ansiapps"] code { font-family: var(--font-mono); color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] ::selection { background: var(--dos-cyan); color: var(--dos-black); }
+
+:root[data-theme="ansiapps"] input:focus,
+:root[data-theme="ansiapps"] button:focus-visible,
+:root[data-theme="ansiapps"] a:focus-visible {
+  outline: 2px dashed var(--dos-white) !important;
+  outline-offset: 1px;
+}
+
+/* Scrollbars: a cyan track and a solid thumb, like a Turbo Vision scroller */
+:root[data-theme="ansiapps"] ::-webkit-scrollbar { width: 16px; height: 16px; background: var(--dos-cyan); }
+:root[data-theme="ansiapps"] ::-webkit-scrollbar-thumb { background: var(--dos-blue); border: 3px solid var(--dos-cyan); }
+
+/* Header */
+:root[data-theme="ansiapps"] header.top h1 span.accent { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .version-tag { color: var(--dos-lightcyan); }
+:root[data-theme="ansiapps"] .status-pill { border-color: var(--dos-lightgray); color: var(--dos-lightgray); }
+
+/* Buttons: flat light-gray bars that are just clickable (a convention,
+   docs/ansiapps-theme.md). No shadow and no press-in: a button never
+   moves, so its whole face takes the click and everything keeps its
+   place. Hover turns it white; while the mouse is down it's cyan (the
+   last rule in this file). */
+:root[data-theme="ansiapps"] button {
+  background: var(--dos-lightgray);
+  color: var(--dos-black);
+  border: none;
+  margin: 0;
+  padding: 0 8px;
+  text-align: left;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+:root[data-theme="ansiapps"] button.icontext-btn { gap: 8px; }
+:root[data-theme="ansiapps"] button:hover { background: var(--dos-white); }
+:root[data-theme="ansiapps"] button.primary { background: var(--dos-yellow); color: var(--dos-black); }
+:root[data-theme="ansiapps"] button.primary:hover { background: var(--dos-white); }
+:root[data-theme="ansiapps"] button.danger-fill { background: var(--dos-red); color: var(--dos-white); }
+:root[data-theme="ansiapps"] button.danger-fill:hover { background: var(--dos-lightred); color: var(--dos-black); }
+:root[data-theme="ansiapps"] button:disabled { opacity: 1; color: var(--dos-darkgray); }
+
+/* Panels: double-line frames with the title set into the top border */
+/* The frame is drawn in the panel's outermost ring of cells. */
+:root[data-theme="ansiapps"] .panel {
+  position: relative;
+  border: none;
+  padding: 16px;
+  margin: 0;
+}
+:root[data-theme="ansiapps"] .panel::before,
+:root[data-theme="ansiapps"] .dialog-box::before {
+  content: "";
+  position: absolute;
+  inset: 6px 2px 7px;
+  border: 3px double var(--line);
+  pointer-events: none;
+}
+:root[data-theme="ansiapps"] .panel h2 {
+  position: absolute;
+  top: 0;
+  margin: 0;
+  padding: 0 8px;
+  background: var(--panel);
+  color: var(--dos-white);
+  white-space: nowrap;
+}
+:root[data-theme="ansiapps"] .panel .desc { color: var(--muted); margin: 0 0 16px; }
+
+:root[data-theme="ansiapps"] .error,
+:root[data-theme="ansiapps"] .status-message { border: none; padding: 0 8px; margin: 0 0 16px; box-shadow: var(--dos-shadow-small); }
+:root[data-theme="ansiapps"] .error { background: var(--dos-red); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .status-message { background: var(--dos-green); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .scan-status-row { gap: 0; margin: 0 0 16px; }
+
+/* Progress: a black track with a solid block fill */
+:root[data-theme="ansiapps"] .progress-bar { height: 16px; background: var(--dos-black); border: none; }
+:root[data-theme="ansiapps"] .progress-bar-fill {
+  background: repeating-linear-gradient(90deg, var(--dos-yellow) 0 7px, var(--dos-brown) 7px 8px);
+}
+:root[data-theme="ansiapps"] .scan-status-label,
+:root[data-theme="ansiapps"] .current-path { color: var(--dos-lightgray); }
+
+/* Menus and dialogs: light-gray Turbo Vision windows with black text.
+   Re-pointing the tokens inside them recolors everything they contain. */
+:root[data-theme="ansiapps"] .gear-menu,
+:root[data-theme="ansiapps"] .dialog-box {
+  --panel: var(--dos-lightgray);
+  --panel-2: var(--dos-lightgray);
+  --line: var(--dos-black);
+  --text: var(--dos-black);
+  --muted: var(--dos-blue);
+  --accent: var(--dos-blue);
+  --accent-dim: var(--dos-blue);
+  --good: var(--dos-green);
+  background: var(--dos-lightgray);
+  color: var(--dos-black);
+  box-shadow: var(--dos-shadow);
+}
+/* A single-line frame in the menu's outer ring of cells. */
+:root[data-theme="ansiapps"] .gear-menu {
+  border: none;
+  padding: 16px 8px;
+  gap: 0;
+  top: 100%;
+  min-width: 256px;
+}
+:root[data-theme="ansiapps"] .gear-menu::before { content: ""; position: absolute; inset: 7px 3px; border: 2px solid var(--dos-black); pointer-events: none; }
+:root[data-theme="ansiapps"] .gear-menu .menu-item { min-height: 0; padding: 0 8px; gap: 8px; background: none; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .gear-menu .menu-item svg { width: 16px; height: 16px; }
+:root[data-theme="ansiapps"] .gear-menu .menu-item:hover,
+:root[data-theme="ansiapps"] .gear-menu .menu-item:focus-within { background: var(--dos-green); }
+:root[data-theme="ansiapps"] .gear-menu .menu-item svg { color: var(--dos-black); }
+/* A rule through the middle of its own row. */
+:root[data-theme="ansiapps"] .gear-menu .menu-sep { background: var(--dos-black); height: 2px; margin: 7px 0; }
+
+/* Checkboxes drawn as [X] */
+:root[data-theme="ansiapps"] input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: auto !important;
+  height: auto !important;
+  margin: 0;
+  font-family: var(--font-mono);
+  color: inherit;
+}
+:root[data-theme="ansiapps"] input[type="checkbox"]::before { content: "[ ]"; }
+:root[data-theme="ansiapps"] input[type="checkbox"]:checked::before { content: "[X]"; }
+:root[data-theme="ansiapps"] input[type="checkbox"]:disabled { color: var(--dos-darkgray); }
+/* Radio buttons drawn as ( ) and (•) */
+:root[data-theme="ansiapps"] input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: auto !important;
+  height: auto !important;
+  margin: 0;
+  font-family: var(--font-mono);
+  color: inherit;
+}
+:root[data-theme="ansiapps"] input[type="radio"]::before { content: "( )"; }
+:root[data-theme="ansiapps"] input[type="radio"]:checked::before { content: "(\2022)"; }
+:root[data-theme="ansiapps"] input[type="radio"]:disabled { color: var(--dos-darkgray); }
+
+/* A dialog is 60 cells wide, at a fixed place on the 160 by 45 screen:
+   column 51, row 5. (Centering it by its height could leave it half a
+   row off.) Its frame is in its outer ring of cells, like a panel's. */
+:root[data-theme="ansiapps"] .dialog-overlay { background: rgba(0, 0, 0, 0.35); backdrop-filter: none; transition: none; align-items: flex-start; justify-content: flex-start; padding: 64px 0 0 400px; }
+:root[data-theme="ansiapps"] .dialog-box {
+  position: relative;
+  width: 480px;
+  max-width: none;
+  max-height: 608px;
+  border: none;
+  padding: 32px 24px;
+  transform: none;
+  transition: none;
+}
+:root[data-theme="ansiapps"] .dialog-box::before { border-color: var(--dos-white); }
+/* A dialog with a list in it is 100 cells wide, from column 31. */
+:root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-wide) { padding-left: 240px; }
+:root[data-theme="ansiapps"] .dialog-box.dialog-wide { width: 800px; max-width: none; }
+/* The title sits in the frame's top edge: ═══ About Coupler ═══ */
+:root[data-theme="ansiapps"] .dialog-box h2 {
+  position: absolute;
+  top: 0;
+  color: var(--dos-white);
+  background: var(--dos-blue);
+  margin: 0;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+:root[data-theme="ansiapps"] .dialog-box p { color: var(--dos-black); margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .dialog-box p:last-of-type { margin-bottom: 0; }
+:root[data-theme="ansiapps"] .licenses-text { font: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .shrink-list { margin: 0 0 16px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-actions { margin-top: 16px; gap: 16px; }
+:root[data-theme="ansiapps"] .about-section-title { margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .about-section-desc { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .dialog-box button { background: var(--dos-green); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button:hover { background: var(--dos-lightgreen); }
+:root[data-theme="ansiapps"] .dialog-box button.primary { background: var(--dos-yellow); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button.primary:hover { background: var(--dos-white); }
+:root[data-theme="ansiapps"] .dialog-box button.danger-fill { background: var(--dos-red); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .dialog-box button:disabled { background: var(--dos-lightgray); color: var(--dos-darkgray); }
+:root[data-theme="ansiapps"] .dialog-actions button { min-height: 0; }
+:root[data-theme="ansiapps"] .dialog-box .mono { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .about-section-title { color: var(--dos-blue); }
+
+/* View tabs: a cyan selected tab, like a highlighted menu bar item */
+:root[data-theme="ansiapps"] .view-tabs { border-bottom: 1px solid var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .view-tab { box-shadow: none; background: transparent; color: var(--dos-lightgray); border: none; }
+:root[data-theme="ansiapps"] .view-tab.selected { background: var(--dos-cyan); color: var(--dos-black); }
+
+/* App Testing (dev-only) */
+:root[data-theme="ansiapps"] .testing-tally { gap: 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .status-pill { border: none; padding: 0; }
+:root[data-theme="ansiapps"] .testing-item-list { gap: 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .testing-item { border: none; padding: 0; gap: 0 8px; }
+:root[data-theme="ansiapps"] .testing-item-actions,
+:root[data-theme="ansiapps"] .testing-bug-draft { gap: 8px; }
+:root[data-theme="ansiapps"] .testing-bug-draft textarea {
+  background: var(--dos-black);
+  color: var(--dos-lightgray);
+  border: none;
+  caret-color: var(--dos-white);
+}
+:root[data-theme="ansiapps"] .testing-highlight { outline: 2px dashed var(--dos-yellow); }
+/* What "Check the Grid" found off the grid (lib/grid.ts). */
+:root[data-theme="ansiapps"] .grid-off { outline: 2px solid var(--dos-lightmagenta) !important; }
+
+/* Launch screen (markup and base styles in index.html) */
+:root[data-theme="ansiapps"] .startup-screen { background: var(--dos-blue); color: var(--dos-white); font-family: var(--font-ui); transition: none; }
+:root[data-theme="ansiapps"] .startup-accent { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .startup-label { color: var(--dos-lightgray); font-family: var(--font-mono); }
+/* Keep index.html's copy of these in step. Twelve rows in all, from row 18. */
+:root[data-theme="ansiapps"] .startup-screen { gap: 16px; padding-top: 16px; }
+:root[data-theme="ansiapps"] .startup-progress { width: 224px; height: 16px; margin: 0; }
+:root[data-theme="ansiapps"] .startup-name,
+:root[data-theme="ansiapps"] .startup-label { position: relative; align-self: flex-start; min-height: 16px; }
+
+/* Menu bar: Turbo Vision's light-gray bar with
+   black text and blue access letters; the open menu and the item under
+   the pointer are green with black text. Pairs from the contrast list:
+   black on light gray, blue on light gray, black on green, black on cyan,
+   dark gray on light gray for disabled items. */
+:root[data-theme="ansiapps"] .menu-bar {
+  --panel: var(--dos-lightgray);
+  --panel-2: var(--dos-green);
+  --line: var(--dos-black);
+  --text: var(--dos-black);
+  --muted: var(--dos-blue);
+  background: var(--dos-lightgray);
+  color: var(--dos-black);
+  border: none;
+  border-radius: 0;
+  height: 16px;
+  margin: 0;
+  padding: 0 8px;
+  gap: 16px;
+}
+:root[data-theme="ansiapps"] .menu-app { margin: 0; gap: 8px; }
+:root[data-theme="ansiapps"] .menu-app .app-mark { width: 16px; height: 16px; }
+:root[data-theme="ansiapps"] .menu-app .accent { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .menu-title,
+:root[data-theme="ansiapps"] .menu-command { box-shadow: none; border-radius: 0; background: none; color: var(--dos-black); padding: 0 8px; }
+:root[data-theme="ansiapps"] .menu-title:hover,
+:root[data-theme="ansiapps"] .menu-title.open,
+:root[data-theme="ansiapps"] .menu-command:hover:not(:disabled),
+:root[data-theme="ansiapps"] .menu-command:focus-visible,
+:root[data-theme="ansiapps"] .menu-command.sub-open { background: var(--dos-green); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .access-letter { color: var(--dos-blue); text-decoration: none; }
+:root[data-theme="ansiapps"] .menu-title.open .access-letter,
+:root[data-theme="ansiapps"] .menu-title:hover .access-letter { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-dropdown {
+  top: 100%;
+  border: 2px solid var(--dos-black);
+  outline: 6px solid var(--dos-lightgray);
+  border-radius: 0;
+  padding: 0;
+  background: var(--dos-lightgray);
+  box-shadow: var(--dos-shadow);
+}
+:root[data-theme="ansiapps"] .menu-command:disabled { color: var(--dos-darkgray); opacity: 1; }
+:root[data-theme="ansiapps"] .menu-command:disabled .menu-shortcut { color: var(--dos-darkgray); }
+:root[data-theme="ansiapps"] .menu-shortcut { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-dropdown .menu-sep { background: var(--dos-black); margin: 3px 0; }
+/* Open Recent: beside its item, clear of the menu's frame. */
+:root[data-theme="ansiapps"] .menu-submenu { top: -8px; left: calc(100% + 8px); }
+:root[data-theme="ansiapps"] .menu-bar .view-tab { color: var(--dos-black); padding: 0 8px; }
+:root[data-theme="ansiapps"] .menu-bar .view-tab:hover { background: var(--dos-green); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-bar .view-tab.selected { background: var(--dos-cyan); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-bar .gear-btn { box-shadow: none; background: none; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-bar .gear-btn:hover { background: var(--dos-green); }
+
+/* Coupler's screen, in rows of the 45, until the user rearranges it
+   (defaultLayout in App.tsx): the menu bar (1), the ways to play and
+   the game output (39), a blank row, the command line, its hint, the
+   map beside all of those, the message bar (2). No padding
+   round the stage: the grid starts at the screen's corner.
+
+   The game output keeps CoffeeMUD's colors on black, with a cell of
+   padding each side and no frame (black on the blue desktop needs none).
+   It's 84 cells wide: the padding (1), the text's 80 (columns 2 to 81),
+   the padding (1), the scroll bar (2), which is always there. The input
+   line is a black field with light-gray text (rank 9 is black on light
+   gray). */
+:root[data-theme="ansiapps"] .app.client { padding: 0; }
+:root[data-theme="ansiapps"] .terminal { border: none; padding: 0 8px; width: 672px; height: calc(var(--rows, 25) * 16px); font-family: var(--font-mono); }
+:root[data-theme="ansiapps"] .terminal::-webkit-scrollbar { width: 16px; }
+:root[data-theme="ansiapps"] .terminal-line { min-height: 16px; }
+/* The split view's live rows are whole cells of whatever size the text is. */
+:root[data-theme="ansiapps"] .terminal-held { scroll-padding-bottom: calc(var(--live-rows) * var(--cell-h, 16px)); }
+:root[data-theme="ansiapps"] .terminal-spacer { height: calc(var(--live-rows) * var(--cell-h, 16px)); }
+:root[data-theme="ansiapps"] .terminal-live-rule { color: var(--dos-yellow); }
+/* One cell of the gutter, in the theme's yellow. */
+:root[data-theme="ansiapps"] .terminal-line.reviewed::before { left: -8px; width: 8px; background: var(--dos-yellow); }
+/* Workshop mode's corners (components/Movable.tsx): one cell each, not
+   drawn. A thing on the menu bar's strip is light gray like the strip,
+   so it's still black on light gray wherever it's moved. */
+:root[data-theme="ansiapps"] .movable.menu-chip { padding: 0; gap: 0; background: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .movable .movable-handle,
+:root[data-theme="ansiapps"] .movable .movable-handle:hover,
+:root[data-theme="ansiapps"] body .movable .movable-handle:active { width: 8px; height: 16px; padding: 0; background: none; }
+:root[data-theme="ansiapps"] .input-hint { margin: 0; }
+:root[data-theme="ansiapps"] .input-row input { background: var(--dos-black); color: var(--dos-lightgray); border: none; caret-color: var(--dos-white); }
+:root[data-theme="ansiapps"] .connection-state { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .menu-bar .connection-state { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .menu-bar .connection-state.on { color: var(--dos-black); }
+/* Explore mode black on light gray (9.04:1); Combat mode a white-on-red
+   bar (7.75:1), as red on light gray fails (docs/ansiapps-color-contrast.md). */
+:root[data-theme="ansiapps"] .menu-bar .play-mode { padding: 0 8px; font-size: inherit; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .menu-bar .play-mode.combat { background: var(--dos-red); color: var(--dos-white); font-weight: normal; }
+:root[data-theme="ansiapps"] .input-hint { color: var(--dos-lightgray); }
+
+/* Ways to play and the map, on the blue desktop. Every pair is from
+   docs/ansiapps-color-contrast.md: white (rank 5), yellow (6), light
+   cyan (7) and light gray (23) on blue; black on cyan (13) for a picked
+   room; light gray on black (9) for the fields. */
+:root[data-theme="ansiapps"] .port-list { gap: 16px; padding-right: 8px; }
+:root[data-theme="ansiapps"] .port-list li { grid-template-columns: 224px 1fr; gap: 24px; }
+:root[data-theme="ansiapps"] .port-list p { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .port-last { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .port-number { color: var(--dos-lightgray); }
+/* 52 cells wide: the frame (1), a cell of padding, the body (49: the
+   picture's 45, a cell to spare, a scroll bar's 2 when there is one),
+   the frame (1). */
+:root[data-theme="ansiapps"] .map-panel { padding: 16px 8px 16px 16px; }
+:root[data-theme="ansiapps"] .map-body { gap: 16px; padding-right: 8px; }
+:root[data-theme="ansiapps"] .map-body > button { align-self: flex-start; }
+:root[data-theme="ansiapps"] .map-panel section { gap: 0; }
+:root[data-theme="ansiapps"] .map-legend { margin: 0; }
+:root[data-theme="ansiapps"] .map-terrains { gap: 0 8px; height: 32px; }
+:root[data-theme="ansiapps"] .map-results li,
+:root[data-theme="ansiapps"] .map-picked { gap: 0 8px; }
+:root[data-theme="ansiapps"] .map-heading { color: var(--dos-lightcyan); text-transform: none; }
+:root[data-theme="ansiapps"] .map-room-name,
+:root[data-theme="ansiapps"] .map-walking { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .map-muted { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .map-results { gap: 16px; padding: 0 8px 0 0; max-height: 224px; }
+:root[data-theme="ansiapps"] .map-row { gap: 8px; }
+:root[data-theme="ansiapps"] .map-panel input { background: var(--dos-black); color: var(--dos-lightgray); border: none; caret-color: var(--dos-white); font-family: var(--font-mono); }
+:root[data-theme="ansiapps"] .map-panel input::placeholder { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .map-picture { color: var(--dos-white); height: 240px; }
+:root[data-theme="ansiapps"] .map-cell.stub { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .map-cell.current { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .map-cell.picked { background: var(--dos-cyan); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .keys-table th,
+:root[data-theme="ansiapps"] .keys-table td { padding: 0; }
+:root[data-theme="ansiapps"] .keys-table th { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .keys-table td { color: var(--dos-blue); }
+
+/* The status bar, on the blue desktop: a status is black on green (rank
+   16) and an error white on red, as chips two lines tall at most; the
+   screen readout is light gray on blue (rank 23). */
+/* Two rows, the first message line on the first. */
+:root[data-theme="ansiapps"] .status-bar { align-items: flex-start; gap: 16px; }
+:root[data-theme="ansiapps"] .status-bar .scan-status-row { margin: 0; gap: 16px; }
+:root[data-theme="ansiapps"] .status-bar .error,
+:root[data-theme="ansiapps"] .status-bar .status-message { margin: 0; padding: 0 8px; box-shadow: none; }
+:root[data-theme="ansiapps"] .status-bar .error { background: var(--dos-red); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .status-bar .status-message { background: var(--dos-green); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .screen-readout { color: var(--dos-lightgray); }
+
+/* The hooks list, in a dialog: black on light gray (rank 9) for names,
+   blue on light gray for values as for the dialog's other second voice,
+   and a black field with light-gray text. 20 rows, its scroll bar always
+   there; a row is its [ ] box (3 cells), the name (40) and the value
+   (the rest). The tabs are dialog buttons; the chosen one is black on
+   cyan (rank 13) and has the bullet. */
+:root[data-theme="ansiapps"] .hooks-tabs { gap: 16px; margin: 16px 0; }
+:root[data-theme="ansiapps"] .hooks-tab { gap: 8px; }
+:root[data-theme="ansiapps"] .dialog-box button.hooks-tab.selected { background: var(--dos-cyan); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .hooks-search { gap: 8px; margin: 0 0 16px; align-items: flex-start; }
+:root[data-theme="ansiapps"] .hooks-search input { background: var(--dos-black); color: var(--dos-lightgray); border: none; caret-color: var(--dos-white); font-family: var(--font-mono); }
+:root[data-theme="ansiapps"] .hooks-search input::placeholder { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .hooks-list { margin: 16px 0 0; height: 320px; }
+:root[data-theme="ansiapps"] .hooks-list li { grid-template-columns: 24px 320px 1fr; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hook-key { color: var(--dos-black); }
+/* The hooks list with its assets: 152 cells wide from column 5 (the
+   columns are below). The choices are black fields with light-gray text
+   (rank 9), like every field. */
+:root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-hooks) { padding-left: 32px; }
+:root[data-theme="ansiapps"] .dialog-box.dialog-hooks { width: 1216px; }
+/* 18 rows, not 20: with an intro of up to four lines, the tabs, search, summary
+   and head, that fills the 608px box exactly, so the body never scrolls. */
+:root[data-theme="ansiapps"] .dialog-hooks .hooks-list { height: 288px; }
+/* A row is its [ ] box (3 cells), the name (24), the value (the rest,
+   about 46), what it sets off (56, wrapping onto more rows when it's
+   long) and its Edit... button (7), two cells between. A hook that sets
+   off something says so in black, Nothing in blue like the values. */
+:root[data-theme="ansiapps"] .hooks-head,
+:root[data-theme="ansiapps"] .hooks-list.hooks-list-assets li { grid-template-columns: 24px 192px minmax(0, 1fr) 448px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hook-sets-off { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button.hook-edit { min-height: 0; padding: 0 8px; }
+/* The hook editor: 100 cells wide like the other wide dialogs. A row is
+   the kind's name (24 cells), its asset (30) and what goes with it (a
+   labelled volume, the loop box, a column and row), two cells between;
+   a blank row between kinds. */
+:root[data-theme="ansiapps"] .hook-edit-pair { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .hook-edit-rows { gap: 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .hook-edit-row { grid-template-columns: 192px 240px minmax(0, 1fr); gap: 0 16px; }
+:root[data-theme="ansiapps"] .hook-edit-extras { gap: 16px; }
+:root[data-theme="ansiapps"] .hook-edit-field { gap: 8px; }
+:root[data-theme="ansiapps"] .hook-edit-field .hook-place { width: 40px; }
+:root[data-theme="ansiapps"] .hooks-head { margin: 16px 16px 0 0; font-size: inherit; color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .hooks-head + .hooks-list { margin-top: 0; }
+:root[data-theme="ansiapps"] .hook-asset,
+:root[data-theme="ansiapps"] .hook-place { appearance: none; -webkit-appearance: none; height: 16px; padding: 0 8px; border: none; border-radius: 0; background: var(--dos-black); color: var(--dos-lightgray); font-family: var(--font-mono); font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .hook-loop { gap: 8px; align-items: flex-start; }
+/* The Assets tab: a row is the bullet's cell, the name (24 cells), the
+   kind (9), the file (the rest), what plays it (22: a MIDI file's
+   SoundFont menu), its uses (18) and Play or Show... (7), two cells
+   between; the head names them.
+   The bullet is light green on its own black cell (rank 4): green is
+   only readable on black (the contrast list), and the cell is there,
+   empty, on a row not in use, so the columns stay put. */
+/* Characters' Voices: a row is the name (30 cells), NPC, Player or
+   Unknown (7), the voice in short (the rest) and Edit... (7), two cells
+   between. The narrator's row, above the list, is the same, a blank
+   row above it. */
+:root[data-theme="ansiapps"] .cast-narrator { margin: 16px 16px 0 0; }
+:root[data-theme="ansiapps"] .cast-narrator,
+:root[data-theme="ansiapps"] .hooks-head.cast-row,
+:root[data-theme="ansiapps"] .hooks-list.cast-list li { grid-template-columns: 240px 56px minmax(0, 1fr) 64px 56px; gap: 0 16px; }
+/* Cues: the cue (24 cells), its group (8), how it is now (the rest) and Edit... (7). */
+:root[data-theme="ansiapps"] .hooks-head.cues-row,
+:root[data-theme="ansiapps"] .hooks-list.cues-list li { grid-template-columns: 192px 64px minmax(0, 1fr) 56px; gap: 0 16px; }
+/* Narrator's Answers: the command (17 cells), the game's line (the rest),
+   what the narrator says (25) and Edit... (7). */
+:root[data-theme="ansiapps"] .hooks-head.echoes-row,
+:root[data-theme="ansiapps"] .hooks-list.echoes-list li { grid-template-columns: 136px minmax(0, 1fr) 200px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .echoes-on { margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .hooks-head.assets-row,
+:root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 8px 192px 72px minmax(0, 1fr) 176px 144px 56px; gap: 0 16px; }
+/* A picture tried or made: 80 cells by 25 rows on black (18 in Create
+   Asset, under its words), scrolling inside when bigger. */
+:root[data-theme="ansiapps"] .asset-preview.create-asset-picture { height: 288px; margin-top: 16px; }
+:root[data-theme="ansiapps"] .hooks-search .create-asset-size { flex: 0 0 176px; width: 176px; }
+:root[data-theme="ansiapps"] .dialog-box p.create-asset-made { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .asset-dot { background: var(--dos-black); color: var(--dos-lightgreen); }
+/* The Journal and the Log: a row is the bullet's cell, when (12 cells),
+   who or the channel (20), what was said (the rest) and Play (6), two
+   cells between; Who is a 30-cell field beside Search. */
+:root[data-theme="ansiapps"] .hooks-head.journal-row,
+:root[data-theme="ansiapps"] .hooks-list.journal-list li { grid-template-columns: 8px 96px 160px minmax(0, 1fr) 48px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-search .journal-who { flex: 0 0 240px; width: 240px; }
+:root[data-theme="ansiapps"] .journal-button .asset-dot { width: 8px; }
+:root[data-theme="ansiapps"] .dialog-box select:focus { outline: 2px dashed var(--dos-black) !important; }
+/* The Mixer: a row is the bus's name (3 cells), a cell, the slider, a
+   cell, and its value (4). The slider is a black track with a light-gray
+   thumb one cell wide, all one row tall. */
+:root[data-theme="ansiapps"] .mixer-rows { gap: 16px; margin: 16px 0; }
+:root[data-theme="ansiapps"] .mixer-row { grid-template-columns: 32px 1fr 32px; gap: 8px; align-items: start; }
+:root[data-theme="ansiapps"] .voice-slider,
+:root[data-theme="ansiapps"] .mixer-row input[type="range"] { -webkit-appearance: none; appearance: none; height: 16px; margin: 0; background: var(--dos-black); border: none; }
+:root[data-theme="ansiapps"] .voice-slider::-webkit-slider-thumb,
+:root[data-theme="ansiapps"] .mixer-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 16px; background: var(--dos-lightgray); border: none; border-radius: 0; }
+:root[data-theme="ansiapps"] .voice-slider:focus-visible,
+:root[data-theme="ansiapps"] .mixer-row input[type="range"]:focus-visible { outline: 2px dashed var(--dos-black) !important; outline-offset: 1px; }
+:root[data-theme="ansiapps"] .hook-value { color: var(--dos-blue); }
+
+/* Focus rings on the light-gray surfaces (menu bar, gear menu, dialogs)
+   are black: the theme's white ring is under 3:1 on light gray, black is
+   9.04:1 (rank 9). On green (a focused item that's also hovered) black
+   is 6.75:1 (rank 16). */
+:root[data-theme="ansiapps"] .menu-bar button:focus-visible,
+:root[data-theme="ansiapps"] .gear-menu input:focus-visible,
+:root[data-theme="ansiapps"] .dialog-box:focus-visible,
+:root[data-theme="ansiapps"] .hooks-list:focus-visible,
+:root[data-theme="ansiapps"] .dialog-box button:focus-visible,
+:root[data-theme="ansiapps"] .dialog-box input:focus,
+:root[data-theme="ansiapps"] .dialog-box textarea:focus { outline: 2px dashed var(--dos-black) !important; }
+
+/* A button while the mouse is down on it: black on cyan (rank 13),
+   whatever its kind. Last, and one notch more specific, so no hover
+   rule above outranks it. */
+:root[data-theme="ansiapps"] body button:active:not(:disabled) { background: var(--dos-cyan); color: var(--dos-black); }
+
+/* Here and Heard, on the blue desktop: yellow for the room, light cyan
+   headings, white text, light gray labels (ranks 6, 7, 5 and 23 on blue,
+   docs/ansiapps-color-contrast.md). Every line one 16-pixel row. */
+:root[data-theme="ansiapps"] .scene-panel,
+:root[data-theme="ansiapps"] .heard-panel,
+:root[data-theme="ansiapps"] .picture-panel { padding: 16px 8px 16px 16px; }
+/* The pop-up: 100 cells wide from column 31, under the menu bar, white
+   on the blue desktop (rank 5) in its double frame; at most 8 lines of
+   text, the frame's ring around them making 10 rows. The title (who's
+   speaking) is white like every panel's. */
+:root[data-theme="ansiapps"] .speaking-popup { top: 16px; left: 240px; width: 800px; max-height: 160px; padding: 16px; box-shadow: var(--dos-shadow-small); }
+:root[data-theme="ansiapps"] .speaking-popup.log h2 { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .speaking-text { font-size: inherit; line-height: 16px; color: var(--dos-white); }
+:root[data-theme="ansiapps"] .scene-body { gap: 0; padding-right: 8px; }
+:root[data-theme="ansiapps"] .scene-body h3 { margin-top: 16px; }
+:root[data-theme="ansiapps"] .scene-compass,
+:root[data-theme="ansiapps"] .scene-gauge,
+:root[data-theme="ansiapps"] .scene-layers,
+:root[data-theme="ansiapps"] .heard-body { font-size: inherit; line-height: 16px; color: var(--dos-white); }
+:root[data-theme="ansiapps"] .scene-compass { margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .scene-label { color: var(--dos-lightgray); }
+/* Bars on blue are pictures, not words (3:1 is theirs): light green,
+   yellow, light red (4.23:1) by level; light magenta for the opponent. */
+:root[data-theme="ansiapps"] .gauge-good { color: var(--dos-lightgreen); }
+:root[data-theme="ansiapps"] .gauge-warn { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .gauge-low { color: var(--dos-lightred); }
+:root[data-theme="ansiapps"] .gauge-foe { color: var(--dos-lightmagenta); }
+:root[data-theme="ansiapps"] .vitals-panel { padding: 16px 8px 16px 16px; }
+:root[data-theme="ansiapps"] .vitals-panel .scene-body { column-gap: 16px; row-gap: 0; }
+:root[data-theme="ansiapps"] .heard-body { padding-right: 8px; }
+/* A sound's caption: light gray on blue (rank 23), the voice's lines white. */
+:root[data-theme="ansiapps"] .heard-caption { color: var(--dos-lightgray); }
+/* Before You Play: 94 cells inside the wide dialog. The lesson's words
+   6 rows, the practice game 10 (black, the game's own colors, rule 7),
+   what to do 2, Heard 4: 31 rows in all, so the dialog never grows.
+   Black and blue on light gray, as every dialog's text. */
+:root[data-theme="ansiapps"] .dialog-box p.tutorial-lesson { color: var(--dos-blue); font-weight: normal; }
+:root[data-theme="ansiapps"] .dialog-box p.tutorial-teach { height: 96px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .tutorial-output { height: 160px; margin: 0 0 16px; padding: 0 8px; border: none; border-radius: 0; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .tutorial-output .terminal-line { min-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box p.tutorial-task { height: 32px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box p.tutorial-task.done { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .tutorial-command { margin: 0 0 16px; padding-right: 0; }
+:root[data-theme="ansiapps"] .tutorial-command label { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .tutorial-heard { height: 64px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .tutorial-heard .heard-caption { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .tutorial-offer { grid-template-columns: 224px 1fr; gap: 24px; margin: 0 0 16px; padding-right: 8px; }
+:root[data-theme="ansiapps"] .tutorial-offer p { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .room-picture { margin-top: 16px; }
+:root[data-theme="ansiapps"] .picture-body .room-picture { margin-top: 0; }
+:root[data-theme="ansiapps"] .room-picture-caption { font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .radio-group { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .radio-group legend { margin: 0; font-weight: normal; line-height: 16px; }
+:root[data-theme="ansiapps"] .check-row { gap: 8px; margin: 0; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .check-row input { margin: 0; }
+:root[data-theme="ansiapps"] .check-list { column-gap: 16px; }
+
+/* Big text in Terminal (lib/display.ts): the VGA font at a whole
+   multiple of its 8 by 16 cell, so every character still sits on the
+   grid: 16 by 32 (78 columns across the screen) or 24 by 48 (52). */
+:root[data-theme="ansiapps"] .desk.text-2x { --cell-h: 32px; }
+:root[data-theme="ansiapps"] .desk.text-3x { --cell-h: 48px; }
+:root[data-theme="ansiapps"] .desk.text-2x .terminal,
+:root[data-theme="ansiapps"] .desk.text-3x .terminal { width: 1280px; height: calc(var(--rows, 25) * var(--cell-h)); }
+:root[data-theme="ansiapps"] .desk.text-2x .terminal *,
+:root[data-theme="ansiapps"] .desk.text-2x .input-row input,
+:root[data-theme="ansiapps"] .desk.text-2x .status-bar * { font-size: 32px !important; line-height: 32px !important; }
+:root[data-theme="ansiapps"] .desk.text-3x .terminal *,
+:root[data-theme="ansiapps"] .desk.text-3x .input-row input,
+:root[data-theme="ansiapps"] .desk.text-3x .status-bar * { font-size: 48px !important; line-height: 48px !important; }
+:root[data-theme="ansiapps"] .desk.text-2x .terminal-line { min-height: 32px; }
+:root[data-theme="ansiapps"] .desk.text-3x .terminal-line { min-height: 48px; }
+:root[data-theme="ansiapps"] .desk.text-2x .terminal,
+:root[data-theme="ansiapps"] .desk.text-2x .input-row input { font-size: 32px !important; line-height: 32px !important; }
+:root[data-theme="ansiapps"] .desk.text-3x .terminal,
+:root[data-theme="ansiapps"] .desk.text-3x .input-row input { font-size: 48px !important; line-height: 48px !important; }
+:root[data-theme="ansiapps"] .desk.text-2x .input-row input { height: 32px; }
+:root[data-theme="ansiapps"] .desk.text-3x .input-row input { height: 48px; }
+
+/* Making Your Character: on the grid, 16px rows, 8px columns. The
+   question and its help have two rows each, whatever they hold. */
+:root[data-theme="ansiapps"] .creation-stages { gap: 0 16px; margin: 0 0 16px; font-size: inherit; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-stages li.current { color: var(--dos-blue); font-weight: normal; }
+:root[data-theme="ansiapps"] .dialog-box p.creation-chosen { height: 32px; min-height: 0; margin: 0 0 16px; font-size: inherit; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box p.creation-question { height: 32px; min-height: 0; margin: 0; font-size: inherit; font-weight: normal; color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .creation-problem { background: var(--dos-red); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .dialog-box p.creation-help { height: 32px; min-height: 0; margin: 0 0 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-choices { grid-template-columns: 240px minmax(0, 1fr); gap: 0 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .creation-choices ul { max-height: 192px; gap: 0; padding: 0 8px 0 0; }
+/* The answers are a menu, as the gear menu is: black on the dialog's gray, the one with focus (or the pointer) in green. */
+:root[data-theme="ansiapps"] .dialog-box .creation-choices button { background: none; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box .creation-choices button:hover,
+:root[data-theme="ansiapps"] .dialog-box .creation-choices button:focus { background: var(--dos-green); }
+:root[data-theme="ansiapps"] .dialog-box p.creation-about { font-size: inherit; line-height: 16px; color: var(--dos-black); }
+/* The guide's side: the picture (up to 40 cells), then the words. Wider, for the picture. */
+:root[data-theme="ansiapps"] .dialog-box.dialog-wide.creation-dialog { width: 960px; }
+:root[data-theme="ansiapps"] .dialog-overlay:has(.creation-dialog) { padding-left: 160px; }
+:root[data-theme="ansiapps"] .creation-side { gap: 16px; }
+:root[data-theme="ansiapps"] .dialog-box p.creation-facts { margin: 0 0 16px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-stats-box { grid-template-columns: 384px minmax(0, 1fr); gap: 0 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .creation-stats { font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-stats th, :root[data-theme="ansiapps"] .creation-stats td { padding: 0 16px 0 0; }
+:root[data-theme="ansiapps"] .creation-stats thead th { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .creation-stat-change { gap: 8px; }
+:root[data-theme="ansiapps"] .creation-stat-change button { min-width: 24px; }
+:root[data-theme="ansiapps"] .creation-stats-side p { margin: 0 0 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-row { gap: 16px; margin: 0 0 16px; align-items: flex-start; }
+:root[data-theme="ansiapps"] .creation-note { font-size: inherit; color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .creation-typed { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .creation-typed label { color: var(--dos-black); }
+:root[data-theme="ansiapps"] .creation-text-toggle { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .creation-text { max-height: 128px; margin: 0; padding: 0 8px; font-size: inherit; line-height: 16px; color: var(--dos-lightgray); background: var(--dos-black); border-radius: 0; }
+/* Artisan Skills: 152 cells wide from column 5, like the hooks list.
+   The intro (up to three lines), the mentor's row, its answer (five
+   lines), the key, then the tree: 17 rows, a column a step, the names
+   one cell from the edge and six cells between columns, so every
+   character keeps its cell as it scrolls. Black on yellow, light cyan
+   and light green (ranks 2, 3, 4) mark the chosen skill and its lines;
+   light gray, white on hover, light magenta (rank 10) on black. */
+:root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-artisan) { padding-left: 32px; }
+:root[data-theme="ansiapps"] .dialog-box.dialog-artisan { width: 1216px; }
+:root[data-theme="ansiapps"] .artisan-ask button { padding: 0 8px; }
+:root[data-theme="ansiapps"] .dialog-box p.artisan-answer { height: 80px; margin: 0 0 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box p.artisan-key { gap: 0 16px; height: 16px; margin: 0 0 16px; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box p.artisan-key span { padding: 0 8px; }
+:root[data-theme="ansiapps"] .artisan-chart { grid-auto-rows: 16px; height: 272px; padding: 0 8px; border: none; border-radius: 0; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box .artisan-node { height: 16px; padding: 0 8px 0 0; line-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box .artisan-node:focus-visible { outline: 2px dashed var(--dos-white) !important; }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-node { background: var(--dos-black); color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-node:hover { background: var(--dos-black); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-kind-other { color: var(--dos-lightmagenta); }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-chosen,
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-chosen:hover { background: var(--dos-yellow); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-need,
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-need:hover { background: var(--dos-lightcyan); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-opens,
+:root[data-theme="ansiapps"] .dialog-box button.artisan-mark-opens:hover { background: var(--dos-lightgreen); color: var(--dos-black); }
+/* The Music Editor: on the grid, 16px rows, frames by padding alone. */
+:root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-music) { padding-left: 32px; }
+:root[data-theme="ansiapps"] .dialog-box.dialog-music { width: 1216px; }
+:root[data-theme="ansiapps"] .music-row { gap: 8px; margin: 0 0 16px; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .music-row select,
+:root[data-theme="ansiapps"] .music-row input { height: 16px; padding: 0 8px; background: var(--dos-black); color: var(--dos-lightgray); border: none; border-radius: 0; caret-color: var(--dos-white); font-family: var(--font-mono); line-height: 16px; }
+:root[data-theme="ansiapps"] .music-row .music-number { width: 64px; }
+:root[data-theme="ansiapps"] .music-row .music-name { width: 240px; }
+:root[data-theme="ansiapps"] .music-row .music-file { width: 240px; }
+:root[data-theme="ansiapps"] .music-row .music-beats { width: 80px; }
+:root[data-theme="ansiapps"] .music-row .music-instrument { width: 320px; }
+:root[data-theme="ansiapps"] .music-row button { padding: 0 8px; }
+:root[data-theme="ansiapps"] .dialog-box p.music-heading { margin: 0; color: var(--dos-black); font-weight: normal; }
+:root[data-theme="ansiapps"] .dialog-box p.music-keys { margin: 0 0 16px; color: var(--dos-black); font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .music-grid { padding: 0 8px; border: none; border-radius: 0; font-size: inherit; line-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell { height: 16px; padding: 0; background: var(--dos-black); color: var(--dos-lightgray); line-height: 16px; }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell:hover { background: var(--dos-black); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell.start { color: var(--dos-yellow); }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell.held { color: var(--dos-lightcyan); }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell.chosen { background: var(--dos-yellow); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell.here { outline: 2px dashed var(--dos-lightgray); outline-offset: -2px; }
+:root[data-theme="ansiapps"] .dialog-box button.music-cell:focus-visible { outline: 2px dashed var(--dos-white) !important; }

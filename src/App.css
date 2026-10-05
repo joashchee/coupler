@@ -1,0 +1,886 @@
+/* Coupler component styles. The shared pieces (header, buttons, panels,
+   messages, progress bar, dialog, App Testing) match Diskette's App.css. */
+
+.app {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+header.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+header.top h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+header.top h1 span.accent { color: var(--accent); }
+.app-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+.app-mark svg { width: 100%; height: 100%; }
+.version-tag {
+  font-size: 11px;
+  font-weight: 400;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+header.top p {
+  color: var(--muted);
+  font-size: 13px;
+  flex-basis: 100%;
+}
+.header-actions { display: flex; align-items: flex-start; gap: 8px; flex: 0 0 auto; }
+header.top .header-actions { margin-left: auto; }
+
+/* Menu bar: the app name, the connection controls and the gear in one row */
+.menu-bar { position: relative; z-index: 20; display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 4px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.menu-app { font-size: inherit; display: flex; align-items: center; gap: 6px; font-weight: 600; margin-right: 6px; white-space: nowrap; }
+.menu-app .accent { color: var(--accent); }
+.menu-app .app-mark { width: 18px; height: 18px; }
+.menu-titles { display: flex; gap: 2px; flex-wrap: wrap; }
+.menu-wrap { position: relative; }
+.menu-title { background: none; border: none; border-radius: 4px; padding: 4px 10px; color: var(--text); }
+.menu-title:hover,
+.menu-title.open { background: var(--panel-2); }
+.access-letter { text-decoration: underline; text-underline-offset: 2px; }
+.menu-dropdown { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; display: flex; flex-direction: column; min-width: 260px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.menu-command { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; text-align: left; background: none; border: none; border-radius: 4px; padding: 4px 8px; color: var(--text); font-size: 13px; white-space: nowrap; }
+.menu-command:hover:not(:disabled),
+.menu-command:focus-visible { background: var(--panel-2); }
+.menu-command:disabled { color: var(--muted); opacity: 0.6; }
+.menu-shortcut { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.menu-dropdown .menu-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+.menu-bar-end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.workspaces { display: flex; gap: 4px; }
+.shortcut-list { columns: 2; column-gap: 24px; max-height: 60vh; overflow: auto; }
+.shortcut-list section { break-inside: avoid; margin-bottom: 12px; }
+.shortcut-list h3 { font-size: 13px; margin: 0 0 4px; }
+.shortcut-list dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 0; font-size: 12px; }
+.shortcut-list dd { margin: 0; text-align: right; }
+
+/* Gear menu (same as Diskette's) */
+.gear-menu-wrap { position: relative; flex: 0 0 auto; }
+.gear-btn { position: relative; }
+.gear-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  min-width: 260px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+.gear-menu.open { display: flex; }
+.gear-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-height: 40px;
+}
+.gear-menu .menu-item:hover,
+.gear-menu .menu-item:focus-within { background: var(--panel-2); }
+.gear-menu .menu-item svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--muted); }
+.gear-menu .menu-item-checkbox { gap: 10px; }
+.gear-menu .menu-item-checkbox input[type="checkbox"],
+.gear-menu .menu-item-checkbox input[type="radio"] { flex-shrink: 0; width: 15px; height: 15px; accent-color: var(--accent); }
+/* The ways to play: a radio group inside the menu's column. */
+.gear-menu .menu-group { display: flex; flex-direction: column; gap: inherit; }
+.gear-menu .menu-item-checkbox span { line-height: 1.4; }
+.gear-menu .menu-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+
+/* About dialog (same as Diskette's) */
+.about-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text); margin: 18px 0 4px; }
+.about-section-desc { font-size: 12px; margin: 0 0 8px; }
+
+/* Buttons */
+button {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+button:hover { border-color: var(--accent-dim); }
+button.primary {
+  background: var(--accent);
+  color: #1f1a05;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.primary:hover { background: #fde047; }
+button.danger { color: var(--warn); }
+button.danger:hover { border-color: var(--warn); }
+button.danger-fill { background: var(--warn); color: #1a0406; border-color: var(--warn); font-weight: 600; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.small { padding: 6px 10px; font-size: 12px; }
+button.icontext-btn { display: inline-flex; align-items: center; gap: 6px; }
+button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px; flex-shrink: 0; }
+.status-pill {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.panel h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.panel h2 .section-icon { display: flex; color: var(--accent); flex-shrink: 0; }
+.panel h2 .section-icon svg { width: 15px; height: 15px; display: block; }
+.panel .desc { color: var(--muted); font-size: 12px; margin: 4px 0 14px; line-height: 1.5; }
+.error {
+  color: var(--warn);
+  background: var(--panel);
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.status-message {
+  color: var(--good);
+  background: var(--panel);
+  border: 1px solid var(--good);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+/* Scan progress */
+.scan-status-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.scan-status-label { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.progress-bar {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.progress-bar-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: var(--accent); border-radius: inherit; }
+.progress-bar-determinate .progress-bar-fill { transition: width 0.2s ease; }
+.progress-bar-indeterminate .progress-bar-fill { width: 35%; left: -35%; animation: progress-sweep 1.1s ease-in-out infinite; }
+@keyframes progress-sweep { 0% { left: -35%; } 100% { left: 100%; } }
+.empty { color: var(--muted); font-size: 13px; }
+/* Dialog (components/Dialog.tsx) — replaces window.alert/confirm */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 11, 14, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+  z-index: 50;
+}
+.dialog-overlay.open { opacity: 1; pointer-events: auto; }
+.dialog-box {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  max-width: 420px;
+  width: 100%;
+  padding: 20px 22px;
+  max-height: calc(100dvh - 40px);
+  /* The box is the frame; its body scrolls (Dialog.tsx). */
+  display: flex;
+  flex-direction: column;
+  transform: translateY(6px) scale(0.98);
+  transition: transform 0.14s ease;
+}
+.dialog-overlay.open .dialog-box { transform: translateY(0) scale(1); }
+.dialog-box h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+.dialog-box p { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 10px; }
+.dialog-box p:last-of-type { margin-bottom: 0; }
+.dialog-body { min-height: 0; overflow-y: auto; }
+.dialog-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.dialog-actions button { min-height: 44px; }
+
+/* App Testing overlay (dev-only — CLAUDE.md's Testing section) */
+.testing-tally { display: flex; gap: 8px; margin: 0 0 10px; }
+.testing-item-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.testing-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.testing-item-bug { border-color: var(--warn); }
+.testing-item-done { opacity: 0.6; }
+.testing-item-label { font-size: 12px; flex: 1 1 260px; min-width: 0; }
+.testing-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.testing-item-note { flex: 1 1 100%; margin: 0; font-size: 11px; color: var(--warn); }
+.testing-bug-draft { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.testing-bug-draft textarea {
+  flex: 1 1 220px;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+/* "Go to app" jump target — a brief highlight ring, not a layout change. */
+.testing-highlight { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; transition: outline-color 1.5s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-overlay, .dialog-box { transition: none; }
+}
+
+/* ---- Coupler ---- */
+
+/* The stage (lib/stage.ts): a game screen of one fixed size, 1280 by 720,
+   which is 160 by 45 of the theme's 8 by 16 characters. The window is
+   exactly this size and can't be resized. In full screen the same stage
+   is scaled up to fit (App.tsx sets the scale) and centered on black.
+   Lay things out in stage pixels, never in vw, vh or media queries:
+   the viewport is the monitor in full screen, not the stage. */
+.stage-frame { position: fixed; inset: 0; overflow: hidden; background: #000000; }
+.app.client {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 720px;
+  max-width: none;
+  margin: -360px 0 0 -640px;
+  padding: 12px 12px 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+/* The stage is transformed, so these fixed layers cover the stage, not
+   the monitor; a dialog is never taller than the stage. */
+.client .dialog-box { max-height: 680px; }
+.client .gear-menu { max-width: 1256px; }
+/* A dialog with a list in it (Dialog.tsx's className). */
+.dialog-box.dialog-wide { max-width: 760px; }
+
+
+/* The message bar (the live regions): two lines tall, always, so a
+   message coming or going never moves anything. */
+.status-bar { display: flex; align-items: center; gap: 16px; min-width: 0; overflow: hidden; }
+.status-bar-message { flex: 1 1 auto; min-width: 0; }
+.status-bar .error,
+.status-bar .status-message {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  line-height: 20px;
+}
+.status-bar .scan-status-row { flex-direction: row; align-items: center; gap: 12px; margin: 0; }
+.status-bar .progress-bar { flex: 0 0 200px; }
+/* While something is underway its bar has the place to itself. */
+.status-bar-message:has(.scan-status-row) > p { display: none; }
+.screen-readout { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: pre; }
+
+/* The hooks total, a button that opens the list (HooksDialog.tsx). Fixed
+   width: the count is padded with spaces. */
+.hooks-button { flex: 0 0 auto; font-family: var(--font-mono); white-space: pre; }
+
+/* For words only a screen reader meets. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+
+/* The desk: the whole stage, which everything on the screen is placed
+   in (components/Movable.tsx; the default places are defaultLayout in
+   App.tsx). Its own stacking context, so a thing brought to the front
+   never gets above the startup screen or a dialog.
+
+   A thing fills its box. In Workshop mode each has two corners laid
+   over it, one character each and not drawn: the top left moves it,
+   the bottom right resizes it. They take no room, so the screen is the
+   same with the mode on or off; the pointer's shape and the keyboard's
+   focus ring are all that show.
+
+   The empty part of a bar (the message bar with no message, the hint
+   with nothing to say) lets the pointer through to what's under it. */
+.desk { position: absolute; inset: 0; z-index: 0; }
+.movable { position: absolute; pointer-events: none; }
+.movable > * { pointer-events: auto; }
+.movable > :not(.movable-handle):not(.terminal):not(.terminal-wrap) { width: 100%; height: 100%; }
+.movable > .status-bar,
+.movable > .input-hint { pointer-events: none; }
+.status-bar p,
+.status-bar .scan-status-row { pointer-events: auto; }
+.movable > .panel { margin: 0; }
+/* On the menu bar's strip, a thing has no frame of its own. */
+.movable.menu-chip { margin: 0; padding: 0; border: none; background: none; }
+.movable.menu-chip button { white-space: nowrap; }
+.movable .connection-state { display: block; text-align: right; }
+.movable-handle,
+.movable-handle:hover {
+  position: absolute;
+  z-index: 1;
+  width: 12px;
+  height: 14px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  touch-action: none;
+}
+.movable-move { top: 0; left: 0; cursor: move; }
+.movable-size { bottom: 0; right: 0; cursor: nwse-resize; }
+
+/* Ways to play: one button per CoffeeMUD port, each with what's
+   different about it beside it (and read out with it). */
+/* A panel's frame never scrolls: in the ANSIapps theme its title sits in
+   the top edge, and a scrolling box would clip it. The body scrolls. */
+.ports { display: flex; flex-direction: column; }
+.ports-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.port-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.port-list li { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: start; }
+.port-list button { width: 100%; text-align: left; }
+.port-list p { font-size: 13px; line-height: 1.5; color: var(--text); }
+.port-last { color: var(--accent); }
+.port-number { color: var(--muted); white-space: nowrap; }
+
+/* The map panel (components/MapPanel.tsx): where you are, the picture,
+   then the landmark and the room finder. Wide enough for the picture's
+   45 characters. */
+.map-panel { display: flex; flex-direction: column; }
+.map-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.map-panel section { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.map-heading { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.map-here { line-height: 1.5; }
+.map-room-name { color: var(--accent); font-weight: 600; }
+.map-muted { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.map-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.map-results { max-height: 220px; overflow-y: auto; }
+.map-results li,
+.map-picked { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; }
+.map-row { display: flex; gap: 6px; align-items: center; }
+.map-walking { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--accent); }
+.map-panel input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+/* Always 15 lines tall (MapPanel.tsx's VIEW_HEIGHT), map or no map. */
+.map-picture { margin: 0; height: 17.25em; overflow: hidden; font-family: var(--font-mono); font-size: 13px; line-height: 1.15; color: var(--text); user-select: none; }
+.map-cell { cursor: pointer; }
+.map-cell.stub { color: var(--muted); cursor: default; }
+.map-cell.current { color: var(--accent); font-weight: 600; }
+.map-cell.picked { background: var(--accent); color: #1f1a05; }
+.map-legend { margin-top: 4px; }
+/* The terrains in view (lib/terrain.ts): two lines tall, filled or not. */
+.map-terrains { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0 12px; height: 3em; overflow: hidden; margin: 0; }
+.map-terrain { white-space: pre; }
+.map-swatch { font-family: var(--font-mono); white-space: pre; }
+
+/* The hooks list (components/HooksDialog.tsx): two tabs, a search, how
+   many, then a box, a name and a value per row. The list is a fixed
+   height and scrolls on its own, so the dialog doesn't change size as
+   the search narrows it. The chosen tab has a bullet: its mark is kept
+   in place, only hidden, on the other, so neither changes width. */
+.hooks-tabs { display: flex; gap: 6px; margin: 12px 0 0; }
+.hooks-tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; }
+.hooks-tab.selected { border-color: var(--accent); color: var(--accent); }
+.hooks-tab:not(.selected) .hooks-tab-mark { visibility: hidden; }
+.hooks-search { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: 13px; }
+.hooks-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+.hooks-list { list-style: none; margin: 10px 0 0; padding: 0; height: 320px; overflow-y: scroll; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; user-select: text; }
+.hooks-list:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hooks-list li { display: grid; grid-template-columns: 16px 280px 1fr; gap: 0 12px; align-items: start; overflow-wrap: anywhere; }
+.hooks-list input[type="checkbox"] { width: 14px; height: 14px; margin: 2px 0 0; accent-color: var(--accent); }
+.hook-key { color: var(--text); }
+/* The hooks list with what each pair sets off (HooksDialog.tsx): name,
+   value, then SFX, BGM, its loop box, ART and the picture's column and
+   row. The head row names the columns and lines up with them. */
+.dialog-box.dialog-hooks { max-width: 1216px; }
+.hooks-head,
+.hooks-list.hooks-list-assets li { display: grid; grid-template-columns: 16px 190px minmax(0, 1fr) 440px 64px; gap: 0 12px; align-items: start; }
+.hook-sets-off { color: var(--text); }
+.hook-edit { padding: 1px 8px; font-size: 12px; }
+/* The hook editor (HookEditor.tsx): a row a kind, its name, its asset,
+   then what goes with it once one is chosen. */
+.hook-edit-pair { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
+.hook-edit-rows { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+.hook-edit-row { display: grid; grid-template-columns: 180px 240px minmax(0, 1fr); gap: 0 12px; align-items: center; }
+.hook-edit-extras { display: flex; align-items: center; gap: 16px; }
+.hook-edit-field { display: inline-flex; align-items: center; gap: 6px; }
+.hook-edit-field .hook-place { width: 48px; }
+.hooks-head { margin: 10px 16px 0 0; font-size: 12px; color: var(--muted); }
+.hooks-head + .hooks-list { margin-top: 4px; }
+.hook-asset,
+.hook-place {
+  min-width: 0;
+  width: 100%;
+  padding: 1px 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.hook-loop { display: flex; align-items: center; gap: 4px; }
+/* The Assets tab: a bullet in green (the theme's --good) beside each
+   asset a hook uses, then its name, kind, file, what plays it (a MIDI
+   file's SoundFont menu), its uses in words, and Play or Show. */
+.hooks-head.assets-row,
+.hooks-list.assets-list li { grid-template-columns: 12px 200px 72px minmax(0, 1fr) 176px 136px 64px; gap: 0 12px; }
+/* A picture tried (AssetPreview.tsx) or made (CreateAssetDialog.tsx):
+   80 characters by 25 rows on black, scrolling inside when bigger. */
+.asset-preview { width: 640px; height: 400px; overflow: auto; background: #000000; }
+.asset-preview.create-asset-picture { height: 288px; margin-top: 10px; }
+.asset-preview-image { display: block; max-width: 100%; max-height: 100%; object-fit: contain; object-position: left top; image-rendering: pixelated; }
+.hooks-search .create-asset-size { flex: 0 0 176px; width: 176px; }
+.dialog-box p.create-asset-made { color: var(--text); }
+.asset-dot { color: var(--good); text-align: center; }
+.hooks-add { flex: 0 0 auto; }
+/* Characters' Voices (CastDialog.tsx): name, NPC or player, the voice in
+   short, then Edit. The voice editor's sliders are the Mixer's. */
+.hooks-head.cast-row,
+.cast-narrator,
+.hooks-list.cast-list li { display: grid; grid-template-columns: 240px 64px minmax(0, 1fr) 64px 64px; gap: 0 12px; align-items: start; }
+.cast-narrator { margin: 10px 16px 0 0; }
+/* Cues (CuesDialog.tsx): the cue, its group, how it is now, then Edit. */
+.hooks-head.cues-row,
+.hooks-list.cues-list li { display: grid; grid-template-columns: 200px 64px minmax(0, 1fr) 64px; gap: 0 12px; align-items: start; }
+.voice-slider { width: 100%; accent-color: var(--accent); }
+/* The Journal and the Log (JournalDialog.tsx): the unheard bullet, when,
+   who (or the channel), what was said, then Play. */
+.hooks-head.journal-row,
+.hooks-list.journal-list li { display: grid; grid-template-columns: 12px 100px 160px minmax(0, 1fr) 56px; gap: 0 12px; align-items: start; }
+.journal-when { white-space: pre; }
+.hooks-search .journal-who { flex: 0 0 240px; width: 240px; }
+/* Their buttons by the message bar: the count keeps its width, the bullet its cell. */
+.journal-button { flex: 0 0 auto; font-family: var(--font-mono); white-space: pre; }
+.journal-button .asset-dot { display: inline-block; width: 1ch; }
+/* A trigger's picture (App.tsx), at its cell of the screen. */
+.hook-picture { position: absolute; display: block; cursor: pointer; }
+/* One whose fade has passed (HookPicture.tsx), over FADING ms; with
+   reduced motion it's just gone at the end. */
+.hook-picture { transition: opacity 1s linear; }
+.hook-picture-fading { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .hook-picture { transition: none; }
+}
+/* The Mixer (MixerDialog.tsx): a slider a row, its value beside it. */
+.mixer-rows { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+.mixer-row { display: grid; grid-template-columns: 48px 1fr 48px; gap: 12px; align-items: center; }
+.mixer-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.mixer-value { font-family: var(--font-mono); white-space: pre; }
+/* The music playing, on the menu bar: cut short rather than run into the rest. */
+.now-playing { max-width: 400px; overflow: hidden; white-space: nowrap; }
+/* ANSI art: 8 by 16 cells in the IBM VGA font in either theme, on
+   black; wider or taller than the room left on the screen, it's cut. */
+.hook-ansi { overflow: hidden; background: #000000; color: #aaaaaa; font-family: "ansiapps VGA", monospace; font-size: 16px; line-height: 16px; white-space: pre; user-select: none; }
+.hook-ansi-row { height: 16px; }
+.hook-value { color: var(--muted); }
+
+/* The Keyboard dialog's list */
+.keys-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.keys-table th { text-align: left; font-weight: 400; padding: 4px 12px 4px 0; color: var(--text); }
+.keys-table td { text-align: right; padding: 4px 0; font-family: var(--font-mono); color: var(--accent); white-space: nowrap; }
+
+.connection-state { font-size: 12px; color: var(--muted); font-family: var(--font-mono); white-space: nowrap; }
+.connection-state.on { color: var(--good); }
+/* Combat or Explore mode: the words say it, the color only repeats it. */
+.play-mode { display: inline-block; font-size: 12px; color: var(--muted); font-family: var(--font-mono); white-space: nowrap; }
+.play-mode.combat { color: var(--warn); font-weight: 600; }
+
+/* The game output: CoffeeMUD's own colors on black, whatever the theme
+   (the ANSIapps theme never recolors it). Always 80 characters wide and
+   25 tall, the classic terminal, with its scroll bar beside the 80 and
+   always there. The sizes have a pixel to spare, so a rounded-down
+   measurement still counts 80 and 25 for NAWS. */
+.terminal {
+  width: calc(80ch + 35px);
+  height: calc(var(--rows, 25) * 1.3em + 19px);
+  overflow-y: scroll;
+  padding: 8px 11px 8px 10px;
+  background: #000000;
+  color: #aaaaaa;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.terminal::-webkit-scrollbar { width: 12px; }
+.terminal:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.terminal-line { min-height: 1.3em; }
+.terminal-line.sent { color: #55ffff; }
+.terminal-line.note { color: #ffff55; }
+/* Review mode's line: a bar in the gutter, so the game's own colors stay as they are. */
+.terminal-line.reviewed { position: relative; }
+.terminal-line.reviewed::before { content: ""; position: absolute; left: -8px; top: 0; bottom: 0; width: 5px; background: var(--accent); }
+.terminal-empty { color: #aaaaaa; font-family: var(--font-ui); white-space: normal; }
+.terminal-measure { position: absolute; visibility: hidden; white-space: pre; }
+/* The split view while reviewing: the live bottom laid over the held
+   view's last rows, which scroll padding keeps the reviewed line out of. */
+.terminal-wrap { position: relative; }
+.terminal-live { position: absolute; left: 0; bottom: 0; overflow: hidden; pointer-events: none; }
+.terminal-held { scroll-padding-bottom: calc(var(--live-rows) * 1.3em); }
+.terminal-spacer { height: calc(var(--live-rows) * 1.3em); }
+.terminal-live-rule { color: #ffff55; white-space: pre; overflow: hidden; }
+
+/* The command line: a field as wide as its place on the desk. */
+.input-row { display: flex; }
+.input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.input-row input:disabled { opacity: 0.5; }
+.input-hint { font-size: 12px; color: var(--muted); min-height: 16px; white-space: nowrap; overflow: hidden; }
+
+/* The smaller-sounds question (ShrinkDialog). */
+.shrink-list { list-style: none; margin: 0 0 10px; padding: 0; font-size: 13px; line-height: 1.6; color: var(--text); }
+
+/* Open-Source Licenses (LicensesDialog): the full texts, as written. */
+.licenses-text { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Terminal: the plain terminal on black, nothing else around it. */
+.desk.ux-terminal { background: #000000; }
+
+/* Here (ScenePanel) and Heard (HeardPanel): Immersive's panels. */
+.scene-panel,
+.heard-panel { display: flex; flex-direction: column; }
+/* Immersive's pop-up (SpeakingPopup.tsx): the line being said, at the
+   top of the screen, in stage pixels (never centered by the browser),
+   in front of the panels. Up to eight lines; a longer line is cut. */
+.speaking-popup { position: absolute; left: 240px; top: 62px; width: 800px; max-height: 208px; overflow: hidden; margin: 0; cursor: pointer; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.speaking-popup.log h2 { color: var(--muted); }
+.speaking-text { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.scene-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.scene-body p,
+.scene-body h3 { margin: 0; }
+.scene-room { line-height: 1.5; }
+.scene-compass { margin: 0; font-family: var(--font-mono); font-size: 14px; line-height: 1.3; color: var(--text); }
+.scene-gauge { font-family: var(--font-mono); font-size: 13px; white-space: pre; color: var(--text); }
+.scene-label { white-space: pre; color: var(--muted); }
+/* A bar's color repeats its level; the numbers beside it say it. */
+.gauge-good { color: var(--good); }
+.gauge-warn { color: var(--accent); }
+.gauge-low { color: var(--warn); }
+.gauge-foe { color: #ff55ff; }
+/* You: two columns, Health and Mana over Moves and the fight, to fit above the game output. */
+.vitals-panel { display: flex; flex-direction: column; padding: 8px 16px; }
+.vitals-panel .scene-body { display: grid; grid-template-columns: repeat(2, max-content); column-gap: 24px; row-gap: 2px; overflow: hidden; }
+/* The place a picture would be, kept where the "when" setting leaves it out. */
+.room-picture-none { display: flex; align-items: flex-start; }
+.scene-layers { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+.scene-layers li { white-space: pre; }
+.heard-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+.heard-caption { color: var(--muted); }
+
+/* Before You Play (components/TutorialDialog.tsx): the lesson, the
+   practice game's output in the game's colors, what to do, the command
+   box and Heard. Fixed heights, so nothing moves from lesson to lesson. */
+.tutorial-dialog .dialog-body { overflow-x: hidden; }
+.dialog-box p.tutorial-lesson { color: var(--accent); font-weight: 600; }
+.dialog-box p.tutorial-teach { height: 105px; overflow-y: auto; color: var(--text); }
+.tutorial-output {
+  height: 172px;
+  overflow-y: auto;
+  margin: 0 0 10px;
+  padding: 6px 10px 6px 12px;
+  background: #000000;
+  color: #aaaaaa;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tutorial-output:focus-visible,
+.tutorial-heard:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dialog-box p.tutorial-task { height: 42px; color: var(--text); }
+.dialog-box p.tutorial-task.done { color: var(--accent); }
+.tutorial-command { margin: 0 0 8px; padding-right: 3px; }
+.tutorial-command input { flex: 1 1 auto; min-width: 0; }
+.dialog-box p.tutorial-heard-title { margin: 0; }
+.tutorial-heard { height: 60px; overflow-y: auto; list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+.tutorial-offer { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: start; margin: 0 0 12px; }
+.tutorial-offer button { width: 100%; text-align: left; }
+.tutorial-offer p { font-size: 13px; line-height: 1.5; color: var(--text); }
+.heard-body:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The room's picture (RoomPicture): in Here, and filling Workshop's
+   Picture panel. ANSI art: the VGA font's 8 by 16 cells in any theme. */
+.picture-panel { display: flex; flex-direction: column; }
+.picture-body { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.room-picture { flex-shrink: 0; overflow: hidden; }
+/* Its height is the panel's, never its picture's, so painting to fit can't grow it. */
+.room-picture-fill { flex: 1 1 0; min-height: 0; }
+.room-picture-art { background: #000000; font-family: "ansiapps VGA", monospace; font-size: 16px; line-height: 16px; white-space: pre; user-select: none; }
+.room-picture-row { height: 16px; }
+.room-picture-art { overflow: hidden; }
+/* The player's own picture for the room: fitted, never stretched, pixels kept sharp. */
+.room-picture-image { display: block; max-width: 100%; object-fit: contain; object-position: left top; image-rendering: pixelated; }
+.room-picture-caption { margin: 0; font-size: 12px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.radio-group { border: none; margin: 0 0 12px; padding: 0; min-width: 0; }
+.radio-group legend { padding: 0; margin: 0 0 4px; font-weight: 600; color: var(--text); }
+.radio-group:disabled .check-row { color: var(--muted); }
+
+/* Customize the Screen (WorkshopDialog). */
+.check-row { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--text); margin: 4px 0; }
+.check-row input { flex-shrink: 0; margin-top: 3px; accent-color: var(--accent); }
+.check-list { list-style: none; margin: 0; padding: 0; columns: 2; }
+
+/* Big text (lib/display.ts), in Terminal: the game output, the command
+   line and the messages at twice or three times the size, filling the
+   screen's width. The game is told the columns that fit (NAWS). */
+.desk.text-2x { --text-px: 28px; }
+.desk.text-3x { --text-px: 42px; }
+.desk.text-2x .terminal,
+.desk.text-3x .terminal { width: 1256px; font-size: var(--text-px); }
+.desk.text-2x .input-row input,
+.desk.text-3x .input-row input,
+.desk.text-2x .status-bar,
+.desk.text-3x .status-bar { font-size: var(--text-px); }
+.desk.text-2x .status-bar .error,
+.desk.text-2x .status-bar .status-message,
+.desk.text-3x .status-bar .error,
+.desk.text-3x .status-bar .status-message { line-height: 1.3; -webkit-line-clamp: 1; }
+/* Narrator's Answers (EchoesDialog.tsx): the command, the game's line,
+   what the narrator says, then Edit. */
+.hooks-head.echoes-row,
+.hooks-list.echoes-list li { display: grid; grid-template-columns: 136px minmax(0, 1fr) 200px 64px; gap: 0 12px; align-items: start; }
+.echoes-on { margin: 10px 0 0; }
+
+/* Making Your Character (components/CreationDialog.tsx): the stages, what's
+   settled, the question and its help, then its answers. Fixed heights, so
+   a question with a problem or a long help line never moves the answers. */
+.creation-dialog .dialog-body { overflow-x: hidden; }
+.creation-stages { display: flex; flex-wrap: wrap; gap: 4px 16px; list-style: none; margin: 0 0 8px; padding: 0; font-size: 12px; color: var(--muted); }
+.creation-stages li.current { color: var(--accent); font-weight: 600; }
+.dialog-box p.creation-chosen { min-height: 20px; margin: 0 0 8px; font-size: 12px; color: var(--text); }
+.dialog-box p.creation-question { min-height: 24px; margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--text); }
+.creation-problem { color: var(--warn); font-weight: 400; }
+.dialog-box p.creation-help { min-height: 42px; margin: 0 0 8px; }
+.creation-choices { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; margin: 0 0 12px; }
+.creation-choices ul { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.creation-choices button { width: 100%; text-align: left; }
+.dialog-box p.creation-about { margin: 0; color: var(--text); font-size: 13px; line-height: 1.5; }
+.creation-stats-box { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; margin: 0 0 12px; }
+.creation-stats { border-collapse: collapse; font-size: 13px; color: var(--text); }
+.creation-stats th, .creation-stats td { padding: 2px 12px 2px 0; text-align: left; font-weight: 400; }
+.creation-stats thead th { color: var(--muted); }
+.creation-stat-change { display: flex; gap: 6px; }
+.creation-stat-change button { min-width: 32px; padding-left: 4px; padding-right: 4px; }
+.creation-stats-side p { margin: 0 0 8px; color: var(--text); }
+.creation-row { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.creation-note { font-size: 12px; color: var(--muted); }
+.creation-typed { margin: 0 0 12px; }
+.creation-typed label { flex: 0 0 auto; color: var(--text); }
+.creation-text-toggle { margin: 0 0 8px; }
+.creation-text { max-height: 160px; overflow-y: auto; margin: 0; padding: 8px; white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text); background: var(--panel-2); border-radius: 6px; }
+.creation-text:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Artisan Skills (ArtisanDialog.tsx): the mentor, its answer, the key,
+   then the tree on black, a column a step, scrolling both ways inside
+   its box. The game's own 16 colors, so the pairs are the contrast
+   list's: light gray, white or light magenta on black, black on yellow,
+   light cyan or light green. */
+.dialog-box.dialog-artisan { max-width: 1216px; }
+.artisan-ask button { flex: 0 0 auto; padding: 6px 12px; }
+.dialog-box p.artisan-answer { height: 84px; overflow-y: auto; margin: 0 0 10px; color: var(--text); }
+.dialog-box p.artisan-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; font-family: var(--font-mono); font-size: 12px; white-space: pre; }
+.artisan-chart {
+  position: relative;
+  display: grid;
+  grid-auto-rows: 20px;
+  column-gap: 48px;
+  align-items: center;
+  height: 300px;
+  overflow: auto;
+  padding: 0 8px 8px;
+  background: #000000;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.artisan-chart:focus-within { border-color: var(--accent); }
+.artisan-lines { position: absolute; left: 0; top: 0; pointer-events: none; }
+.artisan-line { fill: none; stroke-width: 1; }
+.artisan-line-all { stroke: #555555; }
+.artisan-line-need { stroke: #55ffff; stroke-width: 2; }
+.artisan-line-opens { stroke: #55ff55; stroke-width: 2; }
+.artisan-step { position: sticky; top: 0; z-index: 2; align-self: stretch; background: #000000; color: #ffff55; white-space: pre; }
+.dialog-box .artisan-node,
+.artisan-key span {
+  position: relative;
+  z-index: 1;
+  justify-self: start;
+  min-height: 0;
+  padding: 0 4px 0 0;
+  border: none;
+  border-radius: 0;
+  background: #000000;
+  color: #aaaaaa;
+  font: inherit;
+  text-align: left;
+  white-space: pre;
+  transition: none;
+}
+.dialog-box .artisan-node:hover { color: #ffffff; }
+.dialog-box .artisan-kind-other { color: #ff55ff; }
+.dialog-box .artisan-mark-chosen,
+.dialog-box .artisan-mark-chosen:hover { background: #ffff55; color: #000000; }
+.dialog-box .artisan-mark-need,
+.dialog-box .artisan-mark-need:hover { background: #55ffff; color: #000000; }
+.dialog-box .artisan-mark-opens,
+.dialog-box .artisan-mark-opens:hover { background: #55ff55; color: #000000; }
+.dialog-box .artisan-node:focus-visible { outline: 2px dashed #ffffff; outline-offset: 0; }
+.dialog-box p.artisan-key span { padding: 0 4px; }
+/* The guide's side: a race's or class's picture (CoffeeMUD's, as ANSI
+   art), then its facts and the game's words. */
+.dialog-box.creation-dialog { max-width: 960px; }
+.creation-side { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
+.creation-side-words { min-width: 0; flex: 1 1 auto; }
+.dialog-box p.creation-facts { margin: 0 0 8px; color: var(--text); font-size: 13px; line-height: 1.5; }
+.creation-picture { flex: 0 0 auto; }
+/* The Log's channel tabs: as many as there are channels, so they wrap. */
+.journal-tabs { flex-wrap: wrap; }
+/* The Music Editor (MusicEditorDialog.tsx): a row of fields, the
+   pattern and the piano roll, both characters on black in the VGA
+   colors, as the Artisan chart. */
+.dialog-box.dialog-music { max-width: 1216px; }
+.music-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.music-row select, .music-row input { padding: 4px 6px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.music-row .music-number { width: 72px; }
+.music-row .music-name { width: 240px; }
+.music-row .music-file { width: 240px; }
+.music-row .music-beats { width: 80px; }
+.music-row .music-instrument { width: 320px; }
+.dialog-box p.music-heading { margin: 8px 0 4px; color: var(--text); font-weight: 600; }
+.dialog-box p.music-keys { margin: 4px 0 8px; color: var(--muted); font-size: 12px; }
+.music-grid { padding: 4px 8px; background: #000000; border: 1px solid var(--line); border-radius: 6px; font-family: var(--font-mono); font-size: 13px; line-height: 16px; overflow-x: auto; }
+.music-grid:focus-within { border-color: var(--accent); }
+.music-line { display: flex; height: 16px; white-space: pre; }
+.music-label, .music-bar-number { color: #aaaaaa; white-space: pre; }
+.music-label.chosen { color: #ffff55; }
+.music-line.black .music-label { color: #55ffff; }
+.dialog-box .music-cell {
+  min-height: 0;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: #000000;
+  color: #aaaaaa;
+  font: inherit;
+  line-height: 16px;
+  white-space: pre;
+  transition: none;
+}
+.dialog-box .music-cell:hover { color: #ffffff; }
+.dialog-box .music-cell.start { color: #ffff55; }
+.dialog-box .music-cell.held { color: #55ffff; }
+.dialog-box .music-cell.chosen { background: #ffff55; color: #000000; }
+.dialog-box .music-cell.here { outline: 2px dashed #aaaaaa; outline-offset: -2px; }
+.dialog-box .music-cell:focus-visible { outline: 2px dashed #ffffff; outline-offset: 0; }

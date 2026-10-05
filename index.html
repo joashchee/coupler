@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0000aa" />
+    <title>Coupler</title>
+    <!-- Startup screen styles live here, not in App.css, so the static splash
+         below paints before any JS or bundled CSS loads.
+         components/StartupScreen.tsx renders the same markup plus a progress
+         bar once React mounts. Colors mirror index.css's tokens. -->
+    <style>
+      html, body { margin: 0; height: 100%; background: #14161a; }
+      .startup-screen {
+        position: fixed; inset: 0; z-index: 1000;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        background: #14161a; color: #e7e9ee;
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        transition: opacity 0.2s ease;
+      }
+      .startup-screen.leaving { opacity: 0; pointer-events: none; }
+      .startup-mark { width: 96px; height: 96px; }
+      .startup-name { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+      .startup-accent { color: #facc15; }
+      .startup-progress { width: 220px; height: 6px; margin-top: 6px; }
+      .startup-label { min-height: 16px; font-size: 12px; color: #8b93a1; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      /* ANSIapps theme (src/ansiapps-theme.css finishes the job once it loads) */
+      html[data-theme="ansiapps"], html[data-theme="ansiapps"] body,
+      html[data-theme="ansiapps"] .startup-screen { background: #0000aa; color: #ffffff; }
+      html[data-theme="ansiapps"] .startup-accent { color: #ffff55; }
+      /* On the theme's 8 by 16 grid, as in ansiapps-theme.css's "Launch screen". */
+      html[data-theme="ansiapps"] .startup-screen { gap: 16px; padding-top: 16px; box-sizing: border-box; }
+      html[data-theme="ansiapps"] .startup-name,
+      html[data-theme="ansiapps"] .startup-label { font-size: 16px; line-height: 16px; min-height: 16px; letter-spacing: 0; font-weight: 400; }
+      html[data-theme="ansiapps"] .startup-progress { width: 224px; height: 16px; margin: 0; }
+    </style>
+    <!-- ANSIapps is Coupler's default theme: applied before first paint
+         unless "modern" is stored, so the splash never flashes the other
+         look. Same key and values as src/lib/theme.ts. -->
+    <script>
+      try {
+        if (localStorage.getItem("coupler.theme") !== "modern") document.documentElement.dataset.theme = "ansiapps";
+      } catch (e) {
+        document.documentElement.dataset.theme = "ansiapps";
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="root">
+      <div class="startup-screen">
+        <img class="startup-mark" src="/favicon.svg" alt="" />
+        <div class="startup-name">Coupler<span class="startup-accent">.</span></div>
+        <div class="startup-progress"></div>
+        <div class="startup-label"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

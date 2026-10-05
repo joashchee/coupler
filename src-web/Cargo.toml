@@ -1,0 +1,31 @@
+# Coupler's web build (coupler.ansiapps.com): the protocol and the game's
+# logic from src-tauri/src, the pure modules only, compiled to WebAssembly.
+# No SQLite, no speech engines, no codecs: as slim as it can be
+# No GPL/AGPL/LGPL dependencies (CLAUDE.md rule 5).
+[package]
+name = "coupler-web"
+version = "0.15.0"
+description = "Coupler, a dedicated CoffeeMUD client, for the web"
+authors = ["ansiapps"]
+license = "Apache-2.0"
+edition = "2021"
+publish = false
+
+# A plain WebAssembly module with a C-style interface (ffi.rs) and a
+# hand-written loader (src/web/core.ts): no wasm-bindgen, no generated
+# glue, nothing to install but the wasm32-unknown-unknown target.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# MCCP2 (telnet.rs), the pure-Rust backend as on the desktop.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

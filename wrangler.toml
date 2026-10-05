@@ -1,0 +1,7 @@
+# Cloudflare Pages, the web build at coupler.ansiapps.com.
+# A Direct Upload project: scripts/web-publish.sh
+# builds dist-web/ (with the maintainer's mirror) and uploads it. Only the
+# project's name is here; the account is wrangler's login on the Mac that
+# publishes, never a file in this repo.
+name = "coupler"
+pages_build_output_dir = "dist-web"
