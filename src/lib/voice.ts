@@ -26,6 +26,13 @@
  * the same. Lines from every engine share one queue, so urgent speech
  * and Cmd+Period cut off whichever is talking.
  *
+ * **Priority Audio** (lib/priority.ts): a line (`LineInfo.priority`) or
+ * a cue (`interrupt`) on the player's list never waits its turn. If a
+ * line is being said, it pauses and goes back first in the queue, the
+ * priority bell rings, the priority audio plays, and the queue picks up:
+ * a bundled voice where it stopped (a moment before), the system's from
+ * the line's start. Cmd+Period stops that too.
+ *
  * A line can ask to be told how it went (`onDone`): `true` once it was
  * said to the end, `false` when it was cut off, flushed or never said
  * (no volume, a quiet character). The journal (lib/journal.ts) marks a
@@ -306,6 +313,8 @@ export interface LineInfo {
   book?: mud.Book;
   /** Who's saying it, for the pop-up. */
   speaker?: string;
+  /** On the Priority Audio list (lib/priority.ts): said at once, the queue paused around it. */
+  priority?: boolean;
 }
 
 /** A line of talk being said, for the pop-up. */
@@ -321,6 +330,9 @@ interface Line extends LineInfo {
   how: Voice | null;
   /** What the pop-up shows, when it's more than the words said (the whole line of talk). */
   shown?: string;
+  /** Paused for priority audio: its rendering, and where to pick it up, seconds in. */
+  buffer?: AudioBuffer;
+  from?: number;
 }
 const waiting: Line[] = [];
 let busy = false;
@@ -377,14 +389,14 @@ export function pronounce(words: string): string {
 const lineRate = (how: Voice | null) => (rate * (how?.rate ?? 100)) / 100;
 
 function next() {
-  if (busy) return;
+  if (busy || interrupting) return;
   const line = waiting.shift();
   if (!line) return;
   busy = true;
   current = line;
   tellSpeaking(line);
   const mine = generation;
-  const done = (finished = true) => {
+  sayLine(line, mine, (finished = true) => {
     if (mine !== generation) return;
     busy = false;
     stopLine = null;
@@ -392,12 +404,15 @@ function next() {
     if (line.book) tellSpeaking(null);
     line.onDone?.(finished);
     next();
-  };
-  // A line with no voice is the narrator's.
+  });
+}
+
+/** Says one line in its voice, then calls `done`. A line with no voice is the narrator's. */
+function sayLine(line: Line, mine: number, done: (finished?: boolean) => void) {
   const how = line.how ?? narrator;
   const chosen = line.how ? characterVoice(line.how) : narratorChoice();
   const words = pronounce(line.words);
-  if (chosen && chosen.engine !== "system") sayBundled(words, how, chosen, done, mine, line.book);
+  if (chosen && chosen.engine !== "system") sayBundled(words, how, chosen, done, mine, line);
   else saySystem(words, how, chosen?.system ?? null, done);
 }
 
@@ -437,20 +452,28 @@ function toBuffer(context: AudioContext, bytes: ArrayBuffer): AudioBuffer | null
   return buffer;
 }
 
-function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finished?: boolean) => void, mine: number, book?: mud.Book) {
-  const rendering = mud.voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), book);
-  const thinking = thinkWhile(rendering, mine);
+function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finished?: boolean) => void, mine: number, line: Line) {
+  // A line paused for priority audio has its rendering already.
+  const kept = line.buffer;
+  const rendering = kept ? Promise.resolve(null) : mud.voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), line.book);
+  const thinking = kept ? 0 : thinkWhile(rendering, mine);
   rendering
     .then((bytes) => {
       window.clearTimeout(thinking);
       if (mine !== generation) return;
       const { context, gain } = voxOutput();
-      const buffer = toBuffer(context, bytes);
+      const buffer = kept ?? (bytes ? toBuffer(context, bytes) : null);
       if (!buffer) return done(false);
+      const from = Math.min(line.from ?? 0, buffer.duration);
+      line.buffer = undefined;
+      line.from = undefined;
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(gain);
-      source.onended = () => done(true);
+      source.onended = () => {
+        if (position?.line === line) position = null;
+        done(true);
+      };
       stopLine = () => {
         source.onended = null;
         try {
@@ -460,7 +483,9 @@ function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finis
         }
       };
       // After "Let's see…", if it's still being said.
-      source.start(Math.max(context.currentTime, letsSeeEnds));
+      const at = Math.max(context.currentTime, letsSeeEnds);
+      position = { line, buffer, startedAt: at, from };
+      source.start(at, from);
     })
     .catch((e) => {
       window.clearTimeout(thinking);
@@ -582,6 +607,7 @@ export function speak(text: string, urgent = false, how: Voice | null = null, in
   listeners.forEach((f) => f(words));
   if (volume === 0 || how?.quiet) return info.onDone?.(false);
   if (urgent) hush();
+  if (info.priority) return prioritize({ line: { words, how, ...info } });
   waiting.push({ words, how, ...info });
   next();
 }
@@ -598,9 +624,13 @@ export function speakTalk(text: string, how: Voice | null, info: LineInfo = {}) 
   if (!parts) return speak(text, false, how, info);
   listeners.forEach((f) => f(text.trim()));
   if (volume === 0 || how?.quiet) return info.onDone?.(false);
-  if (parts.lead) waiting.push({ words: parts.lead, how: null });
-  waiting.push({ words: parts.words, how, shown: text.trim(), ...info });
-  if (parts.after) waiting.push({ words: parts.after, how: null });
+  const lines: Line[] = [
+    ...(parts.lead ? [{ words: parts.lead, how: null }] : []),
+    { words: parts.words, how, shown: text.trim(), ...info },
+    ...(parts.after ? [{ words: parts.after, how: null }] : []),
+  ];
+  if (info.priority) return lines.forEach((line) => prioritize({ line }));
+  waiting.push(...lines);
   next();
 }
 
@@ -624,16 +654,118 @@ export function prerender(text: string, how: Voice | null, book: mud.Book) {
 
 /** Whether a line is being said or waiting its turn. */
 export function talking(): boolean {
-  return busy || waiting.length > 0;
+  return busy || interrupting || waiting.length > 0;
+}
+
+// ---- Priority Audio: at once, the queue paused around it (lib/priority.ts) ----
+
+/** A priority line to say, or a sound to play (returning how long it lasts, seconds). */
+type Urgent = { line: Line } | { sound: () => number };
+const priorityQueue: Urgent[] = [];
+/** Priority audio is playing: the queue waits. */
+let interrupting = false;
+/** The priority bell (lib/earcons.ts), returning how long to wait after it, seconds. */
+let bell: (() => number) | null = null;
+/** A breath between the bell, the priority audio and the queue picking up, seconds. */
+const GAP = 0.15;
+/** Picking a paused line up this far before where it stopped, seconds. */
+const BACK = 0.3;
+/** Where the bundled line being said is, to pick it up there after priority audio. */
+let position: { line: Line; buffer: AudioBuffer; startedAt: number; from: number } | null = null;
+
+/** The sound rung before priority audio cuts into the queue. */
+export function setPriorityBell(f: () => number) {
+  bell = f;
+}
+
+/**
+ * Pauses the line being said, putting it back first in the queue: a
+ * bundled voice picks up where it stopped, the system's starts the line
+ * again (the WebView can't pause one voice and speak another). Returns
+ * whether anything was being said.
+ */
+function pause(): boolean {
+  const line = current;
+  if (!busy || !line) return false;
+  generation++;
+  if (position?.line === line) {
+    line.buffer = position.buffer;
+    line.from = Math.max(0, position.from + sharedContext().currentTime - position.startedAt - BACK);
+  }
+  position = null;
+  if (line.book) tellSpeaking(null);
+  current = null;
+  busy = false;
+  const stop = stopLine;
+  stopLine = null;
+  stop?.();
+  if (canSpeak()) {
+    window.speechSynthesis.cancel();
+    speaking.clear();
+  }
+  waiting.unshift(line);
+  return true;
+}
+
+function prioritize(item: Urgent) {
+  priorityQueue.push(item);
+  if (interrupting) return;
+  interrupting = true;
+  const paused = pause();
+  const mine = generation;
+  const wait = paused && bell ? bell() : 0;
+  if (wait <= 0) return playUrgent();
+  window.setTimeout(() => mine === generation && playUrgent(), (wait + GAP) * 1000);
+}
+
+/** Plays the priority audio in turn, then lets the queue pick up. */
+function playUrgent() {
+  const mine = generation;
+  const item = priorityQueue.shift();
+  if (!item) {
+    interrupting = false;
+    return next();
+  }
+  if ("sound" in item) {
+    const seconds = item.sound();
+    window.setTimeout(() => mine === generation && playUrgent(), (seconds + GAP) * 1000);
+    return;
+  }
+  const line = item.line;
+  current = line;
+  tellSpeaking(line);
+  sayLine(line, mine, (finished = true) => {
+    if (mine !== generation) return;
+    stopLine = null;
+    current = null;
+    if (line.book) tellSpeaking(null);
+    line.onDone?.(finished);
+    playUrgent();
+  });
+}
+
+/**
+ * A sound on the Priority Audio list (a cue): played now if nothing's
+ * said; else the queue pauses, the bell rings, it plays (`play` returns
+ * how long it lasts, seconds), and the queue picks up.
+ */
+export function interrupt(play: () => number) {
+  if (!busy && !interrupting) {
+    play();
+    return;
+  }
+  prioritize({ sound: play });
 }
 
 /** Stops speaking, and forgets what was waiting: none of it was heard. */
 export function hush() {
   generation++;
-  const cut = [...(current ? [current] : []), ...waiting.splice(0)];
+  const cut = [...(current ? [current] : []), ...waiting.splice(0), ...priorityQueue.splice(0).flatMap((u) => ("line" in u ? [u.line] : []))];
   if (current?.book) tellSpeaking(null);
   current = null;
   busy = false;
+  interrupting = false;
+  position = null;
   const stop = stopLine;
   stopLine = null;
   stop?.();

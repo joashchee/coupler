@@ -24,6 +24,7 @@ import { CreationDialog } from "./components/CreationDialog";
 import { CuesDialog } from "./components/CuesDialog";
 import { ArtisanDialog } from "./components/ArtisanDialog";
 import { EchoesDialog } from "./components/EchoesDialog";
+import { PriorityDialog } from "./components/PriorityDialog";
 import { DisplayDialog } from "./components/DisplayDialog";
 import { PicturePanel } from "./components/PicturePanel";
 import { VitalsPanel } from "./components/VitalsPanel";
@@ -444,6 +445,7 @@ function App() {
   const [echoesSaid, setEchoesSaid] = useState(echoes.echoesOn);
   useEffect(() => echoes.onEchoesChanged(() => setEchoesSaid(echoes.echoesOn())), []);
   const [echoesOpen, setEchoesOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
   const [artisanOpen, setArtisanOpen] = useState(false);
   /** Which kinds of line the screen reader is given (lib/speech.ts), and the Speech dialog. */
   const [spoken, setSpoken] = useState<Spoken>(loadSpoken);
@@ -1604,7 +1606,7 @@ function App() {
     };
   }, [onFired]);
 
-  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   // With Coupler's voice on, a problem is heard: a low buzz, then the words.
   useEffect(() => {
@@ -1940,6 +1942,18 @@ function App() {
                   >
                     <ChecklistIcon aria-hidden="true" />
                     <span>Narrator's Answers…</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    data-testid="priority-button"
+                    onClick={() => {
+                      setGearOpen(false);
+                      setPriorityOpen(true);
+                    }}
+                  >
+                    <ChecklistIcon aria-hidden="true" />
+                    <span>Priority Audio…</span>
                   </button>
                   <button
                     type="button"
@@ -2578,6 +2592,7 @@ function App() {
 
       <CuesDialog open={cuesOpen} onClose={() => setCuesOpen(false)} onStatus={showStatus} />
       <EchoesDialog open={echoesOpen} onClose={() => setEchoesOpen(false)} onStatus={showStatus} />
+      <PriorityDialog open={priorityOpen} onClose={() => setPriorityOpen(false)} onStatus={showStatus} />
       <ArtisanDialog open={artisanOpen} onClose={() => setArtisanOpen(false)} voiced={voiced} />
 
       <AccountMenuDialog open={accountOpen} menu={accountMenu} onSend={accountSend} onTyped={accountTyped} onTypeInstead={accountTypeInstead} />

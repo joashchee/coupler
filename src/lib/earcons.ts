@@ -37,6 +37,11 @@
  *   channel's own, so OOC and INFO are told apart; three falling blips
  *   when lines came in unblipped and the log's gone 10 minutes unread.
  *
+ * - **Priority Audio** (lib/priority.ts): a cue on the player's list
+ *   cuts into the speech queue (`voice.interrupt`): the queue pauses,
+ *   the priority bell rings (its sound one of four, chosen in Priority
+ *   Audio), the cue plays, the queue picks up.
+ *
  * Every cue is the player's to change (`CUES`, `cueSetting`; Workshop's
  * Cues dialog, components/CuesDialog.tsx): its sound on or off, its
  * volume (a share of the CUE bus) and pitch, and its caption (the
@@ -45,13 +50,15 @@
  */
 import { cueOutput } from "./assets";
 import { caption } from "./captions";
+import * as priority from "./priority";
+import * as voice from "./voice";
 
 export type CueId =
   | "exits" | "footstep" | "discovery" | "threshold" | "landmark" | "arrived"
   | "heartbeat" | "hurt" | "healed" | "lowMana" | "lowMoves"
   | "fightStarts" | "fightEnds" | "opponentAt"
   | "tell" | "loggedOn" | "loggedOff" | "logLine" | "logReminder" | "journalWaiting"
-  | "problem" | "modeChanged"
+  | "problem" | "modeChanged" | "priorityBell"
   | "creationStep" | "creationDone";
 
 export interface CueInfo {
@@ -89,6 +96,7 @@ export const CUES: CueInfo[] = [
   { id: "logReminder", group: "Talk", name: "The log reminds", words: "Unread in the log", summary: "Three soft blips, falling, when lines came in without a blip and the log has gone 10 minutes unread; with the voice on, the narrator says how many." },
   { id: "journalWaiting", group: "Talk", name: "The journal knocks", words: "Knock knock: the journal has lines not yet heard", summary: "A wooden knock-knock when the journal has a line not yet heard and nothing is about to say it." },
   { id: "problem", group: "Coupler", name: "A problem", words: "A problem", summary: "A low buzz when something went wrong." },
+  { id: "priorityBell", group: "Coupler", name: "The priority bell", words: "Priority", summary: "Rung before priority audio when it cuts into speech; its sound is chosen in Priority Audio." },
   { id: "modeChanged", group: "Coupler", name: "A new way to play", words: "A new way to play", summary: "Three rising notes when you choose a way to play." },
   { id: "creationStep", group: "Create", name: "The next question", words: "The next question", summary: "A soft page turn when the game asks the next question about your new character." },
   { id: "creationDone", group: "Create", name: "Into the game", words: "Your character is in the game", summary: "A rising fanfare when your new character first comes into the game." },
@@ -219,22 +227,33 @@ function noise(context: AudioContext): AudioBuffer {
 }
 
 /**
- * Plays a cue's notes `delay` seconds from now, at its volume and pitch,
- * and captions it (lib/captions.ts) as it starts, unless `quiet` (each
- * heartbeat: its caption is when it starts or changes).
+ * Plays a cue: at once, or, when it's on the Priority Audio list and a
+ * line is being said, after the bell with the speech paused around it
+ * (`voice.interrupt`).
  */
 function play(id: CueId, notes: Note[], delay = 0, detail?: string, quiet = false) {
+  if (!quiet && priority.isCue(id)) voice.interrupt(() => sound(id, notes, delay, detail));
+  else sound(id, notes, delay, detail, quiet);
+}
+
+/**
+ * Plays a cue's notes `delay` seconds from now, at its volume and pitch,
+ * and captions it (lib/captions.ts) as it starts, unless `quiet` (each
+ * heartbeat: its caption is when it starts or changes). Returns how long
+ * it lasts, seconds: 0 when it makes no sound.
+ */
+function sound(id: CueId, notes: Note[], delay = 0, detail?: string, quiet = false): number {
   if (!quiet) {
     if (delay > 0) window.setTimeout(() => captionOf(id, detail), delay * 1000);
     else captionOf(id, detail);
   }
   const s = cueSetting(id);
-  if (!s.sound || s.volume === 0) return;
+  if (!s.sound || s.volume === 0) return 0;
   let out: ReturnType<typeof cueOutput>;
   try {
     out = cueOutput();
   } catch {
-    return;
+    return 0;
   }
   const share = s.volume / 100;
   const pitch = s.pitch / 100;
@@ -278,6 +297,7 @@ function play(id: CueId, notes: Note[], delay = 0, detail?: string, quiet = fals
     source.start(start);
     source.stop(end + 0.02);
   }
+  return delay + Math.max(0, ...notes.map((n) => n.at + n.dur));
 }
 
 // ---- Exits ----
@@ -544,6 +564,31 @@ export function problem() {
   play("problem", [{ freq: 150, at: 0, dur: 0.22, wave: "square", gain: 0.12, lowpass: 800 }], 0);
 }
 
+/** Each bell's notes (lib/priority.ts's `BELLS`). */
+const BELL_NOTES: Record<priority.BellSound, Note[]> = {
+  bell: [
+    { freq: 1047, at: 0, dur: 0.7, gain: 0.16 },
+    { freq: 1047 * 2.76, at: 0, dur: 0.3, gain: 0.05 },
+  ],
+  chime: [
+    { freq: 1319, at: 0, dur: 0.25, wave: "triangle", gain: 0.13 },
+    { freq: 1047, at: 0.12, dur: 0.25, wave: "triangle", gain: 0.13 },
+    { freq: 1568, at: 0.24, dur: 0.4, wave: "triangle", gain: 0.13 },
+  ],
+  dingDong: [
+    { freq: 659, at: 0, dur: 0.45, gain: 0.18 },
+    { freq: 523, at: 0.3, dur: 0.6, gain: 0.18 },
+  ],
+  ping: [{ freq: 1760, at: 0, dur: 0.18, gain: 0.14 }],
+};
+
+/** The priority bell, before priority audio cuts into speech. Returns how long to wait after it, seconds (the start of its fade, not the end of its ring). */
+export function priorityBell(bell = priority.bellSound()): number {
+  const length = sound("priorityBell", BELL_NOTES[bell]);
+  return length === 0 ? 0 : Math.min(length, 0.5);
+}
+voice.setPriorityBell(() => priorityBell());
+
 /** A way to play chosen. */
 export function modeChanged() {
   play("modeChanged", [
@@ -633,6 +678,7 @@ export function preview(id: CueId) {
     case "journalWaiting": return journalWaiting();
     case "problem": return problem();
     case "modeChanged": return modeChanged();
+    case "priorityBell": return void priorityBell();
     case "creationStep": return creationStep();
     case "creationDone": return creationDone();
   }

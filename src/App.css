@@ -766,6 +766,11 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .hooks-head.echoes-row,
 .hooks-list.echoes-list li { display: grid; grid-template-columns: 136px minmax(0, 1fr) 200px 64px; gap: 0 12px; align-items: start; }
 .echoes-on { margin: 10px 0 0; }
+/* Priority Audio (PriorityDialog.tsx): what, its kind, then Remove. */
+.hooks-head.priority-row,
+.hooks-list.priority-list li { display: grid; grid-template-columns: minmax(0, 1fr) 96px 64px; gap: 0 12px; align-items: start; }
+.hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
+.priority-add { margin-top: 10px; }
 
 /* Making Your Character (components/CreationDialog.tsx): the stages, what's
    settled, the question and its help, then its answers. Fixed heights, so

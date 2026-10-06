@@ -583,6 +583,12 @@
 :root[data-theme="ansiapps"] .hooks-head.echoes-row,
 :root[data-theme="ansiapps"] .hooks-list.echoes-list li { grid-template-columns: 136px minmax(0, 1fr) 200px 56px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .echoes-on { margin: 16px 0 0; }
+/* Priority Audio: what (the rest), its kind (10 cells) and Remove (7);
+   its menus 60 cells wide. */
+:root[data-theme="ansiapps"] .hooks-head.priority-row,
+:root[data-theme="ansiapps"] .hooks-list.priority-list li { grid-template-columns: minmax(0, 1fr) 80px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
+:root[data-theme="ansiapps"] .priority-add { margin-top: 16px; }
 :root[data-theme="ansiapps"] .hooks-head.assets-row,
 :root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 8px 192px 72px minmax(0, 1fr) 176px 144px 56px; gap: 0 16px; }
 /* A picture tried or made: 80 cells by 25 rows on black (18 in Create

@@ -11,6 +11,8 @@
  *   A line is **heard** only once it's said to the end; Cmd+Period cuts
  *   off the line and flushes the queue, and what was cut stays unheard.
  *   A repeat (an NPC's line said before) isn't kept, and isn't spoken.
+ *   Talk on the Priority Audio list (tells, say, the group; lib/priority.ts)
+ *   doesn't wait: the queue pauses for it.
  * - **The log** (OOC, INFO, every channel) is never spoken on arrival:
  *   a line is a soft blip, at its channel's own note, and captioned, but
  *   at most one blip every `LOG_COOLDOWN`: a busy channel isn't a
@@ -35,6 +37,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as earcons from "./earcons";
 import * as mud from "./mud";
+import * as priority from "./priority";
 import * as voice from "./voice";
 
 interface Options {
@@ -174,7 +177,8 @@ export function useJournal({ cues, voiced, logOpen }: Options) {
           return;
         }
         if (cues && (talk.kind === "tell" || talk.kind === "group")) earcons.tell();
-        if (voiced && !talk.voice?.quiet) voice.speakTalk(talk.text, talk.voice, { book, speaker, onDone: entry ? heardWhenDone(entry.id) : undefined });
+        const first = talk.kind !== "channel" && priority.isSpeech(talk.kind);
+        if (voiced && !talk.voice?.quiet) voice.speakTalk(talk.text, talk.voice, { book, speaker, onDone: entry ? heardWhenDone(entry.id) : undefined, priority: first });
         else if (entry && !talk.voice?.quiet) remind();
       }),
     ];

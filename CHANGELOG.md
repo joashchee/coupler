@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Priority Audio** (2026-10-06): Workshop's gear → Priority Audio… is
+  a list of the cues and speech that never wait behind the speech queue
+  (`lib/priority.ts`): any cue but the heartbeat, tells, the group, a
+  say, the time of day, a long look, a command's answer, or a game line
+  holding the player's words. If something's being said, it pauses, the
+  priority bell rings (a bell, a chime, ding-dong or a ping; its volume,
+  pitch and caption a cue in Cues), the priority audio plays, and the
+  queue picks up: a bundled voice where it stopped, the system's from
+  the line's start (`voice.ts`'s `interrupt`, `LineInfo.priority`).
+  Starts with tells and a fight starting.
+
 ## 0.28.0 (2026-10-06)
 
 - **The account menu is a dialog** (2026-10-06): `account.rs` reads

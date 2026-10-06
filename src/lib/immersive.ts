@@ -32,7 +32,10 @@
  *    in few words and each choice as it's reached, components/
  *    CreationDialog.tsx), what the player asks for by key, and in a
  *    fight, no silence: the freshest fact whenever nothing's said, and
- *    what matters at once, cutting the queue (lib/fightTalk.ts).
+ *    what matters at once, cutting the queue (lib/fightTalk.ts). What's
+ *    on the Priority Audio list (lib/priority.ts: the time, a long look,
+ *    a command's answer, a game line with the player's words) is said at
+ *    once, the queue paused around it.
  *
  * Layers 1 to 3 play in every way to play; 4 and 5 in Immersive, and in
  * Workshop when the player turns them on.
@@ -43,6 +46,7 @@ import * as echoes from "./echoes";
 import { FightTalk } from "./fightTalk";
 import * as mud from "./mud";
 import { exitsLine, promptCut } from "./output";
+import * as priority from "./priority";
 import * as voice from "./voice";
 
 interface Immersive {
@@ -204,8 +208,8 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
   /** A hook went off for the read about to come (its `hook-fired` comes just before its `mud-output`). */
   const hooked = useRef(false);
   useEffect(() => {
-    const say = (text: string) => {
-      if (on.current.voiced && voice.speakable(text)) voice.speak(text);
+    const say = (text: string, first = false) => {
+      if (on.current.voiced && voice.speakable(text)) voice.speak(text, false, null, { priority: first });
     };
     const subscriptions = [
       mud.onGmcp((e) => {
@@ -224,12 +228,24 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         });
         // The narrator's (no voice given): it says the time, the game output doesn't.
         e.lines.forEach((line, i) => {
-          if (e.kinds[i] === "time") say(spokenTime(line.map((s) => s.text).join("")));
+          if (e.kinds[i] === "time") say(spokenTime(line.map((s) => s.text).join("")), priority.isSpeech("time"));
         });
         // The commands' one-line answers, in short (lib/echoes.ts).
-        if (echoes.echoesOn()) e.echoes.forEach((answer) => say(echoes.spoken(answer)));
+        if (echoes.echoesOn()) e.echoes.forEach((answer) => say(echoes.spoken(answer), priority.isAnswer(answer.id)));
         // A long look: the room as written, and what only color showed (src-tauri/src/hidden.rs).
-        if (e.hidden) say(spokenLook(e.hidden));
+        if (e.hidden) say(spokenLook(e.hidden), priority.isSpeech("look"));
+        // The game's lines with the player's priority words, said at once, as written (not an answer, said above).
+        const answered = new Set(e.echoes.flatMap((a) => Array.from({ length: a.lines }, (_, k) => a.line + k)));
+        const urgent = new Set<number>();
+        if (inGame.current && !creating.current) {
+          e.lines.forEach((line, i) => {
+            const text = line.map((s) => s.text).join("").trim();
+            if (e.kinds[i] === "game" && !answered.has(i) && text !== "" && priority.matchesLine(text)) {
+              urgent.add(i);
+              say(text, true);
+            }
+          });
+        }
         // A lone line of the game's ("A rat arrives from the north."), with no
         // hook's sound to tell it: said, rather than missed. A block (a
         // room, a list) is the screen reader's or the review keys'.
@@ -240,10 +256,10 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
           const lone = e.lines
             .map((line, i) => {
               const text = line.map((s) => s.text).join("");
-              return { text: (i === 0 ? text.slice(promptCut(text, before)) : text).trim(), kind: e.kinds[i] };
+              return { text: (i === 0 ? text.slice(promptCut(text, before)) : text).trim(), kind: e.kinds[i], i };
             })
             .filter((l) => l.text !== "" && l.kind === "game" && !exitsLine(l.text));
-          if (lone.length === 1 && e.echoes.length === 0 && !e.hidden) say(lone[0].text);
+          if (lone.length === 1 && e.echoes.length === 0 && !e.hidden && !urgent.has(lone[0].i)) say(lone[0].text);
         }
         // Making a character, the guide says the question, not the screens of text before it.
         if (inGame.current || (creating.current && !on.current.guideHidden)) return;

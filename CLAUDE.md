@@ -411,6 +411,15 @@ and its order is in the roadmap's phase 2.
   Workshop's gear → Narrator's Answers… (`components/EchoesDialog.tsx`,
   `lib/echoes.ts`, `coupler.echoes`, the table from `echo_list`)
   changes the words.
+- **Priority Audio** (`src/lib/priority.ts`, `coupler.priority`;
+  Workshop's gear → Priority Audio…, `components/PriorityDialog.tsx`):
+  cues (`earcons.ts` routes them through `voice.interrupt`), talk kinds
+  (`lib/journal.ts`), the time and a long look and a command's answer
+  (`lib/immersive.ts`), and game lines holding the player's words, said
+  at once (`LineInfo.priority`). If a line is being said it pauses
+  (`voice.ts` `pause`: a bundled voice resumes where it stopped, the
+  system's restarts the line), the `priorityBell` cue rings (its sound
+  one of `BELLS`), the priority audio plays, the queue picks up.
 - `src-tauri/src/hidden.rs`: **hidden details**, pure and
   unit-tested: a long look at the room (`LL`, `LONGLOOK`, `EXAMINE`
   alone) colors the words of the room's hidden items in HIGHLIGHT
