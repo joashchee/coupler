@@ -184,7 +184,10 @@ impl Account {
         }
         let open = partial.is_some_and(is_prompt);
         if open {
-            let changed = seen || self.menu.is_none();
+            // Changed from what the dialog shows: a list read in an earlier
+            // read than the prompt (the game prints it, then the prompt
+            // apart) only shows now.
+            let changed = seen || self.menu.as_ref() != Some(&menu);
             self.known = Some(menu.clone());
             self.menu = Some(menu.clone());
             return changed.then_some(Update::Open(menu));
@@ -207,6 +210,11 @@ impl Account {
         }
         self.asked = true;
         true
+    }
+
+    /// Whether the menu's open: its prompt waits for an answer.
+    pub fn open(&self) -> bool {
+        self.menu.is_some()
     }
 
     /// A character came into the game: the menu is gone till a logout.
@@ -245,6 +253,20 @@ mod tests {
         "",
         " (Enter your character name to login)",
     ];
+
+    #[test]
+    fn a_list_read_before_the_prompt_comes_shows_with_it() {
+        let mut a = Account::default();
+        a.lines(&strings(MENU), Some(PROMPT));
+        assert!(a.wants_list());
+        // The list in one read, the prompt alone in the next.
+        assert_eq!(a.lines(&strings(&["Name  Race  Level  Class  Last  Remain", "", "Total hours played: 0"]), None), None);
+        let Some(Update::Open(menu)) = a.lines(&[], Some(PROMPT)) else { panic!("the list should show") };
+        assert_eq!(menu.characters, Some(Vec::new()));
+        assert_eq!(menu.total_hours, Some(0));
+        // The same again changes nothing.
+        assert_eq!(a.lines(&[], Some(PROMPT)), None);
+    }
 
     #[test]
     fn the_menu_opens_and_asks_for_the_list_once() {

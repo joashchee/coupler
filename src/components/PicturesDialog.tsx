@@ -4,6 +4,7 @@
  * painter is here for now; the models a player brings will be listed
  * here too, each with where to get it and its license.
  */
+import * as keys from "../lib/keys";
 import { PICTURE_ENGINES, PICTURE_STYLES, PICTURE_WHENS, PORTRAIT_SOURCES, type PictureSettings } from "../lib/pictures";
 import { Dialog } from "./Dialog";
 
@@ -101,7 +102,7 @@ export function PicturesDialog({ open, onClose, settings, onSettings, onForgetLo
         ))}
       </fieldset>
       <p className="about-section-desc">
-        Cmd+Shift+P paints the room you're in again, in a new look it keeps. First Looks Back returns every room to its first look. A picture you set for a
+        {keys.keys("Cmd+Shift+P")} paints the room you're in again, in a new look it keeps. First Looks Back returns every room to its first look. A picture you set for a
         room in the hooks list shows in place of the painting.
       </p>
     </Dialog>

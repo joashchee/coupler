@@ -487,6 +487,9 @@ fn push_escaped(msg: &mut Vec<u8>, bytes: &[u8]) {
     }
 }
 
+/// IAC NOP: read, and nothing more (the keep-alive, `session.rs`).
+pub const NOP: [u8; 2] = [IAC, 241];
+
 /// A line the user typed, ready for the socket: UTF-8 (which never
 /// contains 0xFF, but escape anyway), ending in CR LF.
 pub fn encode_line(line: &str) -> Vec<u8> {

@@ -184,7 +184,7 @@
 :root[data-theme="ansiapps"] button.primary:hover { background: var(--dos-white); }
 :root[data-theme="ansiapps"] button.danger-fill { background: var(--dos-red); color: var(--dos-white); }
 :root[data-theme="ansiapps"] button.danger-fill:hover { background: var(--dos-lightred); color: var(--dos-black); }
-:root[data-theme="ansiapps"] button:disabled { opacity: 1; color: var(--dos-darkgray); }
+:root[data-theme="ansiapps"] button:disabled, :root[data-theme="ansiapps"] button[aria-disabled="true"] { opacity: 1; color: var(--dos-darkgray); }
 
 /* Panels: double-line frames with the title set into the top border */
 /* The frame is drawn in the panel's outermost ring of cells. */
@@ -334,7 +334,7 @@
 :root[data-theme="ansiapps"] .dialog-box button.primary { background: var(--dos-yellow); color: var(--dos-black); }
 :root[data-theme="ansiapps"] .dialog-box button.primary:hover { background: var(--dos-white); }
 :root[data-theme="ansiapps"] .dialog-box button.danger-fill { background: var(--dos-red); color: var(--dos-white); }
-:root[data-theme="ansiapps"] .dialog-box button:disabled { background: var(--dos-lightgray); color: var(--dos-darkgray); }
+:root[data-theme="ansiapps"] .dialog-box button:disabled, :root[data-theme="ansiapps"] .dialog-box button[aria-disabled="true"] { background: var(--dos-lightgray); color: var(--dos-darkgray); }
 :root[data-theme="ansiapps"] .dialog-actions button { min-height: 0; }
 :root[data-theme="ansiapps"] .dialog-box .mono { color: var(--dos-blue); }
 :root[data-theme="ansiapps"] .about-section-title { color: var(--dos-blue); }
@@ -496,6 +496,8 @@
 :root[data-theme="ansiapps"] .map-picture { color: var(--dos-white); height: 240px; }
 :root[data-theme="ansiapps"] .map-cell.stub { color: var(--dos-lightgray); }
 :root[data-theme="ansiapps"] .map-cell.current { color: var(--dos-yellow); }
+@keyframes map-you-dos { 50% { background: var(--dos-yellow); color: var(--dos-black); } }
+:root[data-theme="ansiapps"] .map-cell.you { animation-name: map-you-dos; }
 :root[data-theme="ansiapps"] .map-cell.picked { background: var(--dos-cyan); color: var(--dos-black); }
 :root[data-theme="ansiapps"] .keys-table th,
 :root[data-theme="ansiapps"] .keys-table td { padding: 0; }

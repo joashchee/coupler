@@ -15,6 +15,7 @@
  *
  * The list isn't a live region: talk arrives all the time while playing.
  */
+import * as keys from "../lib/keys";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import * as mud from "../lib/mud";
 import { Dialog } from "./Dialog";
@@ -132,7 +133,7 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
     try {
       const chosen = await mud.journalUnheardEntries(book);
       if (chosen.length === 0) onStatus(`Everything in the ${title.toLowerCase()} has been heard.`);
-      else await play(chosen, `Playing ${plural(chosen.length, "unheard line", "unheard lines")}. Cmd+Period stops.`);
+      else await play(chosen, keys.keys(`Playing ${plural(chosen.length, "unheard line", "unheard lines")}. Cmd+Period stops.`));
     } catch (e) {
       onError(String(e));
     }
@@ -171,7 +172,7 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
         {log
           ? "What's said outside the game: OOC, INFO and every other channel. These lines aren't spoken as they come; each is a soft blip, a note of its channel's own."
           : "What's said in the game, to you and around you, by who said it and when. Someone repeating a line they've said before is kept once."}{" "}
-        A green bullet is a line not yet heard to the end. Play says one now; Cmd+Period stops.
+        {keys.keys("A green bullet is a line not yet heard to the end. Play says one now; Cmd+Period stops.")}
       </p>
       {log && (
         <div className="hooks-tabs journal-tabs" role="tablist" aria-label="Channels">

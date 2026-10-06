@@ -269,6 +269,9 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
       return { journal: 0, log: 0, speakers: [] };
     case "voice_engines":
       return [];
+    case "screen_reader_running":
+      // A web page can't tell: Coupler's voice doesn't take turns there.
+      return false;
     case "voice_prerender":
     case "picture_now":
       return null;

@@ -9,11 +9,12 @@
 //!
 //! **A race** stands as itself beside a measuring stick marked every
 //! foot up to six, so its size shows against the others: its height and
-//! build from its Java (`Races/*.java`, `shortestMale` and the rest), its
-//! skin and hair, pointed ears (elves), a beard and a helmet (dwarves), a
-//! tall hat (gnomes), bare feet (halflings), tusks (half ogres), and red
-//! eyes where it sees in the dark. A race the painter doesn't know is
-//! made from its name, the same each time.
+//! build from its Java (`SIZES`: every player race CoffeeMUD documents,
+//! the ones a game turns on too, like Pixie), its skin and hair, pointed
+//! ears (elves), a beard and a helmet (dwarves), a tall hat (gnomes),
+//! bare feet (halflings), tusks (half ogres, orcs), wings (pixies,
+//! faeries), and red eyes where it sees in the dark. A race the painter
+//! doesn't know is made from its name, the same each time.
 //!
 //! **A class** is a person in its clothes with its tools: armor and a
 //! sword, a robe and a glowing staff, a hood and a dagger, a holy symbol,
@@ -52,37 +53,120 @@ enum Feature {
     TallHat,
     BareFeet,
     Tusks,
+    /// Wings behind the shoulders, in this color.
+    Wings(u8),
 }
 
-/// CoffeeMUD's player races (`Races/*.java`): height is `shortestMale`
-/// and half `heightVariance`.
+/// Every player race's average height (inches: `shortestMale` and half
+/// `heightVariance`) and weight (pounds: `lightestWeight` and half
+/// `weightVariance`), and whether it sees in the dark, from its Java and
+/// what it extends. `scripts/creation-art.py` prints this table again
+/// from a new snapshot.
+const SIZES: &[(&str, i32, i32, bool)] = &[
+    ("aarakocran", 65, 200, false),
+    ("beastkin", 74, 175, true),
+    ("centaur", 66, 1350, true),
+    ("drow", 65, 120, true),
+    ("duergar", 56, 200, true),
+    ("dwarf", 56, 200, true),
+    ("elf", 65, 120, true),
+    ("faerie", 21, 12, false),
+    ("ghast", 70, 150, true),
+    ("ghost", 70, 150, true),
+    ("ghoul", 70, 150, true),
+    ("giant", 96, 400, false),
+    ("githyanki", 70, 135, true),
+    ("gnoll", 76, 220, true),
+    ("gnome", 43, 85, true),
+    ("goblin", 48, 95, true),
+    ("halfelf", 70, 135, true),
+    ("halfling", 43, 105, true),
+    ("halfogre", 101, 350, false),
+    ("human", 74, 175, false),
+    ("lich", 70, 150, true),
+    ("lizardman", 73, 225, false),
+    ("merfolk", 96, 205, true),
+    ("mindflayer", 70, 135, true),
+    ("mummy", 70, 150, true),
+    ("mustie", 48, 72, true),
+    ("naga", 65, 120, true),
+    ("ogre", 80, 335, false),
+    ("orc", 66, 200, true),
+    ("pixie", 26, 32, false),
+    ("spectre", 70, 150, true),
+    ("svirfneblin", 43, 85, true),
+    ("tabaxi", 73, 160, true),
+    ("tiefling", 69, 190, true),
+    ("vampire", 70, 150, true),
+    ("zombie", 70, 150, true),
+];
+
+/// Width against a human's, in tenths, from pounds an inch of height
+/// against a human's (175 pounds, 74 inches): a pixie's slight, a
+/// dwarf's stocky. A centaur's horse half is left out.
+fn bulk(inches: i32, pounds: i32) -> i32 {
+    let against_human = (pounds as f64 / inches as f64) / (175.0 / 74.0);
+    ((10.0 * against_human.sqrt()).round() as i32).clamp(6, 15)
+}
+
+/// How each player race looks: its skin, hair, clothes and feature; its
+/// size from `SIZES`.
 fn race(name: &str) -> Build {
-    let b = |inches, bulk, skin, hair, clothes, feature, infravision| Build { inches, bulk, skin, hair, clothes, feature, infravision };
-    match key(name).as_str() {
-        "human" => b(70, 10, LIGHTRED, Some(BROWN), BLUE, Feature::None, false),
-        "elf" => b(65, 8, LIGHTGRAY, Some(YELLOW), GREEN, Feature::PointedEars, true),
-        "halfelf" => b(70, 9, LIGHTRED, Some(BROWN), CYAN, Feature::PointedEars, true),
-        "dwarf" => b(56, 14, LIGHTRED, Some(RED), BROWN, Feature::BeardAndHelmet, true),
-        "gnome" => b(43, 9, LIGHTRED, Some(WHITE), MAGENTA, Feature::TallHat, true),
-        "halfling" => b(43, 10, LIGHTRED, Some(BROWN), GREEN, Feature::BareFeet, true),
-        "halfogre" => b(101, 15, GREEN, None, BROWN, Feature::Tusks, false),
-        other => {
-            // Made from the name: the same each time.
-            let mut rng = Rng::new(seed("race", other, 0));
-            let features = [Feature::None, Feature::PointedEars, Feature::TallHat, Feature::Tusks];
-            let skins = [LIGHTRED, BROWN, GREEN, LIGHTGRAY, CYAN];
-            let clothes = [BLUE, GREEN, BROWN, MAGENTA, RED, CYAN];
-            b(
-                rng.between(40, 96),
-                rng.between(8, 14),
-                skins[rng.below(skins.len() as i32) as usize],
-                Some([BROWN, YELLOW, WHITE, RED, DARKGRAY][rng.below(5) as usize]),
-                clothes[rng.below(clothes.len() as i32) as usize],
-                features[rng.below(features.len() as i32) as usize],
-                rng.chance(50),
-            )
-        }
-    }
+    use Feature::*;
+    let k = key(name);
+    let look: Option<(u8, Option<u8>, u8, Feature)> = match k.as_str() {
+        "human" => Some((LIGHTRED, Some(BROWN), BLUE, None)),
+        "elf" => Some((LIGHTGRAY, Some(YELLOW), GREEN, PointedEars)),
+        "halfelf" => Some((LIGHTRED, Some(BROWN), CYAN, PointedEars)),
+        "dwarf" => Some((LIGHTRED, Some(RED), BROWN, BeardAndHelmet)),
+        "gnome" => Some((LIGHTRED, Some(WHITE), MAGENTA, TallHat)),
+        "halfling" => Some((LIGHTRED, Some(BROWN), GREEN, BareFeet)),
+        "halfogre" => Some((GREEN, Option::None, BROWN, Tusks)),
+        "pixie" => Some((LIGHTRED, Some(LIGHTGREEN), GREEN, Wings(LIGHTCYAN))),
+        "faerie" => Some((LIGHTRED, Some(LIGHTMAGENTA), MAGENTA, Wings(YELLOW))),
+        "aarakocran" => Some((BROWN, Some(YELLOW), BLUE, Wings(BROWN))),
+        "tiefling" => Some((RED, Some(DARKGRAY), MAGENTA, Wings(RED))),
+        "drow" => Some((DARKGRAY, Some(WHITE), MAGENTA, PointedEars)),
+        "duergar" => Some((LIGHTGRAY, Some(DARKGRAY), BROWN, BeardAndHelmet)),
+        "svirfneblin" => Some((LIGHTGRAY, Option::None, BROWN, None)),
+        "goblin" => Some((GREEN, Option::None, RED, PointedEars)),
+        "orc" => Some((GREEN, Some(DARKGRAY), BROWN, Tusks)),
+        "ogre" => Some((BROWN, Option::None, RED, Tusks)),
+        "gnoll" => Some((BROWN, Some(YELLOW), RED, None)),
+        "giant" => Some((LIGHTRED, Some(BROWN), CYAN, None)),
+        "lizardman" => Some((GREEN, Option::None, BROWN, None)),
+        "merfolk" => Some((CYAN, Some(GREEN), BLUE, None)),
+        "mindflayer" => Some((MAGENTA, Option::None, RED, None)),
+        "naga" => Some((GREEN, Option::None, YELLOW, None)),
+        "tabaxi" => Some((YELLOW, Some(BROWN), GREEN, None)),
+        "beastkin" => Some((BROWN, Some(BROWN), GREEN, None)),
+        "centaur" => Some((LIGHTRED, Some(BROWN), BROWN, None)),
+        "githyanki" => Some((YELLOW, Some(DARKGRAY), RED, PointedEars)),
+        "mustie" => Some((BROWN, Some(BROWN), GREEN, None)),
+        "lich" => Some((WHITE, Option::None, MAGENTA, None)),
+        "vampire" => Some((WHITE, Some(DARKGRAY), RED, None)),
+        "mummy" => Some((WHITE, Option::None, WHITE, None)),
+        "zombie" => Some((GREEN, Option::None, BROWN, None)),
+        "ghast" | "ghoul" => Some((LIGHTGRAY, Option::None, BROWN, None)),
+        "ghost" | "spectre" => Some((LIGHTCYAN, Option::None, LIGHTGRAY, None)),
+        _ => Option::None,
+    };
+    let size = SIZES.iter().find(|(n, ..)| *n == k).map(|&(_, inches, pounds, dark)| (inches, bulk(inches, pounds), dark));
+    // Made from the name: the same each time.
+    let mut rng = Rng::new(seed("race", &k, 0));
+    let (inches, bulk, infravision) = size.unwrap_or_else(|| (rng.between(40, 96), rng.between(8, 14), rng.chance(50)));
+    let (skin, hair, clothes, feature) = look.unwrap_or_else(|| {
+        let features = [None, PointedEars, TallHat, Tusks];
+        let skins = [LIGHTRED, BROWN, GREEN, LIGHTGRAY, CYAN];
+        let clothes = [BLUE, GREEN, BROWN, MAGENTA, RED, CYAN];
+        (
+            skins[rng.below(skins.len() as i32) as usize],
+            Some([BROWN, YELLOW, WHITE, RED, DARKGRAY][rng.below(5) as usize]),
+            clothes[rng.below(clothes.len() as i32) as usize],
+            features[rng.below(features.len() as i32) as usize],
+        )
+    });
+    Build { inches, bulk, skin, hair, clothes, feature, infravision }
 }
 
 /// What a class wears and carries.
@@ -173,8 +257,8 @@ struct Colors {
 /// A person `tall` pixels high and `bulk` tenths of a human's width,
 /// standing on `ground` at `cx`.
 fn figure(canvas: &mut Canvas, (cx, ground): (i32, i32), tall: i32, bulk: i32, Colors { skin, clothes, legs }: Colors) -> Body {
-    let tall = tall.max(8);
-    let head = (tall / 6).max(3);
+    let tall = tall.max(5);
+    let head = (tall / 6).max(2);
     let head_half = ((head * bulk + 9) / 20).max(1);
     let head_top = ground - tall;
     let head_bottom = head_top + head;
@@ -251,6 +335,18 @@ fn paint_race(canvas: &mut Canvas, name: &str) {
     let tall = (build.inches * foot / 12).min(ground - 1);
     let cx = canvas.w * 9 / 16;
     let legs = if build.feature == Feature::Tusks { build.skin } else { DARKGRAY };
+    if let Feature::Wings(color) = build.feature {
+        // Behind the figure: from the shoulders out and up, then down to the hips.
+        let top = ground - tall;
+        let span = (tall / 2).max(2);
+        let half = ((tall * build.bulk) / 50).max(2);
+        for i in 0..span {
+            let reach = half + 1 + (span - i) * 2 / 3;
+            let y = top + tall / 6 + i;
+            canvas.rect(cx - reach - 1, y, cx - half, y + 1, color);
+            canvas.rect(cx + half + 1, y, cx + reach + 2, y + 1, color);
+        }
+    }
     let b = figure(canvas, (cx, ground), tall, build.bulk, Colors { skin: build.skin, clothes: build.clothes, legs });
     if let Some(hair) = build.hair {
         canvas.rect(cx - b.head_half, b.head_top, cx + b.head_half + 1, b.head_top + 1, hair);
@@ -283,7 +379,7 @@ fn paint_race(canvas: &mut Canvas, name: &str) {
             canvas.set(cx + 1, b.head_bottom - 1, WHITE);
             canvas.rect(cx - b.half, b.hips - 1, cx + b.half + 1, b.hips + 2, BROWN);
         }
-        Feature::None => {}
+        Feature::Wings(_) | Feature::None => {}
     }
 }
 
@@ -450,6 +546,15 @@ mod tests {
         };
         assert!(top("Half Ogre") < top("Human"));
         assert!(top("Human") < top("Gnome"));
+        assert!(top("Gnome") < top("Pixie"));
+    }
+
+    #[test]
+    fn every_player_race_has_its_size_and_a_look() {
+        for (name, inches, ..) in SIZES {
+            assert_eq!(race(name).inches, *inches, "{name}");
+        }
+        assert!(race("Pixie").inches < 30 && race("Pixie").bulk < race("Human").bulk);
     }
 
     #[test]
@@ -477,13 +582,13 @@ mod look {
     use super::*;
     use crate::ansi::Color;
 
-    /// Writes every stock race and some classes as a PPM to `OUT`, side by
+    /// Writes the races and some classes as a PPM to `OUT`, side by
     /// side, to look at while tuning: `OUT=/tmp/p.ppm cargo test portrait::look -- --ignored`.
     #[test]
     #[ignore]
     fn show() {
         const VGA: [[u8; 3]; 16] = [[0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170], [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255]];
-        let arts: Vec<Art> = ["Human", "Elf", "Half Elf", "Dwarf", "Gnome", "Halfling", "Half Ogre"].iter().map(|n| portrait("race", n, 32, 16))
+        let arts: Vec<Art> = ["Human", "Elf", "Half Elf", "Dwarf", "Gnome", "Halfling", "Half Ogre", "Pixie", "Faerie", "Drow", "Duergar", "Orc", "Tiefling", "Aarakocran"].iter().map(|n| portrait("race", n, 32, 16))
             .chain(["Fighter", "Mage", "Thief", "Cleric", "Druid", "Bard", "Monk", "Artisan", "Paladin", "Necromancer"].iter().map(|n| portrait("class", n, 32, 16)))
             .collect();
         let (w, h) = (arts.len() * 33, 32);

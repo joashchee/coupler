@@ -10,6 +10,7 @@
  * what's coming in without losing their place; the game is told the
  * same size throughout, and screen readers aren't given it twice.
  */
+import * as keys from "../lib/keys";
 import { memo, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { GameColors } from "../lib/display";
 import { spanColors, type Line } from "../lib/mud";
@@ -193,7 +194,7 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
     </div>
       {reviewing !== null && (
         <div className="terminal terminal-live" style={{ "--rows": live + 1 } as CSSProperties} aria-hidden="true" data-testid="terminal-live">
-          <div className="terminal-line terminal-live-rule">{"── Live (Option+End) ".padEnd(80, "─")}</div>
+          <div className="terminal-line terminal-live-rule">{keys.keys("── Live (Option+End) ").padEnd(80, "─")}</div>
           {(unfinished ? shown.slice(-(live - 1)) : shown.slice(-live)).map((l) => (
             <LineView key={l.id} line={shownLine(l, hide)} kind={l.kind} colors={colors} />
           ))}

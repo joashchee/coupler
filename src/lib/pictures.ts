@@ -8,6 +8,7 @@
  * models a player brings will join `PICTURE_ENGINES` once they can run. The picture is never announced and is
  * hidden from screen readers: the room's words are beside it.
  */
+import { keys } from "./keys";
 import type { PictureStyle, Scene } from "./mud";
 import { terrainWords } from "./terrain";
 
@@ -44,7 +45,7 @@ export const PICTURE_STYLES: { id: PictureStyle; name: string; summary: string }
 export const PICTURE_WHENS: { id: PictureWhen; name: string; summary: string }[] = [
   { id: "every", name: "Every room", summary: "A picture of each room as you arrive." },
   { id: "landmarks", name: "Landmarks only", summary: "Only in rooms you've named as landmarks on the map." },
-  { id: "key", name: "When I ask", summary: "Only after Cmd+Shift+P, until you leave the room." },
+  { id: "key", name: "When I ask", summary: keys("Only after Cmd+Shift+P, until you leave the room.") },
 ];
 
 const KEY = "coupler.pictures";
@@ -85,8 +86,8 @@ export function pictureShows(settings: PictureSettings, scene: Scene | null, lan
 
 /** Why there's no picture here, for the place it would be. */
 export function noPictureWords(settings: PictureSettings): string {
-  if (settings.when === "landmarks") return "Pictures show at landmarks only. Cmd+Shift+P paints this room.";
-  return "Cmd+Shift+P paints this room.";
+  if (settings.when === "landmarks") return keys("Pictures show at landmarks only. Cmd+Shift+P paints this room.");
+  return keys("Cmd+Shift+P paints this room.");
 }
 
 /** What the picture shows, in words: "woods at dusk, rain". */

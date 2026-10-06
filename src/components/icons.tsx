@@ -68,3 +68,12 @@ export function InfoIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function QuitIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <path fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M12 3v8" />
+      <path fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" d="M7 6.5a8 8 0 1 0 10 0" />
+    </svg>
+  );
+}

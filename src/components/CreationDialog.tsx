@@ -27,7 +27,7 @@ import * as creation from "../lib/creation";
 import * as creationArt from "../lib/creationArt";
 import * as earcons from "../lib/earcons";
 import * as mud from "../lib/mud";
-import { spanColors, type CreationChoice, type CreationStep, type Line } from "../lib/mud";
+import { spanColors, type CreationChoice, type CreationStats, type CreationStep, type Line } from "../lib/mud";
 import type { PortraitSource } from "../lib/pictures";
 import * as voice from "../lib/voice";
 import { Dialog } from "./Dialog";
@@ -139,7 +139,7 @@ export function CreationDialog({ open, step, voiced, cues, portraits, onSend, on
       const said = creation.spoken(step, last);
       if (said) voice.speak(said, true);
       const first = step.choices[0];
-      if (fresh && first && step.choices.length > 1 && !TYPED[step.kind]) voice.speak(creation.choiceWords(first, extraWords(step, first.name, artRef.current)));
+      if (fresh && first && step.choices.length > 1 && !TYPED[step.kind]) voice.speak(creation.choiceWords(first, extraWords(step, first, artRef.current)));
     }
     // A step is a new object each time the game asks; cues and voiced are read when it comes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,7 +167,7 @@ export function CreationDialog({ open, step, voiced, cues, portraits, onSend, on
   const focusChoice = (choice: CreationChoice) => {
     setAbout(choice.about);
     setReached(choice.name);
-    say(creation.choiceWords(choice, extraWords(step, choice.name, art)));
+    say(creation.choiceWords(choice, extraWords(step, choice, art)));
   };
   // The race or class shown: the one reached in the list, or the one being confirmed.
   const shownName = step.kind === "confirmRace" || step.kind === "confirmClass" ? step.subject : reached;
@@ -256,8 +256,16 @@ export function CreationDialog({ open, step, voiced, cues, portraits, onSend, on
                             type="button"
                             ref={i === 0 && by === 1 ? firstStat : undefined}
                             aria-label={`${by > 0 ? "Raise" : "Lower"} ${s.name}${Math.abs(by) > 1 ? ` by ${Math.abs(by)}` : ""}`}
+                            // Focusable while it can't be used, so the row's still reached and heard.
+                            aria-disabled={!statStepFits(s, by, statsTable.points) || undefined}
                             onFocus={hear}
-                            onClick={() => send(`${s.name} ${by > 0 ? "+" : ""}${by}`)}
+                            onClick={() => {
+                              const why = statStepWhy(s, by, statsTable.points);
+                              if (why) {
+                                setAbout(why);
+                                say(why);
+                              } else send(`${s.name} ${by > 0 ? "+" : ""}${by}`);
+                            }}
                           >
                             {by === 1 ? "+" : by === -1 ? "-" : by > 0 ? `+${by}` : `${by}`}
                           </button>
@@ -296,7 +304,7 @@ export function CreationDialog({ open, step, voiced, cues, portraits, onSend, on
                 <button
                   type="button"
                   className={c.suggested ? "suggested" : undefined}
-                  aria-label={creation.choiceWords(c, extraWords(step, c.name, art))}
+                  aria-label={creation.choiceWords(c, extraWords(step, c, art))}
                   onFocus={() => focusChoice(c)}
                   onMouseEnter={() => {
                     setAbout(c.about);
@@ -316,7 +324,7 @@ export function CreationDialog({ open, step, voiced, cues, portraits, onSend, on
                 {portrait?.facts && <p className="creation-facts">{portrait.facts}</p>}
                 {portrait?.unlike && <p className="creation-facts">{portrait.unlike}</p>}
                 {impact && <p className="creation-facts">{impact}</p>}
-                <p className="creation-about">{about ?? ""}</p>
+                <p className="creation-about">{about ?? portrait?.help ?? ""}</p>
               </div>
             </div>
           )}
@@ -377,12 +385,31 @@ function portraitOf(step: CreationStep, name: string | null, art: ArtBook | null
   return null;
 }
 
-/** Coupler's own words said before a choice's: a race's facts and what sets it apart, what an alignment does. */
-function extraWords(step: CreationStep, name: string, art: ArtBook | null): string | null {
-  if (step.kind === "faction") return creation.factionImpact(step.subject, name);
-  const p = portraitOf(step, name, art);
-  return p ? [p.facts, p.unlike].filter(Boolean).join(" ") || null : null;
+/**
+ * Coupler's own words said before a choice's: a race's facts and what
+ * sets it apart, what an alignment does. A race the game's list gave no
+ * words for (one a game turns on, like Pixie) has CoffeeMUD's help on it.
+ */
+function extraWords(step: CreationStep, choice: CreationChoice, art: ArtBook | null): string | null {
+  if (step.kind === "faction") return creation.factionImpact(step.subject, choice.name);
+  const p = portraitOf(step, choice.name, art);
+  return p ? [p.facts, p.unlike, choice.about ? null : p.help].filter(Boolean).join(" ") || null : null;
 }
+
+/**
+ * Why the game would refuse raising or lowering a stat by `by`, or null
+ * if it wouldn't: CharCreation's own checks. Each point costs at least
+ * one, and a stat's most (the game's 18 plus the race's change) caps it.
+ * Lowering below where it started isn't known here: the game says so.
+ */
+function statStepWhy(s: CreationStats["stats"][number], by: number, points: number | null): string | null {
+  if (by < 0) return s.value + by < 1 ? `${s.name} can't go that low.` : null;
+  if (points !== null && points < by) return points === 0 ? "No points are left: lower another stat first." : `Only ${points} ${points === 1 ? "point is" : "points are"} left.`;
+  if (s.value + by > s.most) return s.value >= s.most ? `${s.name} is at its most, ${s.most}.` : `${s.name} can go up only ${s.most - s.value} more.`;
+  return null;
+}
+
+const statStepFits = (s: CreationStats["stats"][number], by: number, points: number | null) => statStepWhy(s, by, points) === null;
 
 /** The painter's portraits, by kind and name and size: each painted once. */
 const painted = new Map<string, Promise<mud.AnsiArt | null>>();

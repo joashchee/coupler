@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+- **Keys on every platform** (2026-10-06): on Windows and Linux, Cmd is
+  Ctrl, Ctrl+Cmd is Ctrl+Alt and Option is Alt, in what's matched and in
+  everything that names a key, shown or spoken (`lib/keys.ts`). Before,
+  Cmd+Period, Ctrl+Cmd+1/2/3 and Ctrl+Cmd+F couldn't be pressed there,
+  and every hint said Cmd. A letter's found by its key's place when Alt
+  changes it.
+- **Gear → Quit Coupler** (2026-10-06, desktop): the sounds fade and the
+  app closes, hanging up first (`app_quit`).
+- **Taking turns with a screen reader** (2026-10-06): `screen_reader.rs`
+  says whether one is running (VoiceOver's process; Windows'
+  `SPI_GETSCREENREADER`; GNOME's setting or Orca), asked every 5
+  seconds (`lib/screenReader.ts`). While one is, a key it reads pauses
+  Coupler's voice until a second and a half after the keys stop
+  (`voice.yieldTurn`), a say key takes the turn back, and the status bar
+  doesn't hand the screen reader what Coupler's voice is saying. Gear →
+  Speech… says whether one's running.
+- **Every player race described** (2026-10-06): `scripts/creation-art.py`
+  now reads every race CoffeeMUD documents as a player race (its
+  `misc_help.ini` `<RACE>` entries; a game turns them on with `ENABLE`,
+  as coffeemud.net does Pixie), following `extends` for sizes and stat
+  changes, with weight and the game's help on each (`help`). The guide
+  shows and says that help for a race the game's list gives no words
+  for. Without Pillow the script keeps the pictures and remakes the
+  facts.
+- **Race portraits at their real size** (2026-10-06): the painter knows
+  every player race's height and weight (`portrait.rs` `SIZES`), so a
+  Pixie stands two feet tall, with wings, instead of a size made up from
+  its name; a look for each (drow, duergar, orcs, faeries, the undead…).
+- **Stats the game would refuse are dimmed** (2026-10-06): raising past
+  a stat's most or spending points not left; pressed, the guide says why
+  instead of sending it.
+- **The account menu with no characters** (2026-10-06): a list read
+  before its prompt came (the game sends them apart) now shows, so an
+  empty account says No characters yet instead of Reading your
+  characters… for good.
+- **The login kept alive** (2026-10-06): while a character's being made
+  or the account menu waits, a telnet NOP each quiet minute stops
+  CoffeeMUD starting the login over after 3 minutes; at 8 minutes
+  without an answer Coupler warns that the game hangs up at 10.
+- **A ping, not "Let's see…"** (2026-10-06): while an answer renders,
+  a soft high ping each second until it's spoken (the "Getting the
+  answer ready" cue).
+- **The map's @ blinks** (2026-10-06), swapping to inverted once a
+  second; gear → Display… turns it off, and reduced motion never blinks.
+- **Ambience always fades** (2026-10-06): stopping the sounds fades the
+  BGN and BGW out instead of cutting them, and a loop's new volume
+  glides to it.
+- **A fight's end in one line** (2026-10-06): the moment it's over,
+  whatever was waiting to be said is dropped and the narrator says how
+  it ended (killed, fled, you fled, you died), how long it took and your
+  health, with what it cost.
 - **Neumetik MIDI** (2026-10-06): Coupler's synthesizer is now the
   `neumetik-midi` crate (MIT), ansiapps' synthesizer split out for games
   to use freely, in `src-tauri/vendor/neumetik-midi/` in place of
@@ -18,6 +69,9 @@
   queue picks up: a bundled voice where it stopped, the system's from
   the line's start (`voice.ts`'s `interrupt`, `LineInfo.priority`).
   Starts with tells and a fight starting.
+- The desktop build no longer warns that its chunk is over 500 kB: it
+  loads from disk, so its limit is 1 MB (`vite.config.ts`); the web
+  build keeps 500 kB.
 
 ## 0.28.0 (2026-10-06)
 

@@ -30,6 +30,7 @@
  * is in its name as well (rule 10). The song itself is src-tauri's
  * music.rs and lib/music.ts.
  */
+import * as keys from "../lib/keys";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
@@ -278,7 +279,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
 
   function onPatternKey(e: KeyboardEvent<HTMLDivElement>) {
     if (!song || song.parts.length === 0) return;
-    const cmd = e.metaKey || e.ctrlKey;
+    const cmd = keys.command(e);
     let p = part;
     let b = bar;
     if (e.key === "ArrowUp") p = Math.max(0, part - 1);
@@ -291,12 +292,12 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
       e.preventDefault();
       focusIn(rollRef);
       return;
-    } else if (cmd && e.key.toLowerCase() === "c") {
+    } else if (cmd && keys.letter(e) === "c") {
       e.preventDefault();
       setClip(music.copyBar(song, part, bar));
       setSaid(`Copied bar ${bar + 1} of ${song.parts[part].name}.`);
       return;
-    } else if (cmd && e.key.toLowerCase() === "v") {
+    } else if (cmd && keys.letter(e) === "v") {
       e.preventDefault();
       if (!clip) {
         setSaid("Nothing copied yet.");
@@ -570,7 +571,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
               })}
             </div>
             <p className="music-keys" id={`${id}-pattern-keys`}>
-              Arrows choose a bar, Enter opens it below. Cmd+C, Cmd+V copy and paste a bar, Delete clears it. P plays the bar, Shift+P the song.
+              {keys.keys("Arrows choose a bar, Enter opens it below. Cmd+C, Cmd+V copy and paste a bar, Delete clears it. P plays the bar, Shift+P the song.")}
             </p>
 
             {current && (

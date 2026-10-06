@@ -15,12 +15,13 @@
  * Kept as `coupler.ux`; Workshop until chosen otherwise, since it's the
  * screen Coupler always had.
  */
+import { keys } from "./keys";
 export type Ux = "terminal" | "immersive" | "workshop";
 
 export const UXES: { id: Ux; name: string; key: string; summary: string }[] = [
-  { id: "terminal", name: "Terminal", key: "Ctrl+Cmd+1", summary: "A plain text terminal, 80 characters wide and as tall as the screen. Best with a screen reader." },
-  { id: "immersive", name: "Immersive", key: "Ctrl+Cmd+2", summary: "The game in layers of sound, with as little read aloud as possible. Coupler speaks for itself: no screen reader needed." },
-  { id: "workshop", name: "Workshop", key: "Ctrl+Cmd+3", summary: "Everything Coupler has, and every part of the screen yours to move, resize, show or hide." },
+  { id: "terminal", name: "Terminal", key: keys("Ctrl+Cmd+1"), summary: "A plain text terminal, 80 characters wide and as tall as the screen. Best with a screen reader." },
+  { id: "immersive", name: "Immersive", key: keys("Ctrl+Cmd+2"), summary: "The game in layers of sound, with as little read aloud as possible. Coupler speaks for itself: no screen reader needed." },
+  { id: "workshop", name: "Workshop", key: keys("Ctrl+Cmd+3"), summary: "Everything Coupler has, and every part of the screen yours to move, resize, show or hide." },
 ];
 
 const UX_KEY = "coupler.ux";

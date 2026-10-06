@@ -26,6 +26,8 @@ interface MapPanelProps {
   /** Runs a map action with the app's usual feedback: a status on success, an error on failure. */
   run: (label: string, work: () => Promise<string | void>) => void;
   onAskClear: () => void;
+  /** The @ blinks (gear → Display…). */
+  blink: boolean;
 }
 
 /** Each room is three characters wide with one between, and one row between rows, for the links. */
@@ -85,7 +87,7 @@ function drawMap(cells: mud.MapCell[]): Glyph[][] {
   return grid;
 }
 
-export function MapPanel({ snapshot, connected, walking, run, onAskClear }: MapPanelProps) {
+export function MapPanel({ snapshot, connected, walking, run, onAskClear, blink }: MapPanelProps) {
   const room = snapshot?.room ?? null;
   const grid = useMemo(() => drawMap(snapshot?.cells ?? []), [snapshot]);
   /** The terrains on the picture now, with a color, for the key. */
@@ -176,7 +178,7 @@ export function MapPanel({ snapshot, connected, walking, run, onAskClear }: MapP
                   g.cell ? (
                     <span
                       key={x}
-                      className={`map-cell${g.cell.current ? " current" : ""}${g.cell.visited ? "" : " stub"}${picked?.id === g.cell.id ? " picked" : ""}`}
+                      className={`map-cell${g.cell.current ? " current" : ""}${g.cell.current && g.ch === "@" && blink ? " you" : ""}${g.cell.visited ? "" : " stub"}${picked?.id === g.cell.id ? " picked" : ""}`}
                       style={g.cell.visited && picked?.id !== g.cell.id ? (terrainStyle(g.cell.terrain) ?? undefined) : undefined}
                       title={g.cell.visited ? (g.cell.terrain ? `${g.cell.name}, ${terrainWords(g.cell.terrain)}` : g.cell.name) : "Not explored"}
                       onClick={() => setPicked(g.cell?.visited && !g.cell.current ? g.cell : null)}

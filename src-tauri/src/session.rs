@@ -73,6 +73,13 @@ const JOURNAL_SHOWN: usize = 1000;
 /// How often the connection's clock checks whether WHO is due (`who.rs`).
 const WHO_TICK: Duration = Duration::from_secs(1);
 
+/// While a character's being made or the account menu's open, the
+/// game starts the login over once it's read nothing for 3 minutes
+/// (`DefaultSession.HSIDLETIMEOUT`): a telnet NOP (it does nothing, but
+/// it's read) after this long without sending keeps the line alive.
+/// Any line would be an answer, so nothing else is sent.
+const KEEP_ALIVE: Duration = Duration::from_secs(60);
+
 /// Lines the reader finished, and the unfinished one (a prompt), which
 /// replaces the last one sent.
 #[derive(Serialize, Clone)]
@@ -124,6 +131,8 @@ struct Live {
     /// Bumped per connection, so an old reader's "closed" is ignored.
     id: u64,
     port: &'static Port,
+    /// When Coupler last sent the game anything, for the keep-alive.
+    wrote: Instant,
 }
 
 /// The map of the world the player is connected to, and the walk along it.
@@ -415,7 +424,7 @@ impl Session {
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
-        *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port });
+        *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
 
         // WHO's clock, for as long as this connection lasts.
         let clock = app.clone();
@@ -502,6 +511,7 @@ impl Session {
     /// it (`ambient.rs`'s `weather_wanted`), each only when it's gentle to.
     fn who_tick(&self) {
         let now = Instant::now();
+        self.keep_alive(now);
         if self.who.lock().unwrap().due(now) {
             if let Err(e) = self.write(&telnet::encode_line("who")) {
                 log::warn!("{e}");
@@ -514,6 +524,18 @@ impl Session {
             ambient.ambient.weather_asked(now);
             drop(ambient);
             if let Err(e) = self.write(&telnet::encode_line("weather")) {
+                log::warn!("{e}");
+            }
+        }
+    }
+
+    /// Sends a telnet NOP when the login's been quiet `KEEP_ALIVE` while
+    /// a character's being made or the account menu waits.
+    fn keep_alive(&self, now: Instant) {
+        let waiting = self.creation.lock().unwrap().active() || self.account.lock().unwrap().open();
+        let quiet = self.live.lock().unwrap().as_ref().is_some_and(|l| now.duration_since(l.wrote) >= KEEP_ALIVE);
+        if waiting && quiet {
+            if let Err(e) = self.write(&telnet::NOP) {
                 log::warn!("{e}");
             }
         }
@@ -547,6 +569,7 @@ impl Session {
     fn write(&self, bytes: &[u8]) -> Result<(), String> {
         let mut live = self.live.lock().unwrap();
         let live = live.as_mut().ok_or("Not connected to CoffeeMUD.")?;
+        live.wrote = Instant::now();
         live.stream.write_all(bytes).map_err(|e| format!("Couldn't send to CoffeeMUD. ({e})"))
     }
 

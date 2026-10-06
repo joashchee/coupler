@@ -16,6 +16,7 @@
  * in each button's name and in the answer above. One Tab stop: the
  * arrows move between skills, Return chooses.
  */
+import * as keys from "../lib/keys";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import * as artisan from "../lib/artisan";
 import * as voice from "../lib/voice";
@@ -180,7 +181,7 @@ export function ArtisanDialog({ open, onClose, voiced }: ArtisanDialogProps) {
     >
       <p>
         The Artisan's {artisan.SKILLS.length} skills, as CoffeeMUD gives them. A skill is gained from a guildmaster once every skill it needs is known well enough: practice and use
-        them to get there. Ask the mentor, or choose a skill below (arrow keys, then Return) to see what it needs and what it opens up.
+        them to get there. Ask the mentor, or choose a skill below (arrow keys, then {keys.keys("Return")}) to see what it needs and what it opens up.
       </p>
       <form
         className="hooks-search artisan-ask"
@@ -225,7 +226,7 @@ export function ArtisanDialog({ open, onClose, voiced }: ArtisanDialogProps) {
         className="artisan-chart"
         data-testid="artisan-chart"
         role="group"
-        aria-label={`The skill tree: ${cols.length} steps from the start, the arrow keys move between skills, Return chooses one`}
+        aria-label={keys.keys(`The skill tree: ${cols.length} steps from the start, the arrow keys move between skills, Return chooses one`)}
         onKeyDown={onChartKey}
         onScroll={(e) => {
           // Sideways scrolling comes to rest on a whole cell, as lib/grid.ts's

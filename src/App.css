@@ -159,7 +159,7 @@ button.primary:hover { background: #fde047; }
 button.danger { color: var(--warn); }
 button.danger:hover { border-color: var(--warn); }
 button.danger-fill { background: var(--warn); color: #1a0406; border-color: var(--warn); font-weight: 600; }
-button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:disabled, button[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
 button.small { padding: 6px 10px; font-size: 12px; }
 button.icontext-btn { display: inline-flex; align-items: center; gap: 6px; }
 button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px; flex-shrink: 0; }
@@ -454,6 +454,13 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .map-cell { cursor: pointer; }
 .map-cell.stub { color: var(--muted); cursor: default; }
 .map-cell.current { color: var(--accent); font-weight: 600; }
+/* Where you are: the @ blinks, its colors swapping, as a DOS cursor
+   does (gear → Display… turns it off; reduced motion never blinks). */
+@keyframes map-you { 50% { background: var(--accent); color: #1f1a05; } }
+.map-cell.you { animation: map-you 1s steps(1, end) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .map-cell.you { animation: none; }
+}
 .map-cell.picked { background: var(--accent); color: #1f1a05; }
 .map-legend { margin-top: 4px; }
 /* The terrains in view (lib/terrain.ts): two lines tall, filled or not. */

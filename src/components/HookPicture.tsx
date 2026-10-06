@@ -5,6 +5,7 @@
  * the same trigger going off again starts the wait over (`shownAt`).
  * With 0 it stays until it's clicked away or replaced.
  */
+import * as keys from "../lib/keys";
 import { useEffect, useState, type CSSProperties } from "react";
 import type { Shown } from "../lib/assets";
 import { AnsiPicture } from "./AnsiPicture";
@@ -52,7 +53,7 @@ export function HookPicture({ picture, name, style, fade, shownAt, onClose }: Ho
       data-testid="hook-picture"
       src={picture.url}
       alt={name}
-      title="Click to close the picture (Cmd+Shift+S closes them all)"
+      title={keys.keys("Click to close the picture (Cmd+Shift+S closes them all)")}
       style={style}
       onClick={onClose}
     />

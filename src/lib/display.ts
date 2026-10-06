@@ -10,6 +10,8 @@
  *   command line and the messages filling the screen at that size.
  * - **Sound captions**: every sound Coupler plays written in Heard, as a
  *   film's captions are, so the cues can be seen and learned.
+ * - **The map's @ blinks**, so where you are is found at a glance; off
+ *   for anyone a blink bothers (and never with reduced motion).
  *
  * Every change is at once and kept.
  */
@@ -21,6 +23,7 @@ export interface Display {
   colors: GameColors;
   textSize: TextSize;
   captions: boolean;
+  blink: boolean;
 }
 
 export const GAME_COLORS: { id: GameColors; name: string; summary: string }[] = [
@@ -36,7 +39,7 @@ export const TEXT_SIZES: { id: TextSize; name: string; summary: string }[] = [
 ];
 
 const KEY = "coupler.display";
-export const DEFAULT_DISPLAY: Display = { colors: "game", textSize: 1, captions: true };
+export const DEFAULT_DISPLAY: Display = { colors: "game", textSize: 1, captions: true, blink: true };
 
 export function loadDisplay(): Display {
   try {
@@ -45,6 +48,7 @@ export function loadDisplay(): Display {
       colors: GAME_COLORS.some((c) => c.id === kept.colors) ? (kept.colors as GameColors) : DEFAULT_DISPLAY.colors,
       textSize: TEXT_SIZES.some((t) => t.id === kept.textSize) ? (kept.textSize as TextSize) : DEFAULT_DISPLAY.textSize,
       captions: typeof kept.captions === "boolean" ? kept.captions : DEFAULT_DISPLAY.captions,
+      blink: typeof kept.blink === "boolean" ? kept.blink : DEFAULT_DISPLAY.blink,
     };
   } catch {
     return { ...DEFAULT_DISPLAY };

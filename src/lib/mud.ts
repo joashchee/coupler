@@ -197,7 +197,13 @@ export function describeVersionFit({ version, builtFor, fit }: LaunchCounts): st
   if (!version || !fit || fit === "same") return null;
   return `CoffeeMUD here is ${fit === "newer" ? "newer" : "older"} than Coupler knows (${version}; Coupler was made for ${builtFor}). Some of what Coupler hears and says may be off.`;
 }
-export const sendLine = (line: string) => invoke<void>("mud_send", { line });
+/** When a line was last sent the game (`Date.now`), for the login's idle warning (App.tsx). */
+let sentAt = Date.now();
+export const lastSent = () => sentAt;
+export const sendLine = (line: string) => {
+  sentAt = Date.now();
+  return invoke<void>("mud_send", { line });
+};
 export const resize = (columns: number, rows: number) => invoke<void>("mud_resize", { columns, rows });
 
 export const onOutput = (f: (e: OutputEvent) => void): Promise<UnlistenFn> => listen<OutputEvent>("mud-output", (e) => f(e.payload));
@@ -963,3 +969,7 @@ export function backupRestore(path: string, onProgress: (p: BackupProgress) => v
 }
 /** Starts Coupler again. */
 export const appRestart = () => invoke<void>("app_restart");
+/** Quits Coupler (hanging up first). Desktop only. */
+export const appQuit = () => invoke<void>("app_quit");
+/** Whether a screen reader is running (screen_reader.rs). */
+export const screenReaderRunning = () => invoke<boolean>("screen_reader_running");

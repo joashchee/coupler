@@ -10,6 +10,7 @@
  * mode work in it as they do in the game; App's own shortcuts are off
  * while a dialog is open, so they don't reach the real game.
  */
+import * as keys from "../lib/keys";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { onCaption } from "../lib/captions";
 import { spanColors, type Line } from "../lib/mud";
@@ -163,9 +164,9 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
     const onKey = (e: KeyboardEvent) => {
       const s = stage.current!;
       // App's own listener does the hushing; this only notices it.
-      if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") return act({ key: "hush" });
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey) {
-        const k = e.key.toLowerCase();
+      if (keys.quiet(e)) return act({ key: "hush" });
+      if (keys.chord(e)) {
+        const k = keys.letter(e);
         if (k === "l" || k === "v" || k === "e") {
           e.preventDefault();
           const key = k === "l" ? "where" : k === "v" ? "vitals" : "enemy";
@@ -173,7 +174,7 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
           act({ key });
         } else if (k === "w") {
           e.preventDefault();
-          s.answer("In the game, Cmd+Shift+W says who's online. This practice game is just you.");
+          s.answer(keys.keys("In the game, Cmd+Shift+W says who's online. This practice game is just you."));
         } else if (k === "o") {
           e.preventDefault();
           const said = linesRef.current.filter((l) => l.id >= sentAt.current).map((l) => textOf(l.line)).filter(voice.speakable).slice(-15);
@@ -181,7 +182,7 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
         }
         return;
       }
-      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "End")) {
+      if (keys.option(e) && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "End")) {
         e.preventDefault();
         review(e.key === "ArrowUp" ? "back" : e.key === "ArrowDown" ? "forward" : "live");
       }
@@ -241,14 +242,14 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
       }
     >
       <p className="tutorial-lesson" data-testid="tutorial-lesson">{`Lesson ${index + 1} of ${LESSONS.length}: ${lesson.title}`}</p>
-      <p className="tutorial-teach">{lesson.teach}</p>
+      <p className="tutorial-teach">{keys.keys(lesson.teach)}</p>
       <div
         ref={output}
         className="tutorial-output"
         data-testid="tutorial-output"
         tabIndex={0}
         role="region"
-        aria-label="The practice game's output. Option+Up reads it back."
+        aria-label={keys.keys("The practice game's output. Option+Up reads it back.")}
       >
         {lines.map((l, i) => (
           <div key={l.id} id={`${id}-line-${l.id}`} className={`terminal-line${i === reviewAt ? " reviewed" : ""}`} aria-current={i === reviewAt ? "true" : undefined}>
@@ -264,7 +265,7 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
         ))}
       </div>
       <p className={`tutorial-task${done ? " done" : ""}`} id={`${id}-task`} data-testid="tutorial-task">
-        {done ? (last ? lesson.task : `Done. ${lesson.well} Press Return for the next lesson.`) : `Try it: ${lesson.task}`}
+        {keys.keys(done ? (last ? lesson.task : `Done. ${lesson.well} Press Return for the next lesson.`) : `Try it: ${lesson.task}`)}
       </p>
       <div className="hooks-search tutorial-command">
         <label htmlFor={`${id}-command`}>Command</label>
@@ -274,7 +275,7 @@ export function TutorialDialog({ open, onClose, onPlayImmersive }: TutorialDialo
           type="text"
           data-testid="tutorial-input"
           aria-describedby={`${id}-task`}
-          placeholder="Type a command and press Return"
+          placeholder={keys.keys("Type a command and press Return")}
           autoComplete="off"
           spellCheck={false}
           onKeyDown={(e) => {

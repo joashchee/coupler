@@ -27,7 +27,13 @@ const webAliases = {
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   resolve: mode === "web" ? { alias: webAliases } : undefined,
-  build: mode === "web" ? { outDir: "dist-web", emptyOutDir: true } : undefined,
+  // The desktop app loads its one chunk from disk, so splitting it buys
+  // nothing: its size warning starts at 1 MB. The web build is downloaded
+  // and keeps Vite's 500 kB.
+  build:
+    mode === "web"
+      ? { outDir: "dist-web", emptyOutDir: true }
+      : { chunkSizeWarningLimit: 1024 },
   define: {
     // package.json's version is the single source of truth for the
     // displayed app version — see CLAUDE.md's version-bump checklist.

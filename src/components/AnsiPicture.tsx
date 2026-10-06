@@ -4,6 +4,7 @@
  * character in the IBM VGA font whatever the theme, on black, as ANSI
  * art is meant to be seen. Clicking it hides it.
  */
+import * as keys from "../lib/keys";
 import type { CSSProperties } from "react";
 import { spanColors, type AnsiArt } from "../lib/mud";
 
@@ -24,7 +25,7 @@ export function AnsiPicture({ art, name, style, className, onClick }: AnsiPictur
       data-testid="hook-picture"
       role="img"
       aria-label={name}
-      title="Click to hide the picture (Cmd+Shift+S)"
+      title={keys.keys("Click to hide the picture (Cmd+Shift+S)")}
       style={{ ...style, width: art.columns * 8 }}
       onClick={onClick}
     >

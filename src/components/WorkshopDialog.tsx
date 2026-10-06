@@ -5,6 +5,7 @@
  * layers (and Cues, CuesDialog.tsx, for each cue), and going back to
  * the default layout. Every change is at once and kept.
  */
+import * as keys from "../lib/keys";
 import { SHOWABLE, type Layers } from "../lib/ux";
 import { Dialog } from "./Dialog";
 
@@ -56,7 +57,7 @@ export function WorkshopDialog({ open, onClose, arranging, onArranging, shown, o
         <li>
           <label className="check-row">
             <input type="checkbox" checked={mapOpen} onChange={onMap} />
-            <span>The map (Cmd+Shift+M)</span>
+            <span>{keys.keys("The map (Cmd+Shift+M)")}</span>
           </label>
         </li>
         {SHOWABLE.map((s) => (

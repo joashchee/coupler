@@ -40,6 +40,7 @@ mod paint;
 mod ports;
 mod painter;
 mod portrait;
+mod screen_reader;
 mod senses;
 mod session;
 mod speech;
@@ -713,6 +714,19 @@ fn app_restart(app: AppHandle) {
     app.restart();
 }
 
+/// Whether a screen reader is running (screen_reader.rs), asked every few
+/// seconds so Coupler's voice takes turns with it.
+#[tauri::command]
+async fn screen_reader_running() -> bool {
+    screen_reader::running()
+}
+
+/// Gear → Quit Coupler. `RunEvent::Exit` hangs up first.
+#[tauri::command]
+fn app_quit(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Dev-only App Testing report (the overlay is compiled out of release
 /// builds; this plain file write stays, as in Diskette).
 #[tauri::command]
@@ -841,6 +855,8 @@ pub fn run() {
             backup_inspect,
             backup_restore,
             app_restart,
+            app_quit,
+            screen_reader_running,
             export_app_testing_report
         ])
         .build(tauri::generate_context!())

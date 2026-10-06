@@ -25,6 +25,8 @@ export interface Portrait {
   facts?: string;
   /** What sets a race apart from the other player races. */
   unlike?: string;
+  /** CoffeeMUD's help on the race, for one its list gives no words for. */
+  help?: string;
 }
 
 interface Book {

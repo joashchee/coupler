@@ -233,7 +233,13 @@ export async function setLoop(bus: AmbientBus, loop: mud.Loop | null) {
   const was = loops[bus];
   if (loop && was && was.path === loop.path) {
     was.percent = loop.volume;
-    if (was.playing) was.playing.gain.gain.setTargetAtTime(loop.volume / 100, audio().context.currentTime, 0.2);
+    if (was.playing) {
+      const gain = was.playing.gain.gain;
+      const t = audio().context.currentTime;
+      gain.cancelScheduledValues(t);
+      gain.setValueAtTime(gain.value, t);
+      gain.linearRampToValueAtTime(loop.volume / 100, t + FADE);
+    }
     return;
   }
   const turn = ++loopTurn[bus];
@@ -259,13 +265,17 @@ export async function setLoop(bus: AmbientBus, loop: mud.Loop | null) {
   loopsChanged();
 }
 
-/** Stops both loops at once. They start again when what should loop next changes (the `ambient` event only comes on a change). */
+/**
+ * Stops both loops, fading them out: a loop never cuts off. They start
+ * again when what should loop next changes (the `ambient` event only
+ * comes on a change).
+ */
 function stopLoops() {
   for (const bus of ["bgn", "bgw"] as const) {
     loopTurn[bus]++;
     const was = loops[bus]?.playing;
     loops[bus] = null;
-    was?.source.stop();
+    if (was) fadeOut(was);
   }
   loopsChanged();
 }

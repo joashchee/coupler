@@ -7,7 +7,9 @@
  * combat.rs), else their percentage. Something that
  * matters (the fight starting or ending, a death, a big blow, health
  * running low, someone fleeing) cuts whatever's queued and is said at
- * once.
+ * once. The moment it's over, everything waiting to be said is dropped
+ * and the narrator gives the fight in one line (`summary`): how it ended,
+ * how long it took, and the player's health.
  *
  * Outside a fight it says nothing: the grand goal, fewer spoken words,
  * stands everywhere else. Used by lib/immersive.ts for the game and by
@@ -96,6 +98,41 @@ export function urgent(line: string): boolean {
   return /\bis DEAD\b|\bYou are DEAD\b|\bflees?\b|\byou flee\b|\bYou have been KILLED\b|\bcorpse\b/i.test(line) && line.length <= 120;
 }
 
+/** How a fight ended, as its lines told it. */
+export type Ending = "killed" | "fled" | "youFled" | "youDied" | null;
+
+/** What a fight's line says of its end, if anything. */
+export function endingOf(line: string): Ending {
+  if (/You are DEAD|You have been KILLED/i.test(line)) return "youDied";
+  if (/you flee/i.test(line)) return "youFled";
+  if (/is DEAD|is slain/i.test(line)) return "killed";
+  if (/flees/i.test(line)) return "fled";
+  return null;
+}
+
+/**
+ * A fight in one line, once it's over: "Rat killed. 12 seconds. You at
+ * 64 percent, down 20." Its name, how it ended, how long, the player's
+ * health and what the fight cost.
+ */
+export function summary(opponent: mud.Opponent, ending: Ending, seconds: number, mine: number | null, mineBefore: number | null): string {
+  const name = nameOf(opponent);
+  const how =
+    ending === "killed" ? `${name} killed.`
+    : ending === "fled" ? `${name} fled.`
+    : ending === "youFled" ? `You fled from ${name}.`
+    : ending === "youDied" ? `${name} killed you.`
+    : opponent.percent !== null && opponent.percent <= 15 ? `${name} is down.`
+    : `Fight with ${name} over.`;
+  const took = seconds < 1 ? "" : ` ${Math.round(seconds)} ${Math.round(seconds) === 1 ? "second" : "seconds"}.`;
+  let health = "";
+  if (mine !== null && ending !== "youDied") {
+    const lost = mineBefore === null ? 0 : Math.round(mineBefore - mine);
+    health = ` You at ${percent(mine)}${lost >= 5 ? `, down ${lost}` : ""}.`;
+  }
+  return `${how}${took}${health}`;
+}
+
 /** The talk for one fight after another. Feed it the game; `stop` when leaving. */
 export class FightTalk {
   private opponent: mud.Opponent | null = null;
@@ -108,6 +145,10 @@ export class FightTalk {
   private timer: number | null = null;
   /** Turns through the fillers when nothing's new. */
   private turn = 0;
+  /** When this fight started, the player's health then, and how its lines say it ended. */
+  private startedAt = 0;
+  private mineBefore: number | null = null;
+  private ending: Ending = null;
   /** Whether it may speak (Immersive's voice is on). */
   on = true;
 
@@ -121,16 +162,18 @@ export class FightTalk {
     if (o && !before) {
       this.said = { theirs: o.percent, mine: this.mine, at: Date.now() };
       this.lowSaid.clear();
+      this.startedAt = Date.now();
+      this.mineBefore = this.mine;
+      this.ending = null;
       const figures = theirFigures(o);
       this.now(`Fighting ${nameOf(o)}${figures !== null && o.percent !== null && o.percent < 100 ? `, at ${figures}` : ""}.`);
       this.start();
     } else if (!o && before) {
       this.stopTicking();
-      const won = before.percent !== null && before.percent <= 15;
-      const text = won ? `${nameOf(before)} is down. Fight over.` : "Fight over.";
-      // Right after something said at once (the death line), after it, not over it.
-      if (Date.now() - this.last.at < 1500) this.queue(text);
-      else this.now(text);
+      const text = summary(before, this.ending, (Date.now() - this.startedAt) / 1000, this.mine, this.mineBefore);
+      // Over: nothing still waiting about it is worth hearing now.
+      if (this.on && this.cuts) voice.hush();
+      this.now(text);
       this.line = null;
     }
   }
@@ -159,6 +202,7 @@ export class FightTalk {
     if (!this.opponent) return;
     const text = line.trim();
     if (text === "") return;
+    this.ending = endingOf(text) ?? this.ending;
     if (urgent(text)) {
       this.now(text);
       this.line = null;
@@ -176,13 +220,6 @@ export class FightTalk {
   private now(text: string) {
     if (!this.on) return;
     voice.speak(text, this.cuts);
-    this.last = { text, at: Date.now() };
-  }
-
-  /** Said after what's queued. */
-  private queue(text: string) {
-    if (!this.on) return;
-    voice.speak(text);
     this.last = { text, at: Date.now() };
   }
 

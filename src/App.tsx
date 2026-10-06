@@ -5,7 +5,7 @@ import { Dialog } from "./components/Dialog";
 import { HeardPanel } from "./components/HeardPanel";
 import { HookPicture } from "./components/HookPicture";
 import { HooksDialog } from "./components/HooksDialog";
-import { AppMarkIcon, ChecklistIcon, GearIcon, InfoIcon } from "./components/icons";
+import { AppMarkIcon, ChecklistIcon, GearIcon, InfoIcon, QuitIcon } from "./components/icons";
 import { LicensesDialog } from "./components/LicensesDialog";
 import { MapPanel } from "./components/MapPanel";
 import { MixerDialog } from "./components/MixerDialog";
@@ -58,6 +58,8 @@ import { forgetLayout, layoutText } from "./lib/layout";
 import { stageScale } from "./lib/stage";
 import { applyTheme, loadTheme, type Theme } from "./lib/theme";
 import { loadLayers, loadShown, loadUx, storeLayers, storeShown, storeUx, UXES, type Layers, type Ux } from "./lib/ux";
+import * as keys from "./lib/keys";
+import * as screenReader from "./lib/screenReader";
 import * as voice from "./lib/voice";
 import "./App.css";
 
@@ -346,10 +348,13 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Earlier and later commands", "↑ ↓"],
   ["Send the command", "Return"],
 ];
-const SHORTCUTS = WEB ? ALL_SHORTCUTS.filter(([, keys]) => !(keys.startsWith("Cmd+Shift+") && DESKTOP_ONLY_KEYS.includes(keys.slice(-1).toLowerCase()))) : ALL_SHORTCUTS;
+const SHORTCUTS = WEB ? ALL_SHORTCUTS.filter(([, written]) => !(written.startsWith("Cmd+Shift+") && DESKTOP_ONLY_KEYS.includes(written.slice(-1).toLowerCase()))) : ALL_SHORTCUTS;
 
 /** A line that may be a channel's LAST (OOC LAST 10): Rust says whether it is (journal.rs `last_asked`). */
 const LAST_LIKE = /^\S+\s+\S+(\s+\d+)?$/;
+
+/** How long without an answer, while a character's made, before Coupler warns the game will hang up (it does at 10 minutes). */
+const LOGIN_WARN_MS = 8 * 60_000;
 
 /** How long the say key waits for the WHO it asked. */
 const WHO_WAITS = 6000;
@@ -512,6 +517,20 @@ function App() {
   const reviewRef = useRef<{ newest: number; told: number }>({ newest: 0, told: 0 });
   const voicedRef = useRef(voiced);
   voicedRef.current = voiced;
+
+  /** Whether a screen reader is running: Coupler's voice takes turns with it (lib/screenReader.ts). */
+  const [screenReaderOn, setScreenReaderOn] = useState(false);
+  useEffect(() => {
+    const stop = screenReader.start();
+    const off = screenReader.onChange(setScreenReaderOn);
+    return () => {
+      stop();
+      off();
+    };
+  }, []);
+  /** The last words Coupler's voice was given: the status bar doesn't also hand them to the screen reader. */
+  const [lastSaid, setLastSaid] = useState("");
+  useEffect(() => voice.onSaid(setLastSaid), []);
   /**
    * Whether the narrator answers the say keys and tells the connection
    * closing: Immersive and Workshop alike, whatever Workshop's voice
@@ -541,7 +560,7 @@ function App() {
   const gearRef = useRef<HTMLDivElement>(null);
   const firstPortRef = useRef<HTMLButtonElement>(null);
   const { activities, runActivity, isBusy } = useActivities();
-  // An answer being rendered: "Let's see…" in the status bar while it runs (lib/voice.ts).
+  // An answer being rendered: a soft ping each second, and the status bar says so while it runs (lib/voice.ts).
   useEffect(() => voice.onThinking((rendering) => void runActivity(voice.LETS_SEE, () => rendering, "voice").catch(() => {})), [runActivity]);
 
   const finishStep = (step: StartupStep) => setStartupPending((list) => list.filter((s) => s !== step));
@@ -986,7 +1005,7 @@ function App() {
       }
     }
     historyAt.current = history.current.length;
-    // What's said next answers it: "Let's see…" if it has to be rendered.
+    // What's said next answers it: the ping while it renders, if it has to be.
     voice.asked();
     // A channel's LAST (OOC LAST 10) is answered from the log, not the game.
     if (!secret && !WEB && LAST_LIKE.test(line.trim())) {
@@ -1044,6 +1063,23 @@ function App() {
     },
     [narrated],
   );
+
+  // CoffeeMUD hangs up on a character being made (or an account menu)
+  // after 10 minutes without an answer; Coupler's keep-alive (session.rs)
+  // can't answer for the player, so it warns at 8, once a wait.
+  const waitingOnLogin = connected && (creationStep !== null || accountMenu !== null);
+  useEffect(() => {
+    if (!waitingOnLogin) return;
+    let warnedFor = 0;
+    const timer = window.setInterval(() => {
+      const sent = mud.lastSent();
+      if (Date.now() - sent < LOGIN_WARN_MS || warnedFor === sent) return;
+      warnedFor = sent;
+      if (cues) earcons.problem();
+      sayNow("The game hangs up after 10 minutes without an answer here. Answer within 2 minutes to stay connected.");
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [waitingOnLogin, sayNow, cues]);
 
   /** The journal and the log as heard (lib/journal.ts): talk spoken as it comes, tones for what's waiting. */
   const journal = useJournal({ cues, voiced, logOpen });
@@ -1171,7 +1207,7 @@ function App() {
       const intro =
         next === "immersive"
           ? connected
-            ? "Immersive. Listen as you move: the exits sound where they lead. Command Shift L says where you are, Command Period stops me."
+            ? "Immersive. Listen as you move: the exits sound where they lead. Cmd+Shift+L says where you are, Cmd+Period stops me."
             : "Immersive. Press Return to play, Tab to hear the other ways to play, or Shift Tab for Before You Play, a practice game that teaches Immersive."
           : `${info.name}. ${info.summary}`;
       setError(null);
@@ -1628,70 +1664,71 @@ function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // The quiet key works over a dialog too: the Journal's Play is in one.
-      if (e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.key === ".") {
+      if (keys.quiet(e)) {
         e.preventDefault();
         voice.hush();
         return;
       }
       if (anyDialogOpen) return;
-      const chord = (e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey;
-      if (WEB && chord && DESKTOP_ONLY_KEYS.includes(e.key.toLowerCase())) return;
-      const way = e.metaKey && e.ctrlKey && !e.shiftKey && !e.altKey ? { "1": "terminal", "2": "immersive", "3": "workshop" }[e.code.replace("Digit", "")] : undefined;
+      const chord = keys.chord(e);
+      const key = keys.letter(e);
+      if (WEB && chord && DESKTOP_ONLY_KEYS.includes(key)) return;
+      const way = keys.ctrlCmd(e) ? { "1": "terminal", "2": "immersive", "3": "workshop" }[key] : undefined;
       if (way) {
         e.preventDefault();
         chooseUx(way as Ux);
-      } else if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && ["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
+      } else if (keys.option(e) && ["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) {
         e.preventDefault();
         if (e.key === "End") reviewLive();
         else reviewStep(e.key === "ArrowUp" ? "earlier" : e.key === "ArrowDown" ? "later" : "oldest");
-      } else if (chord && e.key.toLowerCase() === "v") {
+      } else if (chord && key === "v") {
         e.preventDefault();
         sayVitals();
-      } else if (chord && e.key.toLowerCase() === "e") {
+      } else if (chord && key === "e") {
         e.preventDefault();
         sayOpponent();
-      } else if (chord && e.key.toLowerCase() === "w") {
+      } else if (chord && key === "w") {
         e.preventDefault();
         sayWho();
-      } else if (chord && e.key.toLowerCase() === "o") {
+      } else if (chord && key === "o") {
         e.preventDefault();
         sayRecent();
-      } else if (chord && e.key.toLowerCase() === "u") {
+      } else if (chord && key === "u") {
         e.preventDefault();
         sayUnheard();
-      } else if (chord && e.key.toLowerCase() === "n") {
+      } else if (chord && key === "n") {
         e.preventDefault();
         playUnheard();
-      } else if (chord && e.key.toLowerCase() === "j") {
+      } else if (chord && key === "j") {
         e.preventDefault();
         setJournalOpen(true);
-      } else if (chord && e.key.toLowerCase() === "k") {
+      } else if (chord && key === "k") {
         e.preventDefault();
         setLogOpen(true);
-      } else if (chord && e.key.toLowerCase() === "l") {
+      } else if (chord && key === "l") {
         e.preventDefault();
         whereAmI();
-      } else if (chord && e.key.toLowerCase() === "g") {
+      } else if (chord && key === "g") {
         e.preventDefault();
         if (accountMenu && accountHidden) setAccountHidden(false);
         else if (creationStep) setGuideHidden(false);
         else showStatus("No character is being made: the guide opens when you make one.");
-      } else if (chord && e.key.toLowerCase() === "m") {
+      } else if (chord && key === "m") {
         e.preventDefault();
         toggleMap();
-      } else if (chord && e.key.toLowerCase() === "h") {
+      } else if (chord && key === "h") {
         e.preventDefault();
         setHooksOpen(true);
-      } else if (chord && e.key.toLowerCase() === "p") {
+      } else if (chord && key === "p") {
         e.preventDefault();
         paintRoom();
-      } else if (chord && e.key.toLowerCase() === "s") {
+      } else if (chord && key === "s") {
         e.preventDefault();
         stopEverything();
-      } else if (chord && e.key.toLowerCase() === "a") {
+      } else if (chord && key === "a") {
         e.preventDefault();
         setArtisanOpen(true);
-      } else if (e.metaKey && e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f") {
+      } else if (keys.ctrlCmd(e) && key === "f") {
         e.preventDefault();
         toggleFullscreen();
       } else if (e.key === "Escape" && !gearOpen && connected) {
@@ -1729,6 +1766,14 @@ function App() {
     };
   }, [gearOpen]);
 
+  /** Gear → Quit Coupler: the sounds fade, then the app closes (hanging up first, in Rust). */
+  const quitApp = () => {
+    setGearOpen(false);
+    setStatus("Quitting Coupler…");
+    sound.fadeAll();
+    window.setTimeout(() => void mud.appQuit(), 400);
+  };
+
   /**
    * Dev-only: is everything showing on the ANSIapps theme's grid? It
    * measures the screen as it is, open menu or dialog included.
@@ -1750,7 +1795,7 @@ function App() {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.ctrlKey && e.key.toLowerCase() === "g") {
+      if (keys.ctrlCmd(e) && keys.letter(e) === "g") {
         e.preventDefault();
         gridCheckRef.current?.();
       }
@@ -1817,7 +1862,7 @@ function App() {
         )}
         {has("where") && (
         <Movable id="where" label="Where am I? button" usual={usual.where} className="menu-bar menu-chip" announce={announcePanel}>
-          <button type="button" className="menu-title" data-testid="where-button" title="Say where you are and the exits (Cmd+Shift+L)" onClick={whereAmI}>
+          <button type="button" className="menu-title" data-testid="where-button" title={keys.keys("Say where you are and the exits (Cmd+Shift+L)")} onClick={whereAmI}>
             Where am I?
           </button>
         </Movable>
@@ -1832,7 +1877,7 @@ function App() {
         )}
         {has("mapToggle") && (
         <Movable id="mapToggle" label="Map button" usual={usual.mapToggle} className="menu-bar menu-chip" announce={announcePanel}>
-          <button type="button" className={`menu-title${mapOpen ? " open" : ""}`} data-testid="map-toggle" aria-pressed={mapOpen} title="Show or hide the map (Cmd+Shift+M)" onClick={toggleMap}>
+          <button type="button" className={`menu-title${mapOpen ? " open" : ""}`} data-testid="map-toggle" aria-pressed={mapOpen} title={keys.keys("Show or hide the map (Cmd+Shift+M)")} onClick={toggleMap}>
             Map
           </button>
         </Movable>
@@ -1887,7 +1932,7 @@ function App() {
               </label>
               <label className="menu-item menu-item-checkbox">
                 <input type="checkbox" data-testid="fullscreen-toggle" checked={fullscreen} onChange={toggleFullscreen} />
-                <span>Full screen (Ctrl+Cmd+F)</span>
+                <span>{keys.keys("Full screen (Ctrl+Cmd+F)")}</span>
               </label>
               <div className="menu-sep" />
               {/* Making a character: Coupler's guide or CoffeeMUD's own way (lib/creation.ts). */}
@@ -2018,7 +2063,7 @@ function App() {
                 }}
               >
                 <ChecklistIcon aria-hidden="true" />
-                <span>Artisan Skills and Mentor (Cmd+Shift+A)…</span>
+                <span>{keys.keys("Artisan Skills and Mentor (Cmd+Shift+A)…")}</span>
               </button>
               {!WEB && (
               <button
@@ -2045,7 +2090,7 @@ function App() {
                 }}
               >
                 <ChecklistIcon aria-hidden="true" />
-                <span>Journal… (Cmd+Shift+J)</span>
+                <span>{keys.keys("Journal… (Cmd+Shift+J)")}</span>
               </button>
               )}
               {!WEB && (
@@ -2059,7 +2104,7 @@ function App() {
                 }}
               >
                 <ChecklistIcon aria-hidden="true" />
-                <span>Log… (Cmd+Shift+K)</span>
+                <span>{keys.keys("Log… (Cmd+Shift+K)")}</span>
               </button>
               )}
               {!WEB && (
@@ -2165,6 +2210,15 @@ function App() {
                 <InfoIcon aria-hidden="true" />
                 <span>About Coupler</span>
               </button>
+              {!WEB && (
+                <>
+                  <div className="menu-sep" />
+                  <button type="button" className="menu-item" data-testid="quit-button" onClick={quitApp}>
+                    <QuitIcon aria-hidden="true" />
+                    <span>Quit Coupler</span>
+                  </button>
+                </>
+              )}
               {import.meta.env.DEV && (
                 <>
                   <div className="menu-sep" />
@@ -2186,7 +2240,7 @@ function App() {
                     onClick={devGridCheck}
                   >
                     <ChecklistIcon aria-hidden="true" />
-                    <span>Check the Grid (Ctrl+Cmd+G)</span>
+                    <span>{keys.keys("Check the Grid (Ctrl+Cmd+G)")}</span>
                   </button>
                   <button type="button" className="menu-item" data-testid="copy-layout" onClick={devCopyLayout}>
                     <ChecklistIcon aria-hidden="true" />
@@ -2285,7 +2339,7 @@ function App() {
               data-testid="command-input"
               aria-label={secret ? "Password" : "Command"}
               aria-describedby="input-hint"
-              placeholder={connected ? (secret ? "Password (hidden, not kept)" : "Type a command and press Return") : "Choose a way to play to start"}
+              placeholder={connected ? (secret ? "Password (hidden, not kept)" : keys.keys("Type a command and press Return")) : "Choose a way to play to start"}
               value={input}
               disabled={!connected}
               autoComplete="off"
@@ -2303,7 +2357,7 @@ function App() {
             {!connected || secret
               ? ""
               : ux === "immersive"
-                ? "Cmd+Shift+L where you are. Cmd+Shift+V health. Cmd+Shift+E the fight. Cmd+Shift+O what the game said. Cmd+Period quiet."
+                ? keys.keys("Cmd+Shift+L where you are. Cmd+Shift+V health. Cmd+Shift+E the fight. Cmd+Shift+O what the game said. Cmd+Period quiet.")
                 : "Up and Down go through what you've typed. Esc comes back here from anywhere."}
           </div>
         </Movable>
@@ -2356,7 +2410,7 @@ function App() {
 
         {((ux === "workshop" && mapOpen) || (controlPanel && has("map"))) && (
           <Movable id="map" label="map" usual={usual.map} least={PANEL_LEAST} tier={1} announce={announcePanel}>
-            <MapPanel snapshot={snapshot} connected={connected} walking={walking} run={runMap} onAskClear={() => setClearMapOpen(true)} />
+            <MapPanel snapshot={snapshot} connected={connected} walking={walking} run={runMap} onAskClear={() => setClearMapOpen(true)} blink={display.blink} />
           </Movable>
         )}
 
@@ -2388,13 +2442,19 @@ function App() {
         <div className="status-bar-message">
           <ActivityStatus activities={activities} />
           {error && (
-            <p className="error" role="alert" title={error}>
-              {error}
+            <p className="error" role="alert" title={keys.keys(error)}>
+              {keys.keys(error)}
             </p>
           )}
           {status && !error && (
-            <p className="status-message" role="status" data-testid="status-message" title={status}>
-              {status}
+            <p
+              className="status-message"
+              role="status"
+              aria-live={screenReaderOn && voice.voiceVolume() > 0 && lastSaid === status.trim() ? "off" : "polite"}
+              data-testid="status-message"
+              title={keys.keys(status)}
+            >
+              {keys.keys(status)}
             </p>
           )}
         </div>
@@ -2412,7 +2472,7 @@ function App() {
                   className="small journal-button"
                   data-testid={`${book}-button`}
                   aria-label={`${name}: ${n === 0 ? "all heard" : `${n} not heard yet`}. Show it`}
-                  title={`${book === "journal" ? "What's said in the game" : "OOC, INFO and the other channels"}; a green bullet when some isn't heard yet (Cmd+Shift+${book === "journal" ? "J" : "K"})`}
+                  title={keys.keys(`${book === "journal" ? "What's said in the game" : "OOC, INFO and the other channels"}; a green bullet when some isn't heard yet (Cmd+Shift+${book === "journal" ? "J" : "K"})`)}
                   onClick={() => (book === "journal" ? setJournalOpen(true) : setLogOpen(true))}
                 >
                   {`${name.padEnd(7)} ${String(Math.min(n, 9999)).padStart(4)} `}
@@ -2430,7 +2490,7 @@ function App() {
           className="small hooks-button"
           data-testid="hooks-button"
           aria-label={`Hooks: ${hooksCount}. Show the list`}
-          title="What the game has sent behind its text, each name and value once. Click for the list (Cmd+Shift+H)"
+          title={keys.keys("What the game has sent behind its text, each name and value once. Click for the list (Cmd+Shift+H)")}
           onClick={() => setHooksOpen(true)}
         >
           {`Hooks ${String(hooksCount).padStart(6)}`}
@@ -2505,7 +2565,7 @@ function App() {
             {SHORTCUTS.map(([what, key]) => (
               <tr key={what}>
                 <th scope="row">{what}</th>
-                <td>{key}</td>
+                <td>{keys.keys(key)}</td>
               </tr>
             ))}
           </tbody>
@@ -2612,6 +2672,7 @@ function App() {
         open={speechOpen}
         onClose={() => setSpeechOpen(false)}
         spoken={spoken}
+        screenReader={screenReaderOn}
         onSpoken={(next) => {
           setSpoken(next);
           saveSpoken(next);

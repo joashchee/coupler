@@ -58,7 +58,7 @@ export type CueId =
   | "heartbeat" | "hurt" | "healed" | "lowMana" | "lowMoves"
   | "fightStarts" | "fightEnds" | "opponentAt"
   | "tell" | "loggedOn" | "loggedOff" | "logLine" | "logReminder" | "journalWaiting"
-  | "problem" | "modeChanged" | "priorityBell"
+  | "problem" | "modeChanged" | "priorityBell" | "thinking"
   | "creationStep" | "creationDone";
 
 export interface CueInfo {
@@ -97,6 +97,7 @@ export const CUES: CueInfo[] = [
   { id: "journalWaiting", group: "Talk", name: "The journal knocks", words: "Knock knock: the journal has lines not yet heard", summary: "A wooden knock-knock when the journal has a line not yet heard and nothing is about to say it." },
   { id: "problem", group: "Coupler", name: "A problem", words: "A problem", summary: "A low buzz when something went wrong." },
   { id: "priorityBell", group: "Coupler", name: "The priority bell", words: "Priority", summary: "Rung before priority audio when it cuts into speech; its sound is chosen in Priority Audio." },
+  { id: "thinking", group: "Coupler", name: "Getting the answer ready", words: "Getting the answer ready", summary: "A soft, high ping each second while Coupler's voice gets your answer ready, until it speaks: your command was heard." },
   { id: "modeChanged", group: "Coupler", name: "A new way to play", words: "A new way to play", summary: "Three rising notes when you choose a way to play." },
   { id: "creationStep", group: "Create", name: "The next question", words: "The next question", summary: "A soft page turn when the game asks the next question about your new character." },
   { id: "creationDone", group: "Create", name: "Into the game", words: "Your character is in the game", summary: "A rising fanfare when your new character first comes into the game." },
@@ -589,6 +590,18 @@ export function priorityBell(bell = priority.bellSound()): number {
 }
 voice.setPriorityBell(() => priorityBell());
 
+/**
+ * The answer's being rendered: a soft, high ping, a sine with a quiet
+ * octave above, fading fast. Captioned the first time a wait only.
+ */
+export function thinking(first = true) {
+  sound("thinking", [
+    { freq: 1568, at: 0, dur: 0.28, gain: 0.05 },
+    { freq: 3136, at: 0, dur: 0.12, gain: 0.012 },
+  ], 0, undefined, !first);
+}
+voice.setThinkingSound((first) => thinking(first));
+
 /** A way to play chosen. */
 export function modeChanged() {
   play("modeChanged", [
@@ -679,6 +692,7 @@ export function preview(id: CueId) {
     case "problem": return problem();
     case "modeChanged": return modeChanged();
     case "priorityBell": return void priorityBell();
+    case "thinking": return thinking();
     case "creationStep": return creationStep();
     case "creationDone": return creationDone();
   }

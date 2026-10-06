@@ -8,14 +8,23 @@ race_*.jpg`, 32 by 32) and each class's (`web/pub/images/classes/*.jpg`,
 pixels a cell (the upper half block), in the 16 VGA colors, a
 near-white background made black. Reads each player race's Java
 (`Races/*.java`, those a theme makes available) for its facts: stat
-changes, senses, height, lifespan, what it knows and can do, and what
-sets it apart from the other player races.
+changes, senses, height, weight, lifespan, what it knows and can do,
+and what sets it apart from the other player races; and the game's own
+help on each (`resources/help/misc_help.ini`'s `<RACE>` entries). The
+player races are those a theme makes available and every race with
+such help: a game turns the rest on by its `ENABLE` flag
+(coffeemud.net has Pixie and others), and their Java may only inherit
+a size (Pixie `extends SmallElfKin`), so a value is looked for up the
+`extends` chain. The painter's heights (`src-tauri/src/portrait.rs`,
+`SIZES`) are printed last, to paste there.
 
 Writes `public/creation-art.json`, which components/CreationDialog.tsx
 reads when the guide opens (lib/creationArt.ts): the facts always, the
 pictures only when the player chooses CoffeeMUD's over Coupler's own
-painter (gear → Pictures…; the painter's come first, CLAUDE.md rule 11). Needs Pillow (the
-maintainer's, never shipped). Run it again when the snapshot changes:
+painter (gear → Pictures…; the painter's come first, CLAUDE.md rule 11). The
+pictures need Pillow (the maintainer's, never shipped): without it, the
+facts are made again and the pictures kept from the file as it is. Run
+it again when the snapshot changes:
 
     python3 scripts/creation-art.py
 """
@@ -25,13 +34,17 @@ import json
 import re
 from pathlib import Path
 
-from PIL import Image, ImageEnhance
+try:
+    from PIL import Image, ImageEnhance
+except ImportError:
+    Image = None
 
 ROOT = Path(__file__).resolve().parent.parent
 CM = ROOT / "reference" / "CoffeeMud"
 RACE_IMAGES = CM / "web" / "pub" / "images" / "mxp"
 CLASS_IMAGES = CM / "web" / "pub" / "images" / "classes"
 RACES = CM / "com" / "planet_ink" / "coffee_mud" / "Races"
+HELP = CM / "resources" / "help" / "misc_help.ini"
 OUT = ROOT / "public" / "creation-art.json"
 
 # The VGA palette, as src/lib/mud.ts's BASE16.
@@ -133,26 +146,89 @@ def number(src: str, method: str):
     return int(m.group(1)) if m else None
 
 
-def race_facts(path: Path):
+def source(name: str):
+    path = RACES / f"{name}.java"
+    return path.read_text(errors="replace") if path.exists() else None
+
+
+def chain(src: str) -> list:
+    """The race's Java, then each it extends, up to StdRace."""
+    out = [src]
+    while len(out) < 8:
+        parent = re.search(r"\bextends\s+(\w+)", out[-1])
+        up = source(parent.group(1)) if parent else None
+        if not up:
+            break
+        out.append(up)
+    return out
+
+
+def inherited(sources: list, find):
+    """The first value `find` finds, the race's own before what it extends."""
+    for src in sources:
+        value = find(src)
+        if value:
+            return value
+    return None
+
+
+def race_help() -> dict:
+    """CoffeeMUD's help on each player race: `NAME=<RACE>\\` and its lines, by key."""
+    out = {}
+    if not HELP.exists():
+        return out
+    text = HELP.read_text(errors="replace")
+    for m in re.finditer(r"^([A-Z_]+)=<RACE>\\\n((?:.*\\\n)*.*)$", text, re.M):
+        words = re.sub(r"\\\n", " ", m.group(2)).rstrip("\\")
+        words = re.sub(r"\^[A-Za-z?.<>&*\[\]]", "", words)
+        out[key(m.group(1))] = " ".join(words.split())
+    return out
+
+
+def player_race(sources: list, helped: bool) -> bool:
+    code = inherited(sources, lambda s: re.search(r"int availabilityCode\(\)\s*\{\s*return ([^;]+);", s))
+    if not code or "THEME_" not in code.group(1):
+        return False
+    return helped or "SKILLONLY" not in code.group(1)
+
+
+def race_facts(path: Path, help: dict):
     src = path.read_text(errors="replace")
-    code = re.search(r"int availabilityCode\(\)\s*\{\s*return ([^;]+);", src)
-    if not code or "THEME_" not in code.group(1) or "SKILLONLY" in code.group(1):
-        return None
     name = re.search(r'localizedStaticName\s*=\s*CMLib\.lang\(\)\.L\("([^"]+)"\)', src)
     name = name.group(1) if name else path.stem
-    affect = method_body(src, "affectCharStats")
-    stats = {STATS[s]: int(n) for s, n in re.findall(r"adjStat\(CharStats\.STAT_(\w+)\s*,\s*([+-]?\d+)\)", affect) if s in STATS}
-    resists = [SAVES[s] for s, n in re.findall(r"STAT_SAVE_(\w+)\s*\)\s*([+-]\s*\d+)", affect) if s in SAVES and int(n.replace(" ", "")) > 0]
+    sources = chain(src)
+    if not player_race(sources, key(name) in help or key(path.stem) in help):
+        return None
+    # Stat changes and saves add up the chain while each calls super's.
+    stats, saves = {}, {}
+    for one in sources:
+        affect = method_body(one, "affectCharStats")
+        for s, n in re.findall(r"adjStat\(CharStats\.STAT_(\w+)\s*,\s*([+-]?\d+)\)", affect):
+            if s in STATS:
+                stats[STATS[s]] = stats.get(STATS[s], 0) + int(n)
+        for s, n in re.findall(r"STAT_SAVE_(\w+)\s*\)\s*([+-]\s*\d+)", affect):
+            if s in SAVES:
+                saves[SAVES[s]] = saves.get(SAVES[s], 0) + int(n.replace(" ", ""))
+        if "super.affectCharStats" not in affect:
+            break
+    stats = {s: n for s, n in stats.items() if n}
+    resists = [s for s, n in saves.items() if n > 0]
     senses = []
-    phy = method_body(src, "affectPhyStats")
+    phy = inherited(sources, lambda s: method_body(s, "affectPhyStats")) or ""
     if "CAN_SEE_INFRARED" in phy:
         senses.append("infravision")
     if "CAN_SEE_DARK" in phy:
         senses.append("sees in the dark")
-    shortest, variance = number(src, "shortestMale"), number(src, "heightVariance")
-    height = shortest + (variance or 0) // 2 if shortest else None
-    aging = re.search(r"agingChart\s*=\s*\{([^}]*)\}", src)
-    lifespan = int(aging.group(1).split(",")[-1]) if aging else None
+    shortest = inherited(sources, lambda s: number(s, "shortestMale"))
+    variance = inherited(sources, lambda s: number(s, "heightVariance")) or 0
+    height = shortest + variance // 2 if shortest else None
+    lightest = inherited(sources, lambda s: number(s, "lightestWeight"))
+    heavier = inherited(sources, lambda s: number(s, "weightVariance")) or 0
+    weight = lightest + heavier // 2 if lightest else None
+    aging = inherited(sources, lambda s: re.search(r"agingChart\s*=\s*\{([^}]*)\}", s))
+    last = aging.group(1).split(",")[-1].strip() if aging else ""
+    # The undead's YEARS_AGE_LIVES_FOREVER: no end to say.
+    lifespan = int(last) if last.isdigit() and int(last) < 1_000_000 else None
     knows = strings(src, "culturalAbilityNames")
     effects = [words_of(a) for a in strings(src, "racialEffectNames")]
     abilities = [words_of(a) for a in strings(src, "racialAbilityNames")]
@@ -162,9 +238,11 @@ def race_facts(path: Path):
         "resists": resists,
         "senses": senses,
         "height": height,
+        "weight": weight,
         "lifespan": lifespan,
         "knows": [words_of(k) for k in knows],
         "gifts": effects + abilities,
+        "help": help.get(key(name)) or help.get(key(path.stem)),
     }
 
 
@@ -184,7 +262,9 @@ def describe(race: dict, all_races: list) -> dict:
         facts.append(f"{', '.join(sense).capitalize()}.")
     if race["resists"]:
         facts.append(f"Resists {', '.join(race['resists'])}.")
-    if race["height"]:
+    if race["height"] and race["weight"]:
+        facts.append(f"About {feet(race['height'])} tall, {race['weight']} pounds.")
+    elif race["height"]:
         facts.append(f"About {feet(race['height'])} tall.")
     if race["lifespan"]:
         facts.append(f"Lives up to {race['lifespan']} years.")
@@ -216,24 +296,41 @@ def describe(race: dict, all_races: list) -> dict:
     unlike += [f"alone with {g}" for g in race["senses"] + race["gifts"] if g not in theirs]
     if not race["stats"] and all(r["stats"] for r in others):
         unlike.append("the only one with no stat changes: good at anything")
-    return {"facts": " ".join(facts), "unlike": f"Of the races: {', '.join(unlike)}." if unlike else ""}
+    out = {"facts": " ".join(facts), "unlike": f"Of the races: {', '.join(unlike)}." if unlike else ""}
+    if race["help"]:
+        out["help"] = race["help"]
+    return out
 
 
 def main():
-    races = [f for f in (race_facts(p) for p in sorted(RACES.glob("*.java"))) if f]
+    help = race_help()
+    races = [f for f in (race_facts(p, help) for p in sorted(RACES.glob("*.java"))) if f]
     described = {key(r["name"]): {"name": r["name"], **describe(r, races)} for r in races}
+    kept = json.loads(OUT.read_text()) if OUT.exists() else {"races": {}, "classes": {}}
     out = {"races": {}, "classes": {}}
-    for path in sorted(RACE_IMAGES.glob("race_*.jpg")):
-        k = key(path.stem[len("race_"):])
-        out["races"][k] = {"art": ansi(path, RACE_SIZE, False), **described.get(k, {})}
+    if Image:
+        for path in sorted(RACE_IMAGES.glob("race_*.jpg")):
+            k = key(path.stem[len("race_"):])
+            out["races"][k] = {"art": ansi(path, RACE_SIZE, False)}
+        for path in sorted(CLASS_IMAGES.glob("*.jpg")):
+            out["classes"][key(path.stem)] = {"name": path.stem, "art": ansi(path, CLASS_SIZE, True)}
+    else:
+        print("No Pillow: the pictures are kept as they are, the facts made again.")
+        out["races"] = {k: {"art": v["art"]} for k, v in kept["races"].items() if "art" in v}
+        out["classes"] = kept["classes"]
     for k, d in described.items():
-        out["races"].setdefault(k, d)
-    for path in sorted(CLASS_IMAGES.glob("*.jpg")):
-        out["classes"][key(path.stem)] = {"name": path.stem, "art": ansi(path, CLASS_SIZE, True)}
+        out["races"].setdefault(k, {}).update(d)
     OUT.write_text(json.dumps(out, separators=(",", ":")) + "\n")
     print(f"{OUT.relative_to(ROOT)}: {len(out['races'])} races ({len(described)} with facts), {len(out['classes'])} classes, {OUT.stat().st_size} bytes")
     for k, d in described.items():
         print(f"  {d['name']}: {d['facts']} {d['unlike']}")
+    missing = sorted(set(help) - set(described))
+    if missing:
+        print(f"Help but no player race's Java: {', '.join(missing)}")
+    print("\nportrait.rs SIZES (key, inches, pounds, sees in the dark):")
+    for r in sorted(races, key=lambda r: key(r["name"])):
+        if r["height"] and r["weight"]:
+            print(f'    ("{key(r["name"])}", {r["height"]}, {r["weight"]}, {str(bool(r["senses"])).lower()}),')
 
 
 if __name__ == "__main__":
