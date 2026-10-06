@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Neumetik MIDI** (2026-10-06): Coupler's synthesizer is now the
+  `neumetik-midi` crate (MIT), ansiapps' synthesizer split out for games
+  to use freely, in `src-tauri/vendor/neumetik-midi/` in place of
+  `vendor/neumetik/`. `scripts/neumetik-sync.sh` copies it from the
+  Neumetik repository's `midi/` (and nothing else from there). MIDI
+  plays as before.
 - **Priority Audio** (2026-10-06): Workshop's gear → Priority Audio… is
   a list of the cues and speech that never wait behind the speech queue
   (`lib/priority.ts`): any cue but the heartbeat, tells, the group, a
