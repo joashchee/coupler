@@ -420,6 +420,8 @@ export interface WhoReport {
 }
 /** Who's online now. */
 export const whoNow = () => invoke<WhoReport>("who_now");
+/** Sends WHO now when none was read yet (the say key); whether it was sent. */
+export const whoAsk = () => invoke<boolean>("who_ask");
 /** The one-line commands and what the narrator says for their answers (echo.rs). */
 export const echoList = () => invoke<EchoListing>("echo_list");
 /** Someone logged on or off (the game's announcement, or WHO's list changing). */

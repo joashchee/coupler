@@ -322,6 +322,7 @@
 :root[data-theme="ansiapps"] .dialog-actions { margin-top: 16px; gap: 16px; }
 :root[data-theme="ansiapps"] .about-section-title { margin: 16px 0 0; }
 :root[data-theme="ansiapps"] .about-section-desc { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .about-links { gap: 0 16px; margin: 0 0 16px; }
 :root[data-theme="ansiapps"] .dialog-box button { background: var(--dos-green); color: var(--dos-black); }
 :root[data-theme="ansiapps"] .dialog-box button:hover { background: var(--dos-lightgreen); }
 :root[data-theme="ansiapps"] .dialog-box button.primary { background: var(--dos-yellow); color: var(--dos-black); }

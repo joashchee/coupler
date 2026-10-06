@@ -13,6 +13,9 @@
 import { memo, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { GameColors } from "../lib/display";
 import { spanColors, type Line } from "../lib/mud";
+import { cutLine, playerPrompt } from "../lib/output";
+
+export { playerPrompt };
 
 export interface TermLine {
   id: number;
@@ -26,33 +29,32 @@ export interface TermLine {
   echo?: boolean;
   /** The prompt, finished by what came after it (src-tauri/src/speech.rs). */
   prompt?: boolean;
+  /** The game wrote on after the prompt: this many characters at the start are it (lib/output.ts). */
+  promptCut?: number;
+  /** The room's exits, `[Exits: north, east]` (lib/output.ts): Immersive plays them as cues. */
+  exits?: boolean;
   line: Line;
 }
 
 /** A line Immersive speaks instead of writing: talk, and the time of day. */
 export const spokenAside = (l: TermLine) => Boolean(l.talk || l.time);
 
-/**
- * Whether an unfinished line is the player's prompt (`<100hp 50m 80mv>`),
- * not a question waiting for an answer ("Quit (y/N)?", "<pause - enter>",
- * "Choose one:"), which always shows.
- */
-export function playerPrompt(text: string): boolean {
-  const t = text.trim();
-  return t !== "" && !/[?:]$/.test(t) && !/\b(y\/n|pause|enter|press|return)\b/i.test(t);
-}
-
-/** What Immersive leaves out of the game output (`talk`: talk and the time of day; `prompt`: the player's prompt; `echo`: the commands' one-line answers). */
+/** What Immersive leaves out of the game output (`talk`: talk and the time of day; `prompt`: the player's prompt; `echo`: the commands' one-line answers; `exits`: the room's exits). */
 export interface Hidden {
   talk: boolean;
   prompt: boolean;
   echo: boolean;
+  exits: boolean;
 }
 
 export const lineText = (line: Line) => line.map((span) => span.text).join("");
 
 /** Whether a line is left out of the game output. */
-export const hiddenLine = (l: TermLine, hide: Hidden) => (hide.talk && spokenAside(l)) || (hide.echo && !!l.echo) || (hide.prompt && !!l.prompt && playerPrompt(lineText(l.line)));
+export const hiddenLine = (l: TermLine, hide: Hidden) =>
+  (hide.talk && spokenAside(l)) || (hide.echo && !!l.echo) || (hide.exits && !!l.exits) || (hide.prompt && !!l.prompt && playerPrompt(lineText(l.line)));
+
+/** A line as shown: without the prompt the game wrote on after, when the prompt's left out. */
+export const shownLine = (l: TermLine, hide: Hidden): Line => (hide.prompt && l.promptCut ? cutLine(l.line, l.promptCut) : l.line);
 
 interface TerminalProps {
   lines: TermLine[];
@@ -99,7 +101,7 @@ const LineView = memo(function LineView({ line, kind, current, colors }: { line:
   );
 });
 
-const NOTHING_HIDDEN: Hidden = { talk: false, prompt: false, echo: false };
+const NOTHING_HIDDEN: Hidden = { talk: false, prompt: false, echo: false, exits: false };
 
 /** The live lines shown under the held view while reviewing: at most this many, and a third of the rows. */
 const LIVE = 5;
@@ -155,7 +157,7 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
     return () => observer.disconnect();
   }, [onSize]);
 
-  const shown = hide.talk || hide.prompt || hide.echo ? lines.filter((l) => !hiddenLine(l, hide)) : lines;
+  const shown = hide.talk || hide.prompt || hide.echo || hide.exits ? lines.filter((l) => !hiddenLine(l, hide)) : lines;
   const unfinished = partial && hide.prompt && playerPrompt(lineText(partial)) ? null : partial;
   const live = Math.max(1, Math.min(LIVE, Math.floor(rows / 3)));
 
@@ -183,7 +185,7 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
       </span>
       {lines.length === 0 && !unfinished && <div className="terminal-empty">{empty}</div>}
       {shown.map((l) => (
-        <LineView key={l.id} line={l.line} kind={l.kind} current={l.id === reviewing} colors={colors} />
+        <LineView key={l.id} line={shownLine(l, hide)} kind={l.kind} current={l.id === reviewing} colors={colors} />
       ))}
       {unfinished && <LineView line={unfinished} colors={colors} />}
       {/* Room under the live lines, so the newest held line can still be read above them. */}
@@ -193,7 +195,7 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
         <div className="terminal terminal-live" style={{ "--rows": live + 1 } as CSSProperties} aria-hidden="true" data-testid="terminal-live">
           <div className="terminal-line terminal-live-rule">{"── Live (Option+End) ".padEnd(80, "─")}</div>
           {(unfinished ? shown.slice(-(live - 1)) : shown.slice(-live)).map((l) => (
-            <LineView key={l.id} line={l.line} kind={l.kind} colors={colors} />
+            <LineView key={l.id} line={shownLine(l, hide)} kind={l.kind} colors={colors} />
           ))}
           {unfinished && <LineView line={unfinished} colors={colors} />}
         </div>

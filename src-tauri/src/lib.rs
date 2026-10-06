@@ -122,6 +122,12 @@ fn update_open() -> Result<(), String> {
     update::open()
 }
 
+/// Opens Coupler's Discord or Reddit (`update::COMMUNITY`) in the browser.
+#[tauri::command]
+fn community_open(id: String) -> Result<(), String> {
+    update::open_community(&id)
+}
+
 #[tauri::command]
 fn mud_send(app: AppHandle, line: String, session: State<'_, Session>) -> Result<(), String> {
     session.send_line(&app, &line)
@@ -375,6 +381,12 @@ fn echo_list() -> echo::Listing {
 #[tauri::command]
 fn who_now(session: State<'_, Session>) -> who::Report {
     session.who_now()
+}
+
+/// Asks WHO now for the report key, when none was read yet (who.rs).
+#[tauri::command]
+fn who_ask(session: State<'_, Session>) -> bool {
+    session.who_ask()
 }
 
 /// What background noise and weather should be looping now (ambient.rs).
@@ -761,6 +773,7 @@ pub fn run() {
             launch_counts,
             update_check,
             update_open,
+            community_open,
             mud_send,
             mud_disconnect,
             mud_resize,
@@ -790,6 +803,7 @@ pub fn run() {
             hooks_set_trigger,
             ambience_now,
             who_now,
+            who_ask,
             echo_list,
             picture_now,
             picture_again,

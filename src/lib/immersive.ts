@@ -27,7 +27,8 @@
  *    hidden details only its colors show (src-tauri/src/hidden.rs,
  *    written too), the login (until
  *    the character is in the game, every line of words, since there's
- *    no sound for a menu; but making a character, the guide's question
+ *    no sound for a menu, but the intro: "Connecting…", then nothing
+ *    till the game's welcome or its first question; but making a character, the guide's question
  *    in few words and each choice as it's reached, components/
  *    CreationDialog.tsx), what the player asks for by key, and in a
  *    fight, no silence: the freshest fact whenever nothing's said, and
@@ -41,6 +42,7 @@ import * as earcons from "./earcons";
 import * as echoes from "./echoes";
 import { FightTalk } from "./fightTalk";
 import * as mud from "./mud";
+import { exitsLine, promptCut } from "./output";
 import * as voice from "./voice";
 
 interface Immersive {
@@ -69,6 +71,11 @@ const spokenTime = (text: string) => text.replace(/\s*\(Hour: (\d+)\/(\d+)\)/, (
 /** A long look said: "Hidden details found.", the description, then the details by name. */
 const spokenLook = ({ text, words }: mud.Hidden) =>
   words.length > 0 ? `Hidden details found. ${text} Hidden: ${mud.hiddenList(words)}.` : `${text} No hidden details.`;
+
+/** The game's first line on connecting: the narrator says "Connecting…" and nothing more till the welcome. */
+const CONNECTING = /^\s*Connecting to CoffeeMUD/i;
+/** The game's welcome, which ends the quiet. */
+const WELCOME = /Welcome to CoffeeMUD/i;
 
 /** Where the player was, for the cues on coming into a room. */
 export interface Whereabouts {
@@ -186,6 +193,10 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
   /** A character's being made (src-tauri/src/creation.rs): known as its question comes, before that read's output. */
   const creating = useRef(false);
   const lastPrompt = useRef("");
+  /** The unfinished line after the last read, to leave the prompt out of a line the game wrote on after it. */
+  const unfinished = useRef<string | null>(null);
+  /** Between "Connecting to CoffeeMUD" and the game's welcome: the intro's art and words aren't said. */
+  const connecting = useRef(false);
   /** A hook went off for the read about to come (its `hook-fired` comes just before its `mud-output`). */
   const hooked = useRef(false);
   useEffect(() => {
@@ -218,16 +229,37 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         // A lone line of the game's ("A rat arrives from the north."), with no
         // hook's sound to tell it: said, rather than missed. A block (a
         // room, a list) is the screen reader's or the review keys'.
+        // The prompt (if the game wrote on after it) and the exits (the cues play them) aren't said.
+        const before = unfinished.current;
+        unfinished.current = e.partial ? e.partial.map((s) => s.text).join("") : null;
         if (inGame.current && !creating.current && !fired) {
-          const lone = e.lines.map((line, i) => ({ text: line.map((s) => s.text).join("").trim(), kind: e.kinds[i] })).filter((l) => l.text !== "" && l.kind === "game");
+          const lone = e.lines
+            .map((line, i) => {
+              const text = line.map((s) => s.text).join("");
+              return { text: (i === 0 ? text.slice(promptCut(text, before)) : text).trim(), kind: e.kinds[i] };
+            })
+            .filter((l) => l.text !== "" && l.kind === "game" && !exitsLine(l.text));
           if (lone.length === 1 && e.echoes.length === 0 && !e.hidden) say(lone[0].text);
         }
         // Making a character, the guide says the question, not the screens of text before it.
         if (inGame.current || (creating.current && !on.current.guideHidden)) return;
         e.lines.forEach((line, i) => {
-          if (e.kinds[i] !== "time") say(line.map((s) => s.text).join(""));
+          const text = line.map((s) => s.text).join("");
+          if (CONNECTING.test(text)) {
+            connecting.current = true;
+            say("Connecting…");
+          } else if (connecting.current) {
+            if (WELCOME.test(text)) {
+              connecting.current = false;
+              say(text);
+            }
+          } else if (e.kinds[i] !== "time") say(text);
         });
         const prompt = e.partial ? e.partial.map((s) => s.text).join("").trim() : "";
+        // A question before any welcome ends the quiet too: it needs an
+        // answer. Not any unfinished line: a read can end mid-art.
+        if (connecting.current && !/[:?]$/.test(prompt)) return;
+        connecting.current = false;
         if (prompt !== lastPrompt.current) {
           lastPrompt.current = prompt;
           say(prompt);
@@ -241,6 +273,8 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         inGame.current = false;
         creating.current = false;
         lastPrompt.current = "";
+        unfinished.current = null;
+        connecting.current = false;
       }),
       mud.onCharacterLeft(() => {
         talk.current?.stop();

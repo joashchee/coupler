@@ -1,8 +1,10 @@
 /**
  * **Fight talk**: in a fight, Immersive's narrator never leaves a
  * silence. Whenever nothing's being said for a moment, it fills it with
- * the freshest fact about the fight, in a few words ("Rat at 40 percent,
- * falling fast.", "You at 62 percent.", "You hit hard."). Something that
+ * the freshest fact about the fight, in a few words ("Rat at 37 of 90,
+ * falling fast.", "You at 62 percent.", "You hit hard."). The opponent's
+ * exact hit points when the game sends them (MSDP, src-tauri/src/
+ * combat.rs), else their percentage. Something that
  * matters (the fight starting or ending, a death, a big blow, health
  * running low, someone fleeing) cuts whatever's queued and is said at
  * once.
@@ -16,9 +18,9 @@ import * as mud from "./mud";
 import * as voice from "./voice";
 
 /** How long a silence is let be before the narrator fills it. */
-const SILENCE_MS = 900;
-/** How often the silence is checked. */
-const TICK_MS = 250;
+const SILENCE_MS = 250;
+/** How often the silence is checked: often enough that a silence is never much longer. */
+const TICK_MS = 50;
 /** A blow this share of the maximum or more, at once, is said at once. */
 const BIG_HIT = 15;
 /** Health under these is said at once, each the first time it's crossed. */
@@ -46,12 +48,19 @@ export interface Said {
 const percent = (n: number) => `${Math.round(n)} percent`;
 const nameOf = (o: mud.Opponent | null) => o?.name ?? "Your opponent";
 
+/** The opponent's health as said: their exact hit points ("37 of 90"), else the percentage, or null. */
+export function theirFigures(o: mud.Opponent): string | null {
+  if (o.health !== null && o.healthMax !== null && o.healthMax > 0) return `${o.health} of ${o.healthMax}`;
+  return o.percent !== null ? percent(o.percent) : null;
+}
+
 /** The opponent's health in words, with how fast it's going. */
 function theirHealth(o: mud.Opponent, before: number | null): string | null {
-  if (o.percent === null) return null;
+  const figures = theirFigures(o);
+  if (o.percent === null || figures === null) return null;
   const drop = before === null ? 0 : before - o.percent;
   const trend = drop >= 20 ? ", falling fast" : drop >= 5 ? ", falling" : drop <= -5 ? ", recovering" : "";
-  return `${nameOf(o)} at ${percent(o.percent)}${trend}.`;
+  return `${nameOf(o)} at ${figures}${trend}.`;
 }
 
 /**
@@ -73,7 +82,8 @@ export function insight(state: FightState, said: Said, turn = 0): { text: string
     return { text: `You at ${percent(state.mine)}.`, said: { ...said, mine: state.mine } };
   }
   if (state.line && state.line.length <= 90) return { text: state.line, said };
-  const parts = [o.percent !== null ? `${nameOf(o)} ${Math.round(o.percent)}` : null, state.mine !== null ? `you ${Math.round(state.mine)}` : null].filter(Boolean);
+  const theirs = theirFigures(o);
+  const parts = [theirs !== null ? `${nameOf(o)} ${theirs.replace(/ percent$/, "")}` : null, state.mine !== null ? `you ${Math.round(state.mine)}` : null].filter(Boolean);
   const both = parts.length > 0 ? `${parts.join(", ")}.` : null;
   const range = o.range === null ? null : o.range === 0 ? `Toe to toe with ${nameOf(o)}.` : `${nameOf(o)} at range ${o.range}.`;
   const choices = [both, range, `Still fighting ${nameOf(o)}.`].filter((t): t is string => t !== null);
@@ -111,7 +121,8 @@ export class FightTalk {
     if (o && !before) {
       this.said = { theirs: o.percent, mine: this.mine, at: Date.now() };
       this.lowSaid.clear();
-      this.now(`Fighting ${nameOf(o)}${o.percent !== null && o.percent < 100 ? `, at ${percent(o.percent)}` : ""}.`);
+      const figures = theirFigures(o);
+      this.now(`Fighting ${nameOf(o)}${figures !== null && o.percent !== null && o.percent < 100 ? `, at ${figures}` : ""}.`);
       this.start();
     } else if (!o && before) {
       this.stopTicking();

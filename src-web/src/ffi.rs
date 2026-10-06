@@ -143,6 +143,7 @@ fn call(input: &[u8]) -> Result<Value, String> {
         "hooks_count" => Ok(Value::from(app.hooks_count())),
         "ambience_now" => json(app.ambience_now()),
         "who_now" => json(app.who_now()),
+        "who_ask" => Ok(Value::from(app.who_ask())),
         "portrait_paint" => {
             let size = |name: &str| args.get(name).and_then(Value::as_u64).unwrap_or(0) as usize;
             serde_json::to_value(crate::portrait::portrait(&s("kind"), &s("name"), size("columns"), size("rows"))).map_err(|e| e.to_string())

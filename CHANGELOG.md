@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- **CoffeeMUD's source brought up to date** (2026-10-06):
+  `reference/CoffeeMud/` is now `master` at `720aec6` (2026-10-03),
+  still CoffeeMUD 5.11.0.4, so `BUILT_FOR` stands. The 15 commits since
+  `c1e556f` touch items, quests, a new common skill (Snake Oil Selling)
+  and the channel backlog's settings; nothing Coupler reads (the
+  protocols, commands, socials, races, character creation, Artisan), so
+  the studies and the files made from the source stand.
+
+- **The narrator, more at hand** (2026-10-06):
+  - Connecting in Immersive, the narrator says "Connecting…", then
+    nothing of the intro until the game's welcome (said), or its first
+    question if that comes first.
+  - Typing a command where nothing takes it (focus on the output or a
+    button) says "Press escape to return to the command line", at most
+    every 5 seconds.
+  - "Let's see…": when a reply to a command or a say key has to be
+    rendered in a built-in voice (not in the voice cache), the narrator
+    says it at once and the status bar shows it while the render runs.
+    The narrator's own is rendered at launch and kept, so it never waits.
+  - The say keys answer in the narrator's voice in Workshop too, whatever
+    its voice layer (Terminal still leaves it to the screen reader).
+  - "CoffeeMUD closed the connection." is said in Immersive and Workshop
+    when the game hangs up, also when a QUIT ends with a reset (it was
+    "the connection dropped", with the system's error).
+  - Immersive leaves the player's prompt out also where the game wrote
+    on after it on the same line, and never says it; and the room's
+    exits lines (`[Exits: …]`, `Obvious exits:`) are left out, the cues
+    playing them.
+  - Fight talk says the opponent's exact hit points ("Rat at 37 of 90")
+    when MSDP sends them, the percentage otherwise; it fills a silence
+    after a quarter second (was 0.9).
+  - Cmd+Shift+W before any WHO was read asks WHO at once (its reply
+    hidden) and says the list. WHO's prompt counting starts with the
+    character, so the account menu's prompt no longer holds back the
+    background WHO.
+  - About links Coupler's Discord and r/coupler_app on Reddit, opened in
+    the browser by fixed address.
+
 - **Accessibility, for every player** (2026-10-06): the README,
   `CLAUDE.md`, `CONTRIBUTING.md` and `docs/accessibility.md` no longer
   speak of blind and visually impaired players alone. Accessible first

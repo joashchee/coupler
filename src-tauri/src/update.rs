@@ -19,6 +19,10 @@ pub const LATEST: &str = "https://api.github.com/repos/joashchee/coupler/release
 /// The page `open` shows (also the fallback when GitHub names no page).
 pub const PAGE: &str = "https://github.com/joashchee/coupler/releases/latest";
 
+/// Coupler's community, by ID: About's links, opened in the player's
+/// browser (`open_community`). Nothing is fetched by Coupler itself.
+pub const COMMUNITY: [(&str, &str); 2] = [("discord", "https://discord.gg/ZH8ZhXChY3"), ("reddit", "https://www.reddit.com/r/coupler_app/s/wnwhNjQV9d")];
+
 /// What a check found, for the frontend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -90,10 +94,21 @@ pub async fn check(current: &str) -> Result<Check, String> {
     Ok(Check { current: current.to_string(), newer: newer(current, &latest), latest })
 }
 
-/// Shows `PAGE` in the player's browser by the system's own opener
-/// (`open` on macOS, the URL handler on Windows, `xdg-open` on Linux;
-/// docs/platform-parity.md). Only ever this one fixed address.
+/// Shows `PAGE` in the player's browser.
 pub fn open() -> Result<(), String> {
+    open_page(PAGE).map_err(|_| "The release's page couldn't be opened.".to_string())
+}
+
+/// Shows one of `COMMUNITY`'s pages in the player's browser, by its ID.
+pub fn open_community(id: &str) -> Result<(), String> {
+    let (_, page) = COMMUNITY.iter().find(|(known, _)| *known == id).ok_or("Coupler has no such page.")?;
+    open_page(page).map_err(|_| "The page couldn't be opened.".to_string())
+}
+
+/// A fixed page in the player's browser by the system's own opener
+/// (`open` on macOS, the URL handler on Windows, `xdg-open` on Linux;
+/// docs/platform-parity.md). Only ever one of this file's addresses.
+fn open_page(page: &'static str) -> std::io::Result<()> {
     #[cfg(target_os = "macos")]
     let mut command = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
@@ -104,7 +119,7 @@ pub fn open() -> Result<(), String> {
     };
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let mut command = std::process::Command::new("xdg-open");
-    let mut child = command.arg(PAGE).spawn().map_err(|_| "The release's page couldn't be opened.".to_string())?;
+    let mut child = command.arg(page).spawn()?;
     // Reaped once the opener hands the page over, so it leaves no zombie.
     std::thread::spawn(move || child.wait());
     Ok(())

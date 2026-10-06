@@ -21,6 +21,8 @@ export interface UpdateCheck {
 export const check = () => invoke<UpdateCheck>("update_check");
 /** Opens the latest release's page in the player's browser. */
 export const openPage = () => invoke<void>("update_open");
+/** Opens Coupler's Discord or Reddit in the browser. */
+export const openCommunity = (id: "discord" | "reddit") => invoke<void>("community_open", { id });
 
 /** Automatic checks are on only once the player turned them on. */
 export function loadAuto(): boolean {

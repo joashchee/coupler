@@ -94,6 +94,7 @@ function store(key: string, value: number) {
 export function setVoiceRate(percent: number) {
   rate = Math.min(Math.max(Math.round(percent), 50), 300);
   store(RATE_KEY, rate);
+  prepareLetsSee();
 }
 
 export function setVoiceVolume(percent: number) {
@@ -425,18 +426,27 @@ function saySystem(words: string, how: Voice | null, system: SpeechSynthesisVoic
   window.speechSynthesis.speak(u);
 }
 
+/** Raw audio from `voice_synth` (its sample rate, then 16-bit samples) as a buffer, or null when empty. */
+function toBuffer(context: AudioContext, bytes: ArrayBuffer): AudioBuffer | null {
+  const view = new DataView(bytes);
+  const samples = (bytes.byteLength - 4) >> 1;
+  if (samples <= 0) return null;
+  const buffer = context.createBuffer(1, samples, view.getUint32(0, true));
+  const channel = buffer.getChannelData(0);
+  for (let i = 0; i < samples; i++) channel[i] = view.getInt16(4 + 2 * i, true) / 32768;
+  return buffer;
+}
+
 function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finished?: boolean) => void, mine: number, book?: mud.Book) {
-  mud
-    .voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), book)
+  const rendering = mud.voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), book);
+  const thinking = thinkWhile(rendering, mine);
+  rendering
     .then((bytes) => {
+      window.clearTimeout(thinking);
       if (mine !== generation) return;
-      const view = new DataView(bytes);
-      const samples = (bytes.byteLength - 4) >> 1;
-      if (samples <= 0) return done(false);
       const { context, gain } = voxOutput();
-      const buffer = context.createBuffer(1, samples, view.getUint32(0, true));
-      const channel = buffer.getChannelData(0);
-      for (let i = 0; i < samples; i++) channel[i] = view.getInt16(4 + 2 * i, true) / 32768;
+      const buffer = toBuffer(context, bytes);
+      if (!buffer) return done(false);
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(gain);
@@ -449,13 +459,115 @@ function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finis
           // Already over.
         }
       };
-      source.start();
+      // After "Let's see…", if it's still being said.
+      source.start(Math.max(context.currentTime, letsSeeEnds));
     })
     .catch((e) => {
+      window.clearTimeout(thinking);
       // Still heard, in the system's voice, rather than lost.
       console.warn(`Coupler: ${chosen.name} couldn't speak: ${String(e)}`);
       if (mine === generation) saySystem(words, how, null, done);
     });
+}
+
+// ---- "Let's see…": the answer's coming ----
+
+/**
+ * When the player sends a command or presses a say key, what's said
+ * next is their answer. If it has to be rendered (a bundled voice, not
+ * in the voice cache), the narrator says "Let's see…" at once, and the
+ * status bar shows it while the render runs (`onThinking`), so the wait
+ * is never silent. Said once per command, from the narrator's rendering
+ * kept from launch (rendered again when the narrator changes), so it
+ * starts the moment it's wanted; the system's voice needs no render.
+ */
+export const LETS_SEE = "Let's see…";
+/** Speech this long after the player asked is their answer. */
+const ANSWER_MS = 4000;
+/** A render taking longer than this wasn't in the cache: "Let's see…". */
+const SLOW_MS = 120;
+/** When the player last asked, and whether "Let's see…" was said for it. */
+let askedAt = 0;
+let thoughtFor = -1;
+/** The narrator's "Let's see…", rendered ahead, and for which narrator. */
+let letsSee: { key: string; buffer: AudioBuffer } | null = null;
+/** When the "Let's see…" being said ends, on the audio clock. */
+let letsSeeEnds = 0;
+const thinkingListeners = new Set<(rendering: Promise<unknown>) => void>();
+
+/** The player sent a command or pressed a say key: the next render is their answer. */
+export function asked() {
+  askedAt = Date.now();
+}
+
+/** Calls `f` with each render "Let's see…" was said for, to show while it runs. */
+export function onThinking(f: (rendering: Promise<unknown>) => void): () => void {
+  thinkingListeners.add(f);
+  return () => thinkingListeners.delete(f);
+}
+
+const narratorKey = () => JSON.stringify([narrator.engine, narrator.voiceName, narrator.pitch, lineRate(narrator)]);
+
+/** Renders the narrator's "Let's see…" ahead, unless it's the system's voice or already done. */
+function prepareLetsSee() {
+  const chosen = narratorChoice();
+  if (!chosen || chosen.engine === "system") return;
+  const key = narratorKey();
+  if (letsSee?.key === key) return;
+  void mud
+    .voiceSynth(chosen.engine, chosen.id, pronounce(LETS_SEE), narrator.gender, narrator.pitch, lineRate(narrator))
+    .then((bytes) => {
+      const buffer = toBuffer(sharedContext(), bytes);
+      if (buffer && key === narratorKey()) letsSee = { key, buffer };
+    })
+    .catch(() => {
+      // Not in Tauri, or the engine's gone: the system's voice says it.
+    });
+}
+onVoicesChanged(prepareLetsSee);
+onNarratorChanged(prepareLetsSee);
+prepareLetsSee();
+
+/** Says "Let's see…" if `rendering` is slow and answers the player; returns the timer to clear once it's done. */
+function thinkWhile(rendering: Promise<unknown>, mine: number): number {
+  if (Date.now() - askedAt > ANSWER_MS || thoughtFor === askedAt || volume === 0) return 0;
+  return window.setTimeout(() => {
+    if (mine !== generation || thoughtFor === askedAt) return;
+    thoughtFor = askedAt;
+    listeners.forEach((f) => f(LETS_SEE));
+    thinkingListeners.forEach((f) => f(rendering));
+    const chosen = narratorChoice();
+    if (letsSee && letsSee.key === narratorKey()) {
+      const { context, gain } = voxOutput();
+      const source = context.createBufferSource();
+      source.buffer = letsSee.buffer;
+      source.connect(gain);
+      source.start();
+      letsSeeEnds = context.currentTime + letsSee.buffer.duration;
+      const stop = stopLine;
+      // Cut off with the line it's for.
+      stopLine = () => {
+        try {
+          source.stop();
+        } catch {
+          // Already over.
+        }
+        letsSeeEnds = 0;
+        stop?.();
+      };
+    } else if (canSpeak()) {
+      // The system's voice starts at once; the answer waits about as long as it takes.
+      const u = new SpeechSynthesisUtterance(pronounce(LETS_SEE));
+      u.rate = lineRate(narrator) / 100;
+      u.volume = volume / 100;
+      if (chosen?.system) u.voice = chosen.system;
+      speaking.add(u);
+      u.onend = () => speaking.delete(u);
+      window.speechSynthesis.speak(u);
+      const context = sharedContext();
+      letsSeeEnds = context.currentTime + (0.8 * 130) / lineRate(narrator);
+    }
+  }, SLOW_MS);
 }
 
 /**

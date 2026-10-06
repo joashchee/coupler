@@ -158,6 +158,8 @@ pub struct Who {
     changes: Vec<Change>,
     /// The latest changes, newest last, with when.
     recent: Vec<(Change, Instant)>,
+    /// A character has come into the game this connection.
+    played: bool,
 }
 
 /// Spaces collapsed, ends trimmed.
@@ -284,6 +286,14 @@ impl Who {
         }
         if self.me.is_empty() {
             self.next_ask = Some(now + FIRST_ASK);
+            // The login's questions (the account menu's, seen many times)
+            // aren't the game's prompt: counted from the first character,
+            // the usual one is known after a few prompts, and WHO starts
+            // soon after. A later character keeps it.
+            if !self.played {
+                self.prompts.clear();
+            }
+            self.played = true;
         }
         self.me = me.to_string();
     }
@@ -318,6 +328,20 @@ impl Who {
             self.asked = None;
         }
         if !self.gentle(now) || self.next_ask.is_none_or(|next| now < next) {
+            return false;
+        }
+        self.asked = Some(now);
+        self.next_ask = Some(now + ASK_EVERY);
+        true
+    }
+
+    /// The player asked who's online before a WHO was read (the say
+    /// key): whether to send WHO now, counted as Coupler's own (its reply
+    /// hidden, then said). Only with a character in the game, no password
+    /// or character being made, and no WHO already waiting; not at the
+    /// usual prompt only, since the player asked this moment.
+    pub fn ask_now(&mut self, now: Instant) -> bool {
+        if self.me.is_empty() || self.secret || self.creating || self.listing.is_some() || self.asked.is_some_and(|at| now.saturating_duration_since(at) < ANSWER_WAITS) {
             return false;
         }
         self.asked = Some(now);
@@ -509,7 +533,7 @@ impl Who {
     /// up): nothing is known. When they last typed and their usual
     /// prompt are still theirs.
     pub fn leave(&mut self) {
-        *self = Who { prompts: std::mem::take(&mut self.prompts), typed_at: self.typed_at, ..Who::default() };
+        *self = Who { prompts: std::mem::take(&mut self.prompts), typed_at: self.typed_at, played: self.played, ..Who::default() };
     }
 }
 
@@ -553,6 +577,46 @@ mod tests {
         }
         who.partial(Some(PROMPT), t);
         shown
+    }
+
+    #[test]
+    fn the_say_key_asks_before_the_usual_prompt_is_known() {
+        let t = Instant::now();
+        let mut who = Who::default();
+        // Not before a character's in the game.
+        assert!(!who.ask_now(t));
+        who.character("bob", t);
+        who.partial(Some(PROMPT), t);
+        assert!(!who.due(t + secs(10)), "the usual prompt isn't known yet");
+        assert!(who.ask_now(t));
+        // Asked: a second press doesn't send it twice.
+        assert!(!who.ask_now(t + secs(1)));
+        let mut shown = Vec::new();
+        for l in [PROMPT.to_string(), HEADER.to_string(), row_line("Elf", "Bard", "12", "Carl"), String::new()] {
+            if who.line(&l, t) == Seen::Show {
+                shown.push(l);
+            }
+        }
+        who.partial(Some(PROMPT), t);
+        assert!(shown.is_empty(), "{shown:?}");
+        let report = who.report(t);
+        assert!(report.known);
+        assert_eq!(report.online[0].name, "Carl");
+    }
+
+    #[test]
+    fn the_account_menu_doesnt_outnumber_the_game_prompt() {
+        let t = Instant::now();
+        let mut who = Who::default();
+        for _ in 0..10 {
+            who.partial(Some("Command or Name ('?' for help): "), t);
+        }
+        who.character("bob", t);
+        who.typed("look", t);
+        for _ in 0..USUAL_PROMPT {
+            who.partial(Some(PROMPT), t);
+        }
+        assert!(who.due(t + FIRST_ASK + secs(1)));
     }
 
     #[test]

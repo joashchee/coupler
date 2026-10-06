@@ -519,6 +519,19 @@ impl Session {
         self.who.lock().unwrap().report(Instant::now())
     }
 
+    /// The say key before any WHO was read: asks now (`Who::ask_now`).
+    /// Returns whether it was sent.
+    pub fn who_ask(&self) -> bool {
+        let asked = self.who.lock().unwrap().ask_now(Instant::now());
+        if asked {
+            if let Err(e) = self.write(&telnet::encode_line("who")) {
+                log::warn!("{e}");
+                return false;
+            }
+        }
+        asked
+    }
+
     /// Emits `who` when someone logged on or off.
     fn who_changed(&self, app: &AppHandle) {
         let changes = self.who.lock().unwrap().take_changes();
@@ -1372,6 +1385,9 @@ enum Said<'a> {
     WorldTime(&'a str),
 }
 
+/// What's said when the game hangs up (a QUIT).
+const CLOSED: &str = "CoffeeMUD closed the connection.";
+
 /// Reads until the socket closes. Returns why, for the status line.
 fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> Option<String> {
     let mut writer = stream.try_clone().ok();
@@ -1382,8 +1398,11 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
     let mut buf = vec![0u8; 16 * 1024];
     loop {
         let n = match stream.read(&mut buf) {
-            Ok(0) => return Some("CoffeeMUD closed the connection.".into()),
+            Ok(0) => return Some(CLOSED.into()),
             Ok(n) => n,
+            // A QUIT the game ends with a reset rather than a close: it's
+            // still the game hanging up, not the line dropping.
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) => return Some(CLOSED.into()),
             // Our own shutdown lands here too; `disconnect` has already
             // reported it, and the id check drops this one.
             Err(e) => return Some(format!("The connection to CoffeeMUD dropped. ({e})")),

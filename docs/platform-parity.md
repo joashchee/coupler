@@ -16,7 +16,7 @@ milestone. Unresearched beyond naming the mechanism.
 | Characters' voices by gender | `lib/voice.ts` `GENDERS`: macOS's voice names (Samantha, Daniel, …) marked feminine or masculine, and its novelty voices (Zarvox, …) left out of Automatic; `speechSynthesis` says nothing of a voice's gender | Windows' voice names (Zira, David, …) need their own entries | Whatever engine speaks: its voices' names, or its own variants (Flite's voices are named by speaker) |
 | The game's talk in bundled voices (planned) | Pocket TTS in Rust (Candle, Metal) | Same, CPU | Same, CPU |
 | The voice cache's free-space check (`voicecache.rs` `free_space`) | `statvfs` (libc) on the app-data volume; `f_bavail` × `f_frsize` | `GetDiskFreeSpaceExW` (not built: until then the cache keeps to its 1 GB cap alone) | `statvfs`, as on macOS (built, untested) |
-| Opening the release page (`update.rs` `open`) | `open` with the fixed URL | `rundll32 url.dll,FileProtocolHandler` | `xdg-open` (untested) |
+| Opening the release page and About's Discord and Reddit (`update.rs` `open_page`) | `open` with the fixed URL | `rundll32 url.dll,FileProtocolHandler` | `xdg-open` (untested) |
 | The update check's TLS (`update.rs`, reqwest `native-tls`) | Security framework | SChannel | The system's OpenSSL, linked (`libssl-dev` in `linux.yml`), never bundled |
 | Fixed window size | `resizable: false` greys out the green button; a window taller than the screen is shrunk by the system, and the stage scales down to fit | Check 1366×768 with the taskbar: the window is taller than the work area | Check tiling window managers, which ignore fixed sizes (the stage scales to whatever it's given) |
 

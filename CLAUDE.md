@@ -21,9 +21,12 @@ match in `docs/coffeemud-socials.tsv`), `docs/coffeemud-commands.md`
 `docs/ansiapps-color-contrast.md` (the look). `CONTRIBUTING.md` is
 these rules for contributors; keep the two in step.
 CoffeeMUD's source is unpacked in `reference/CoffeeMud/` (gitignored,
-Apache-2.0, snapshot `c1e556f`, CoffeeMUD 5.11.0.4): read it before
-guessing what the server sends. A new snapshot changes `BUILT_FOR` in
-`mssp.rs` too.
+Apache-2.0, snapshot `720aec6` of 2026-10-03, CoffeeMUD 5.11.0.4; the
+studies in `docs/` were made at `c1e556f`, and nothing they read changed
+since): read it before guessing what the server sends. To update it,
+download the tarball of `bozimmerman/CoffeeMud`'s `master` (the sandbox
+can't write a `.git` there) and unpack it in its place. A new snapshot
+changes `BUILT_FOR` in `mssp.rs` when `MUD.HOST_VERSION` changed.
 
 **`CHANGELOG.md`**: add a bullet whenever a change lands.
 
@@ -488,6 +491,9 @@ and its order is in the roadmap's phase 2.
   "OOC" as "O O C", for every engine and the screen reader's feed);
   in a fight, `src/lib/fightTalk.ts` fills every silence with the
   freshest fact and says what matters at once, cutting the queue;
+  `lib/output.ts` tells the prompt the game wrote on after and the
+  exits' lines, which Immersive leaves out; `voice.ts`'s "Let's see…"
+  (`asked`, `onThinking`) covers a reply still rendering;
   `components/ScenePanel.tsx` (Here) and `HeardPanel.tsx` (Heard) are
   its panels, `WorkshopDialog.tsx` Workshop's Customize the Screen.
   The grand goal: **fewer spoken words**; what can be a sound is one.
@@ -562,7 +568,8 @@ and its order is in the roadmap's phase 2.
   channels', also kept out of talk via `Who::heard`). Emits `who` with
   each change; `lib/earcons.ts` `loggedOnOff` rings for it, and
   Cmd+Shift+W (`sayWho`, `who_now`, `mud.describeWho`) says the list,
-  names alone (`bare_name` takes the titles off). `Who::gentle` is
+  names alone (`bare_name` takes the titles off); before any WHO was
+  read it asks one at once (`who_ask`, `Who::ask_now`). `Who::gentle` is
   when a command of Coupler's own goes unnoticed: WHO, and WEATHER
   when the painter's sky is unknown (`Ambient::weather_wanted`, an area
   at most every 15 minutes, its answer hidden).
@@ -574,7 +581,9 @@ and its order is in the roadmap's phase 2.
   `releases/latest` for `joashchee/coupler` (prereleases never count)
   over reqwest with the system's TLS (`native-tls`); a newer version
   puts Get Coupler X… in the gear menu, which opens the release page in
-  the browser by the system's opener (`open`). Desktop only.
+  the browser by the system's opener (`open`). Desktop only. About's
+  Discord and Reddit buttons open `COMMUNITY`'s fixed pages the same
+  way (`community_open`; the web build's `core.ts` keeps the same two).
 - `src-tauri/src/mssp.rs`: **the greeting at launch**, pure and
   unit-tested: MSSP's `PLAYERS` (how many are online) and `CODEBASE`
   (the game's CoffeeMUD version), read by a short probe
@@ -611,9 +620,9 @@ and its order is in the roadmap's phase 2.
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
   (takes a port ID), `launch_counts` (takes a port ID), `update_check`,
-  `update_open`, `mud_send`, `mud_disconnect`, `mud_resize`,
+  `update_open`, `community_open`, `mud_send`, `mud_disconnect`, `mud_resize`,
   `map_snapshot`, `map_find`, `map_directions`, `map_walk`, `map_stop`,
-  `map_set_landmark`, `map_clear`, `who_now`, `echo_list`, `cast_list`, `cast_set_voice`,
+  `map_set_landmark`, `map_clear`, `who_now`, `who_ask`, `echo_list`, `cast_list`, `cast_set_voice`,
   `cast_reset`, `cast_forget`, `journal_list`, `journal_unheard`,
   `journal_unheard_entries`, `journal_set_heard`, `journal_heard_all`,
   `voice_engines`, `voice_synth`, `voice_prerender`, `hooks_count`, `hooks_list`, `hooks_set_trigger`, `ambience_now`, `picture_now`, `picture_again`, `picture_forget_looks`, `picture_paint`, `assets_list`,

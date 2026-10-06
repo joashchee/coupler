@@ -129,6 +129,7 @@ header.top .header-actions { margin-left: auto; }
 /* About dialog (same as Diskette's) */
 .about-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text); margin: 18px 0 4px; }
 .about-section-desc { font-size: 12px; margin: 0 0 8px; }
+.about-links { display: flex; gap: 8px; margin: 0 0 8px; }
 
 /* Buttons */
 button {

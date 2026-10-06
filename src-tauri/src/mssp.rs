@@ -17,7 +17,7 @@
 //! The same table names the server's version, `CODEBASE` ("CoffeeMUD
 //! v5.11.0.4", `CMProps.Str.MUDVER`, set from `MUD.HOST_VERSION`), which
 //! is checked against [`BUILT_FOR`], the version of the source Coupler
-//! was made from (`reference/CoffeeMud/`, snapshot `c1e556f`): a game
+//! was made from (`reference/CoffeeMud/`, snapshot `720aec6`): a game
 //! that's moved on may say things the studies never saw, so the
 //! greeting warns (`fit`).
 //!

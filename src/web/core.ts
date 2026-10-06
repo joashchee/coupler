@@ -215,6 +215,9 @@ async function mirrored(path: string, looping = false): Promise<Response> {
 
 type Args = Record<string, unknown>;
 
+/** Coupler's community pages, as src-tauri/src/update.rs's COMMUNITY. */
+const COMMUNITY: Record<string, string> = { discord: "https://discord.gg/ZH8ZhXChY3", reddit: "https://www.reddit.com/r/coupler_app/s/wnwhNjQV9d" };
+
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   const x = await start();
   const result = await answer(x, cmd, args);
@@ -229,6 +232,13 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
       return connect(x, String(args.portId));
     case "mud_disconnect":
       return disconnect(x);
+    case "community_open": {
+      // The desktop's update::COMMUNITY: a fixed page, in a new tab.
+      const page = COMMUNITY[String(args.id)];
+      if (!page) throw "Coupler has no such page.";
+      window.open(page, "_blank", "noopener");
+      return null;
+    }
     case "server_info":
     case "mud_send":
     case "mud_resize":
@@ -243,6 +253,7 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
     case "hooks_count":
     case "ambience_now":
     case "who_now":
+    case "who_ask":
     case "echo_list":
     case "portrait_paint":
       return call(x, cmd, args);

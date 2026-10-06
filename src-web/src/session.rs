@@ -240,6 +240,15 @@ impl Coupler {
         }
     }
 
+    /// The say key before any WHO was read, as the desktop's `who_ask`.
+    pub fn who_ask(&mut self) -> bool {
+        if self.telnet.is_none() || !self.who.ask_now(Instant::now()) {
+            return false;
+        }
+        self.outgoing.extend(telnet::encode_line("who"));
+        true
+    }
+
     /// Who's online now, as the desktop's `who_now`.
     pub fn who_now(&self) -> String {
         json!(self.who.report(Instant::now())).to_string()

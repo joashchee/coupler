@@ -32,7 +32,7 @@ import { JournalDialog } from "./components/JournalDialog";
 import { SpeakingPopup } from "./components/SpeakingPopup";
 import { describeUnheard, useJournal } from "./lib/journal";
 import { StartupScreen } from "./components/StartupScreen";
-import { hiddenLine, Terminal, type Hidden, type TermLine } from "./components/Terminal";
+import { hiddenLine, shownLine, Terminal, type Hidden, type TermLine } from "./components/Terminal";
 import { WorkshopDialog } from "./components/WorkshopDialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { DESKTOP_ONLY, DESKTOP_ONLY_KEYS, WEB } from "./lib/web";
@@ -43,6 +43,7 @@ import * as creation from "./lib/creation";
 import * as earcons from "./lib/earcons";
 import * as echoes from "./lib/echoes";
 import { useImmersive } from "./lib/immersive";
+import { ExitsReader, promptCut } from "./lib/output";
 import * as mud from "./lib/mud";
 import * as updates from "./lib/updates";
 import { checkGrid, installRowSnap } from "./lib/grid";
@@ -325,9 +326,28 @@ const ALL_SHORTCUTS: [string, string][] = [
 ];
 const SHORTCUTS = WEB ? ALL_SHORTCUTS.filter(([, keys]) => !(keys.startsWith("Cmd+Shift+") && DESKTOP_ONLY_KEYS.includes(keys.slice(-1).toLowerCase()))) : ALL_SHORTCUTS;
 
-/** A line's words, without the spaces around them. */
-function lineText(l: TermLine): string {
-  return l.line.map((span) => span.text).join("").trim();
+/** How long the say key waits for the WHO it asked. */
+const WHO_WAITS = 6000;
+
+/** How often the tip for typing away from the command line is said, at most. */
+const TYPED_AWAY_EVERY = 5000;
+
+/**
+ * Whether a key is the player typing a command where nothing takes it:
+ * a letter, digit or mark with no modifier, and focus not in a text box
+ * (nor Space on a control, which presses it).
+ */
+function typedAway(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return false;
+  const target = e.target instanceof HTMLElement ? e.target : null;
+  if (target?.closest("input, textarea, select, [contenteditable='true']")) return false;
+  if (e.key === " " && target?.closest("button, a, [role='button'], [role='menuitem'], [role='checkbox'], [role='tab']")) return false;
+  return true;
+}
+
+/** A line's words as shown, without the spaces around them. */
+function lineText(l: TermLine, hide: Hidden): string {
+  return shownLine(l, hide).map((span) => span.text).join("").trim();
 }
 
 /** "1 line", "12 lines". */
@@ -366,6 +386,9 @@ function App() {
   const [portId, setPortId] = useState<string | null>(() => stored(PORT_KEY));
   const [lines, setLines] = useState<TermLine[]>([]);
   const [partial, setPartial] = useState<mud.Line | null>(null);
+  /** The unfinished line's text, to tell a prompt the game wrote on after (lib/output.ts). */
+  const unfinished = useRef<string | null>(null);
+  const exitsReader = useRef(new ExitsReader());
   /** The server echoes, so what's typed is a password. */
   const [serverEchoes, setServerEchoes] = useState(false);
   const [input, setInput] = useState("");
@@ -449,6 +472,15 @@ function App() {
   const reviewRef = useRef<{ newest: number; told: number }>({ newest: 0, told: 0 });
   const voicedRef = useRef(voiced);
   voicedRef.current = voiced;
+  /**
+   * Whether the narrator answers the say keys and tells the connection
+   * closing: Immersive and Workshop alike, whatever Workshop's voice
+   * layer, since the player asked or must know. Terminal leaves it to
+   * the screen reader, through the status bar.
+   */
+  const narrated = voiced || ux === "workshop";
+  const narratedRef = useRef(narrated);
+  narratedRef.current = narrated;
   const cuesRef = useRef(cues);
   cuesRef.current = cues;
   const spokenRef = useRef(spoken);
@@ -469,6 +501,8 @@ function App() {
   const gearRef = useRef<HTMLDivElement>(null);
   const firstPortRef = useRef<HTMLButtonElement>(null);
   const { activities, runActivity, isBusy } = useActivities();
+  // An answer being rendered: "Let's see…" in the status bar while it runs (lib/voice.ts).
+  useEffect(() => voice.onThinking((rendering) => void runActivity(voice.LETS_SEE, () => rendering, "voice").catch(() => {})), [runActivity]);
 
   const finishStep = (step: StartupStep) => setStartupPending((list) => list.filter((s) => s !== step));
 
@@ -551,7 +585,25 @@ function App() {
   useEffect(() => {
     const subscriptions = [
       mud.onOutput((e) => {
-        if (e.lines.length > 0) append(e.lines.map((line, i) => ({ id: nextLineId.current++, line, talk: e.kinds[i] === "talk", time: e.kinds[i] === "time", echo: e.kinds[i] === "echo", prompt: e.kinds[i] === "prompt" })));
+        const before = unfinished.current;
+        unfinished.current = e.partial ? e.partial.map((span) => span.text).join("") : null;
+        if (e.lines.length > 0)
+          append(
+            e.lines.map((line, i) => {
+              const text = line.map((span) => span.text).join("");
+              const cut = i === 0 && e.kinds[i] !== "prompt" ? promptCut(text, before) : 0;
+              return {
+                id: nextLineId.current++,
+                line,
+                talk: e.kinds[i] === "talk",
+                time: e.kinds[i] === "time",
+                echo: e.kinds[i] === "echo",
+                prompt: e.kinds[i] === "prompt",
+                promptCut: cut > 0 ? cut : undefined,
+                exits: exitsReader.current.line(text.slice(cut)) || undefined,
+              };
+            }),
+          );
         setPartial(e.partial);
         // A finished prompt was already read as it came.
         e.lines.forEach((line, i) => {
@@ -593,6 +645,8 @@ function App() {
         setVitals(null);
         setServerEchoes(false);
         setPartial(null);
+        unfinished.current = null;
+        exitsReader.current.reset();
         setInGame(false);
         creationRef.current = null;
         setCreationStep(null);
@@ -604,7 +658,10 @@ function App() {
         if (reason) {
           setStatus(reason);
           note(`*** ${reason}`);
-          if (voicedRef.current) voice.speak(reason, true);
+          // The narrator says it in every way to play but Terminal (the
+          // status reaches the screen reader there), without the system's
+          // own words for a dropped line.
+          if (narratedRef.current) voice.speak(reason.replace(/\s*\(.*\)$/, ""), true);
         }
       }),
       // A logout or a switch: the old character's sounds fade out and their pictures close.
@@ -648,8 +705,11 @@ function App() {
   const has = (id: string) => !(WEB && DESKTOP_ONLY.has(id)) && (ux === "workshop" ? (shown[id] ?? true) : UX_PARTS[ux].has(id));
   linesRef.current = lines;
   /** In Immersive, talk isn't in the game output (it's in the journal and the log, and the pop-up shows it while it's said), nor the time of day (the narrator says it). */
-  /** Nor the player's prompt, once in the game: Immersive has no need of it to look at. */
-  const hide: Hidden = useMemo(() => ({ talk: ux === "immersive", prompt: ux === "immersive" && inGame, echo: ux === "immersive" && echoesSaid }), [ux, inGame, echoesSaid]);
+  /** Nor the player's prompt, once in the game: Immersive has no need of it to look at. Nor the exits: the cues play them. */
+  const hide: Hidden = useMemo(
+    () => ({ talk: ux === "immersive", prompt: ux === "immersive" && inGame, echo: ux === "immersive" && echoesSaid, exits: ux === "immersive" && inGame }),
+    [ux, inGame, echoesSaid],
+  );
   const hideRef = useRef(hide);
   hideRef.current = hide;
   const [arranging, setArranging] = useState(() => stored(ARRANGE_KEY) === "on");
@@ -724,6 +784,18 @@ function App() {
     }
   }
 
+  /** About's Discord and Reddit buttons: the page in the browser. */
+  function openCommunityPage(id: "discord" | "reddit") {
+    const name = id === "discord" ? "Coupler's Discord" : "r/coupler_app on Reddit";
+    updates.openCommunity(id).then(
+      () => {
+        setError(null);
+        setStatus(`Opening ${name} in your browser.`);
+      },
+      (e) => setError(String(e)),
+    );
+  }
+
   /** Gear → Check for Updates Automatically. */
   function toggleAutoUpdates(on: boolean) {
     updates.saveAuto(on);
@@ -747,7 +819,7 @@ function App() {
       store(PORT_KEY, to.id);
       setConnected(true);
       setStatus(`Connected to CoffeeMUD ${to.name}.`);
-      if (voiced) voice.speak(`Connected to CoffeeMUD ${to.name}.`, true);
+      // Immersive's narrator says "Connecting…" as the game greets, then nothing till its welcome (lib/immersive.ts).
       // The input is disabled until this render lands.
       window.setTimeout(() => inputRef.current?.focus(), 0);
     } catch (e) {
@@ -814,6 +886,8 @@ function App() {
       }
     }
     historyAt.current = history.current.length;
+    // What's said next answers it: "Let's see…" if it has to be rendered.
+    voice.asked();
     await send(line);
   }
 
@@ -840,9 +914,12 @@ function App() {
       setError(null);
       // A changed string is what makes a screen reader speak it again.
       setStatus((was) => (was === text ? `${text} ` : text));
-      if (voiced) voice.speak(text, true);
+      if (narrated) {
+        voice.asked();
+        voice.speak(text, true);
+      }
     },
-    [voiced],
+    [narrated],
   );
 
   /** The journal and the log as heard (lib/journal.ts): talk spoken as it comes, tones for what's waiting. */
@@ -863,17 +940,30 @@ function App() {
   const whereAmI = useCallback(() => sayNow(mud.describeRoom(snapshot?.room ?? null)), [sayNow, snapshot]);
   const sayVitals = useCallback(() => sayNow(mud.describeVitals(vitals)), [sayNow, vitals]);
   const sayOpponent = useCallback(() => sayNow(mud.describeOpponent(opponent)), [sayNow, opponent]);
+  /**
+   * Who's online. Before any WHO was read, it's asked now (its reply
+   * hidden, as Coupler's own) and said once it's in, which also starts
+   * the asking once a minute.
+   */
   const sayWho = useCallback(() => {
-    mud.whoNow().then(
-      (report) => sayNow(mud.describeWho(report)),
-      (e) => setError(String(e)),
-    );
+    void (async () => {
+      let report = await mud.whoNow();
+      if (!report.known && (await mud.whoAsk())) {
+        sayNow("Asking who's online…");
+        const until = Date.now() + WHO_WAITS;
+        while (!report.known && Date.now() < until) {
+          await new Promise((resolve) => window.setTimeout(resolve, 250));
+          report = await mud.whoNow();
+        }
+      }
+      sayNow(mud.describeWho(report));
+    })().catch((e) => setError(String(e)));
   }, [sayNow]);
   /** What the game said since the last command: its words, not its art, the last 15 lines at most. */
   const sayRecent = useCallback(() => {
     const said = linesRef.current
       .filter((l) => l.id >= sentAt.current && !l.kind && !hiddenLine(l, hideRef.current))
-      .map((l) => l.line.map((span) => span.text).join("").trim())
+      .map((l) => lineText(l, hideRef.current))
       .filter(voice.speakable)
       .slice(-15);
     sayNow(said.length > 0 ? said.join(" ") : "The game hasn't said anything since your last command.");
@@ -894,7 +984,7 @@ function App() {
         return;
       }
       const after = Math.max(reviewId, reviewRef.current.newest);
-      const missed = linesRef.current.filter((l) => l.id > after && lineText(l) !== "" && !hiddenLine(l, hideRef.current)).length;
+      const missed = linesRef.current.filter((l) => l.id > after && lineText(l, hideRef.current) !== "" && !hiddenLine(l, hideRef.current)).length;
       setReviewId(null);
       if (!quietly) sayNow(missed > 0 ? `Live. ${countLines(missed)} came in after the line you were on.` : "Live.");
     },
@@ -902,7 +992,7 @@ function App() {
   );
   const reviewStep = useCallback(
     (step: "earlier" | "later" | "oldest") => {
-      const list = linesRef.current.filter((l) => lineText(l) !== "" && !hiddenLine(l, hideRef.current));
+      const list = linesRef.current.filter((l) => lineText(l, hideRef.current) !== "" && !hiddenLine(l, hideRef.current));
       if (list.length === 0) {
         sayNow("There's no output to review yet.");
         return;
@@ -934,7 +1024,7 @@ function App() {
       const news = newer > 0 && newer !== reviewRef.current.told ? `${newer} new ${newer === 1 ? "line" : "lines"} below. ` : "";
       reviewRef.current.told = newer;
       setReviewId(line.id);
-      const text = lineText(line);
+      const text = lineText(line, hideRef.current);
       sayNow(`${edge}${news}${voice.speakable(text) ? text : "A line of symbols."}`);
     },
     [reviewId, sayNow, reviewLive],
@@ -1390,6 +1480,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walking]);
 
+  /** When the tip for typing away from the command line was last said. */
+  const typedAwayAt = useRef(0);
   // The shortcuts in SHORTCUTS that aren't the input's own.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1462,11 +1554,18 @@ function App() {
       } else if (e.key === "Escape" && !gearOpen && connected) {
         e.preventDefault();
         inputRef.current?.focus();
+      } else if (connected && !gearOpen && typedAway(e)) {
+        // Typing a command where nothing takes it: say how to get back,
+        // at most every few seconds.
+        const now = Date.now();
+        if (now - typedAwayAt.current < TYPED_AWAY_EVERY) return;
+        typedAwayAt.current = now;
+        sayNow("Press escape to return to the command line.");
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anyDialogOpen, gearOpen, connected, creationStep, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom]);
+  }, [anyDialogOpen, gearOpen, connected, creationStep, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom]);
 
   useEffect(() => {
     if (!gearOpen) return;
@@ -2198,6 +2297,16 @@ function App() {
           characters anywhere but this computer. The map it draws as you explore is kept on this computer too.
         </p>
         <p>Coupler is free and open source, under the Apache License 2.0.</p>
+        <h3 className="about-section-title">Community</h3>
+        <p className="about-section-desc">Talk about Coupler, ask for help and share what you've made with other players. Each opens in your browser.</p>
+        <div className="about-links">
+          <button type="button" data-testid="discord-button" onClick={() => openCommunityPage("discord")}>
+            Coupler's Discord
+          </button>
+          <button type="button" data-testid="reddit-button" onClick={() => openCommunityPage("reddit")}>
+            r/coupler_app on Reddit
+          </button>
+        </div>
         <h3 className="about-section-title">Credits</h3>
         <p className="about-section-desc" data-testid="about-credits">
           CoffeeMUD is by Bo Zimmerman and its contributors (coffeemud.net). Coupler's handling of the game's protocols follows Sip, CoffeeMUD's own client by
