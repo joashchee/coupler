@@ -19,9 +19,12 @@
  * The corners are buttons, so the keyboard does it too: the arrow keys
  * by one character, Home back to the default place or size.
  *
- * Only Workshop's screen is the player's (lib/ux.ts): in Terminal and
+ * Only Workshop's screen is the player's (lib/ux.ts), and Terminal's
+ * Control Panel side (components/ControlPanel.tsx), kept apart from
+ * Workshop's under its own scope (LayoutScopeContext, "terminal:"); in
  * Immersive (KeptContext false) everything is in its default place and
- * nothing is kept.
+ * nothing is kept. A `fixed` thing (Terminal's game output, command
+ * line) is never arranged.
  */
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { fitRect, frontZ, LAYOUT_FORGOTTEN, storedPanel, storePanel, type Point, type Rect, type Size } from "../lib/layout";
@@ -31,6 +34,8 @@ import { CELL_HEIGHT, CELL_WIDTH } from "../lib/stage";
 export const ArrangeContext = createContext(true);
 /** Whether the player's arrangement applies (Workshop) or only the default layout does. */
 export const KeptContext = createContext(true);
+/** Whose arrangement it is: "" for Workshop's, "terminal:" for Terminal's, a prefix to every kept ID. */
+export const LayoutScopeContext = createContext("");
 
 /** Room for each tier's pile of `z` turns, and the place above them all for an open menu. */
 const TIER = 1_000_000;
@@ -70,6 +75,8 @@ interface MovableProps {
   front?: boolean;
   /** Brought to the front of its tier each time it appears: the ways to play, after a disconnect. */
   frontOnShow?: boolean;
+  /** Always in its default place and size, never arranged. */
+  fixed?: boolean;
   /** Says what just happened ("Map moved: column 109, row 2."), for the status bar. */
   announce?: (message: string) => void;
   children: ReactNode;
@@ -84,8 +91,9 @@ const STEPS: Record<string, [number, number]> = {
   ArrowDown: [0, CELL_HEIGHT],
 };
 
-export function Movable({ id, label, usual, resizable = true, least = LEAST, className, backdrop, tier = 3, front, frontOnShow, announce, children }: MovableProps) {
-  const keeps = useContext(KeptContext);
+export function Movable({ id: own, label, usual, resizable = true, least = LEAST, className, backdrop, tier = 3, front, frontOnShow, fixed, announce, children }: MovableProps) {
+  const id = useContext(LayoutScopeContext) + own;
+  const keeps = useContext(KeptContext) && !fixed;
   const arranging = useContext(ArrangeContext) && keeps;
   const box = useRef<HTMLDivElement>(null);
   // What the user chose; null is "the usual", which can differ by theme.
@@ -255,7 +263,7 @@ export function Movable({ id, label, usual, resizable = true, least = LEAST, cla
     <div
       ref={box}
       className={`movable${className ? ` ${className}` : ""}`}
-      data-panel={id}
+      data-panel={own}
       style={{
         left: at.x,
         top: at.y,
@@ -269,7 +277,7 @@ export function Movable({ id, label, usual, resizable = true, least = LEAST, cla
         <button
           type="button"
           className="movable-handle movable-move"
-          data-testid={`move-${id}`}
+          data-testid={`move-${own}`}
           aria-label={`Move the ${label}`}
           title={`Drag to move the ${label}. With the keyboard: the arrow keys move it, Home puts it back`}
           {...move}
@@ -281,7 +289,7 @@ export function Movable({ id, label, usual, resizable = true, least = LEAST, cla
         <button
           type="button"
           className="movable-handle movable-size"
-          data-testid={`resize-${id}`}
+          data-testid={`resize-${own}`}
           aria-label={`Resize the ${label}`}
           title={`Drag to resize the ${label}. With the keyboard: the arrow keys resize it, Home gives it its default size`}
           {...resizing}

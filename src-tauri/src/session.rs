@@ -53,6 +53,7 @@ use crate::echo::{Echoed, Echoes};
 use crate::hidden::{Hidden, LongLook};
 use crate::speech::{Kinds, LineKind};
 use crate::telnet::{self, Event, Telnet};
+use crate::account::{self, Account};
 use crate::who::{self, Seen, Who};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -247,6 +248,8 @@ pub struct Session {
     counted: Mutex<bool>,
     /// Who's online (`who.rs`); new each connection.
     who: Mutex<Who>,
+    /// The account menu (`account.rs`); new each connection.
+    account: Mutex<Account>,
     /// The commands sent, waiting for their one-line answers (`echo.rs`).
     echoes: Mutex<Echoes>,
     /// A long look sent, waiting for its room (`hidden.rs`).
@@ -408,6 +411,7 @@ impl Session {
         *self.senses.lock().unwrap() = SensesStore::default();
         *self.counted.lock().unwrap() = false;
         *self.who.lock().unwrap() = Who::default();
+        *self.account.lock().unwrap() = Account::default();
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
@@ -704,6 +708,15 @@ impl Session {
     pub fn journal_list(&self, app: &AppHandle, book: &str, query: &str, who: Option<&str>) -> Result<journal::Listing, String> {
         let book = Book::parse(book)?;
         self.with_journal(app, |j, scope| j.list(scope, book, query, who, JOURNAL_SHOWN))
+    }
+
+    /// A typed channel LAST (`OOC LAST 10`), answered from the journal
+    /// rather than sent: the channel and its newest lines, or None when
+    /// the line isn't one (the game's to answer).
+    pub fn journal_last(&self, app: &AppHandle, line: &str) -> Result<Option<journal::LastAnswer>, String> {
+        let Some((word, count)) = journal::last_asked(line) else { return Ok(None) };
+        let found = self.with_journal(app, |j, scope| j.last(scope, &word, count))?;
+        Ok(found.map(|(channel, entries)| journal::LastAnswer { channel, count, entries }))
     }
 
     /// A book's unheard lines, oldest first.
@@ -1488,17 +1501,18 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                     let talk: Option<Talk> = session.senses.lock().unwrap().senses.gmcp(&package, &data);
                     // A login or logout on a channel is a sound, not talk.
                     let talk = talk.filter(|t| !session.who.lock().unwrap().heard(&t.text, Instant::now()));
+                    // Kept once its lines are read, as they were printed (speech.rs `heard`).
                     if let Some(talk) = talk {
-                        kinds.talk(&talk.text, Instant::now());
-                        let (event, new) = session.cast_talk(app, talk);
-                        met |= new;
-                        let _ = app.emit("talk", event);
+                        kinds.talk(talk, Instant::now());
                     }
                     met |= session.cast_gmcp(&package, &data);
                     room_changed |= session.map_gmcp(app, &package, &data);
                     in_game |= package.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("char."));
                     if package.eq_ignore_ascii_case("room.info") {
                         // The new character's in the game: the guide closes.
+                        if session.account.lock().unwrap().entered() {
+                            let _ = app.emit("account-menu", None::<account::Menu>);
+                        }
                         if session.creation.lock().unwrap().entered() {
                             let _ = app.emit("creation", None::<creation::Step>);
                         }
@@ -1512,6 +1526,14 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                     let _ = app.emit("mud-gmcp", GmcpEvent { package, data });
                 }
             }
+        }
+        // Talk, as the player saw it: a mood's words, a language
+        // scrambled or translated, a whisper (speech.rs `heard`).
+        let texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
+        for talk in kinds.heard(&texts, Instant::now()) {
+            let (event, new) = session.cast_talk(app, talk);
+            met |= new;
+            let _ = app.emit("talk", event);
         }
         // After the whole read, so a room.exits that came with the
         // room.info (doors, locks) is in before a walk takes its next step.
@@ -1553,7 +1575,6 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         shown_partial = partial.clone();
         session.who_changed(app);
         session.character.lock().unwrap().partial(prompt.as_deref());
-        let texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
         let fighting = session.combat.lock().unwrap().combat.opponent().is_some();
         let mut line_kinds = kinds.lines(&texts, prompt.as_deref(), fighting, Instant::now());
         let playing = !session.senses.lock().unwrap().senses.name().is_empty();
@@ -1566,6 +1587,22 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 let _ = app.emit("creation", None::<creation::Step>);
             }
             None => {}
+        }
+        // The account menu, for its dialog (account.rs); its list asked once.
+        let menu = session.account.lock().unwrap().lines(&texts, prompt.as_deref());
+        match menu {
+            Some(account::Update::Open(menu)) => {
+                let _ = app.emit("account-menu", Some(menu));
+            }
+            Some(account::Update::Closed) => {
+                let _ = app.emit("account-menu", None::<account::Menu>);
+            }
+            None => {}
+        }
+        if session.account.lock().unwrap().wants_list() {
+            if let Err(e) = session.write(&telnet::encode_line("L")) {
+                log::warn!("{e}");
+            }
         }
         // WHO waits while a character's being made (who.rs).
         let creating = session.creation.lock().unwrap().active();

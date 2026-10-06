@@ -322,6 +322,12 @@
 :root[data-theme="ansiapps"] .dialog-actions { margin-top: 16px; gap: 16px; }
 :root[data-theme="ansiapps"] .about-section-title { margin: 16px 0 0; }
 :root[data-theme="ansiapps"] .about-section-desc { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .account-chars { gap: 0; margin: 0 0 16px; max-height: 240px; }
+:root[data-theme="ansiapps"] .account-name { font-weight: normal; }
+:root[data-theme="ansiapps"] .dialog-box .account-chars button { background: none; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .dialog-box .account-chars button:hover,
+:root[data-theme="ansiapps"] .dialog-box .account-chars button:focus { background: var(--dos-green); }
+:root[data-theme="ansiapps"] .account-actions { gap: 16px; margin: 0 0 16px; align-items: flex-start; }
 :root[data-theme="ansiapps"] .about-links { gap: 0 16px; margin: 0 0 16px; }
 :root[data-theme="ansiapps"] .dialog-box button { background: var(--dos-green); color: var(--dos-black); }
 :root[data-theme="ansiapps"] .dialog-box button:hover { background: var(--dos-lightgreen); }
@@ -662,6 +668,14 @@
 :root[data-theme="ansiapps"] .vitals-panel { padding: 16px 8px 16px 16px; }
 :root[data-theme="ansiapps"] .vitals-panel .scene-body { column-gap: 16px; row-gap: 0; }
 :root[data-theme="ansiapps"] .heard-body { padding-right: 8px; }
+/* Terminal's Control Panel, on the blue desktop like Here and Heard:
+   white text, its help and each item's about in light gray (rank 23). */
+:root[data-theme="ansiapps"] .control-panel { padding: 16px 8px 16px 16px; }
+:root[data-theme="ansiapps"] .control-body { gap: 16px; padding-right: 8px; color: var(--dos-white); }
+:root[data-theme="ansiapps"] .control-help,
+:root[data-theme="ansiapps"] .control-about { font-size: inherit; line-height: 16px; color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .control-panel .check-row { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .control-arrange { gap: 16px; align-items: flex-start; }
 /* A sound's caption: light gray on blue (rank 23), the voice's lines white. */
 :root[data-theme="ansiapps"] .heard-caption { color: var(--dos-lightgray); }
 /* Before You Play: 94 cells inside the wide dialog. The lesson's words

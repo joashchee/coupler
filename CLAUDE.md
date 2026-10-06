@@ -392,7 +392,10 @@ and its order is in the roadmap's phase 2.
 - `src-tauri/src/speech.rs`: what kind each output line is (game,
   talk, time, combat, prompt), pure and unit-tested: talk matched to
   `comm.channel` (sent before the text, unwrapped, so wrapped lines
-  count), the finished prompt, a fight from `combat.rs`. Sent with
+  count; a say found by its speaker, since a mood or a language changes
+  it after its GMCP, and kept as printed or translated by `heard`; a
+  whisper or a yell from afar read from the text alone), the finished
+  prompt, a fight from `combat.rs`. Sent with
   `mud-output` as `kinds`. The game output isn't a live region: App
   gives the screen reader the kinds the player keeps on (gear →
   Speech…, `lib/speech.ts`, `coupler.speech`) through a hidden one,
@@ -441,6 +444,15 @@ and its order is in the roadmap's phase 2.
   snapshot); alignment and inclination say what they do
   (`creation.factionImpact`). WHO waits while a character's made
   (`Who::creating`): the stats prompt would pass for the usual one.
+- `src-tauri/src/account.rs`: **the account menu**, pure and
+  unit-tested: CoffeeMUD's (`CharCreation.java`'s `acctmenu*`) read
+  from its letters and the Account command's list of characters, open
+  while "Command or Name (?)" is the prompt; `wants_list` has
+  `session.rs` send `L` once. Emits `account-menu` (null when gone).
+  `components/AccountMenuDialog.tsx` is the dialog (in place of the
+  guide's account menu), its words in `lib/account.ts`; a y/N it
+  already asked is answered for the player (`pendingConfirm` in
+  `App.tsx`). Both builds.
 - `src-tauri/src/senses.rs`: the character's vitals (`char.vitals`,
   `char.maxstats`) and the talk addressed to them (`comm.channel`:
   tell, group, say, channel; their own lines marked), pure and
@@ -450,7 +462,9 @@ and its order is in the roadmap's phase 2.
   every `comm.channel` line kept in SQLite (`journal.sqlite` in app
   data, game data: it stays local) per world and character, by who said
   it and when. Says, tells and the group go in the journal; every other
-  channel in the log. A repeat (same speaker, same words, numbers and
+  channel in the log. A typed channel LAST (`OOC LAST 10`) isn't sent:
+  `journal_last` answers it from the log (`last_asked`, `Journal::last`).
+  A repeat (same speaker, same words, numbers and
   punctuation ignored) from anyone not a player isn't kept again.
   `heard` only once Coupler's voice finished a line (`lib/voice.ts`
   `speak`'s `onDone`). `session.rs` records each line (`talk` carries
@@ -478,7 +492,10 @@ and its order is in the roadmap's phase 2.
   fewest plays, then never-played. The system's voices can't be
   rendered ahead (they speak through the WebView).
 - **The three ways to play** (`src/lib/ux.ts`, `coupler.ux`): Terminal
-  (the terminal alone, 80 wide and as tall as the screen), Immersive
+  (the terminal, 80 wide and as tall as the screen, at the left; on the
+  right its Control Panel, `components/ControlPanel.tsx` and
+  `lib/controlPanel.ts`, what shows beside it and arranged under the
+  `terminal:` layout scope, `LayoutScopeContext`), Immersive
   (sound first, self-voiced) and Workshop (everything, arranged by the
   player; the default). Layouts in `uxLayout` (`App.tsx`); only
   Workshop's arrangement is kept (`KeptContext`). Immersive's director
@@ -623,7 +640,7 @@ and its order is in the roadmap's phase 2.
   `update_open`, `community_open`, `mud_send`, `mud_disconnect`, `mud_resize`,
   `map_snapshot`, `map_find`, `map_directions`, `map_walk`, `map_stop`,
   `map_set_landmark`, `map_clear`, `who_now`, `who_ask`, `echo_list`, `cast_list`, `cast_set_voice`,
-  `cast_reset`, `cast_forget`, `journal_list`, `journal_unheard`,
+  `cast_reset`, `cast_forget`, `journal_list`, `journal_last`, `journal_unheard`,
   `journal_unheard_entries`, `journal_set_heard`, `journal_heard_all`,
   `voice_engines`, `voice_synth`, `voice_prerender`, `hooks_count`, `hooks_list`, `hooks_set_trigger`, `ambience_now`, `picture_now`, `picture_again`, `picture_forget_looks`, `picture_paint`, `assets_list`,
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,

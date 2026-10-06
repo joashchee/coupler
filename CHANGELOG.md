@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 0.28.0 (2026-10-06)
+
+- **The account menu is a dialog** (2026-10-06): `account.rs` reads
+  CoffeeMUD's account menu (`CharCreation.java`'s `acctmenu*`, the
+  Account command's list) and asks `L` once so the characters are
+  known; `AccountMenuDialog.tsx` shows each as a button to play them,
+  New Character, Retire, Quit (asked in words, the game's y/N answered),
+  and Change Password, E-mail, Import and Export on the command line.
+  The narrator says the menu in a few words, not its screen of letters.
+- **All the talk, as it was seen** (2026-10-06): a say's GMCP is sent
+  before a mood rewrites it or a language scrambles it, so its printed
+  line is found by its speaker and kept instead (`speech.rs` `heard`);
+  a known language's "(translated from …)" line is kept as the line;
+  WHISPER and a yell heard from the next room, which have no GMCP, are
+  read from the text. Say, yell, shout and ask were already captured.
+- **A channel's LAST from the log** (2026-10-06): `OOC LAST 10` (or
+  `GOSSIP LAST`, `ooc prev 5`) isn't sent: the channel's newest lines in
+  Coupler's log are written in the output, said, and marked heard
+  (`journal.rs` `last`). The stock channels and any heard; SAY LAST
+  still goes to the game. Desktop only.
+- **Terminal's Control Panel** (2026-10-06): the game output sits against
+  the left edge, and the right of the screen is the Control Panel:
+  checkboxes for the map, You, Picture, Heard and the Journal, Log and
+  Hooks buttons, help at its top, and Arrange to move and resize them
+  (dragging or the arrow keys), kept apart from Workshop's arrangement.
+
 - **CoffeeMUD's source brought up to date** (2026-10-06):
   `reference/CoffeeMud/` is now `master` at `720aec6` (2026-10-03),
   still CoffeeMUD 5.11.0.4, so `BUILT_FOR` stands. The 15 commits since

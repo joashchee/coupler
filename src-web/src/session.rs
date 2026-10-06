@@ -94,6 +94,7 @@ pub struct Coupler {
     senses: Senses,
     vitals_sent: Option<Vitals>,
     who: Who,
+    account: crate::account::Account,
     echoes: Echoes,
     long_look: LongLook,
     creation: Creation,
@@ -132,6 +133,7 @@ impl Coupler {
             senses: Senses::default(),
             vitals_sent: None,
             who: Who::default(),
+            account: crate::account::Account::default(),
             echoes: Echoes::default(),
             long_look: LongLook::default(),
             creation: Creation::default(),
@@ -178,6 +180,7 @@ impl Coupler {
         self.senses = Senses::default();
         self.vitals_sent = None;
         self.who = Who::default();
+        self.account = crate::account::Account::default();
         self.echoes.clear();
         self.long_look.clear();
         self.creation.clear();
@@ -318,12 +321,9 @@ impl Coupler {
                     }
                     self.combat.gmcp(&package, &data);
                     let talk = self.senses.gmcp(&package, &data).filter(|t| !self.who.heard(&t.text, Instant::now()));
+                    // Told once its lines are read, as printed (speech.rs `heard`).
                     if let Some(talk) = talk {
-                        self.kinds.talk(&talk.text, Instant::now());
-                        let (voice, new) = self.cast.talk(&talk, unix_now());
-                        self.cast_saved.unsaved |= voice.is_some();
-                        met |= new;
-                        self.emit("talk", json!(TalkEvent { talk, voice, entry: None, repeat: false }));
+                        self.kinds.talk(talk, Instant::now());
                     }
                     let new = self.cast.gmcp(&package, &data, unix_now());
                     self.cast_saved.unsaved |= new || package.eq_ignore_ascii_case("room.mobiles") || package.eq_ignore_ascii_case("room.players");
@@ -331,6 +331,9 @@ impl Coupler {
                     room_changed |= self.map_gmcp(&package, &data);
                     in_game |= package.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("char."));
                     if package.eq_ignore_ascii_case("room.info") {
+                        if self.account.entered() {
+                            self.emit("account-menu", Value::Null);
+                        }
                         if self.creation.entered() {
                             self.emit("creation", Value::Null);
                         }
@@ -340,6 +343,14 @@ impl Coupler {
                     self.emit("mud-gmcp", json!({ "package": package, "data": data }));
                 }
             }
+        }
+        // Talk, as the player saw it (speech.rs `heard`).
+        let texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
+        for talk in self.kinds.heard(&texts, Instant::now()) {
+            let (voice, new) = self.cast.talk(&talk, unix_now());
+            self.cast_saved.unsaved |= voice.is_some();
+            met |= new;
+            self.emit("talk", json!(TalkEvent { talk, voice, entry: None, repeat: false }));
         }
         if room_changed {
             self.room_changed();
@@ -371,7 +382,6 @@ impl Coupler {
             self.emit("who", json!({ "changes": changes }));
         }
         self.character.partial(prompt.as_deref());
-        let texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
         let fighting = self.combat.opponent().is_some();
         let mut line_kinds = self.kinds.lines(&texts, prompt.as_deref(), fighting, Instant::now());
         let playing = !self.senses.name().is_empty();
@@ -379,6 +389,15 @@ impl Coupler {
             Some(creation::Update::Step(step)) => self.emit("creation", json!(step)),
             Some(creation::Update::Ended) => self.emit("creation", Value::Null),
             None => {}
+        }
+        // The account menu, for its dialog (account.rs); its list asked once.
+        match self.account.lines(&texts, prompt.as_deref()) {
+            Some(crate::account::Update::Open(menu)) => self.emit("account-menu", json!(menu)),
+            Some(crate::account::Update::Closed) => self.emit("account-menu", Value::Null),
+            None => {}
+        }
+        if self.account.wants_list() {
+            self.outgoing.extend(telnet::encode_line("L"));
         }
         // WHO waits while a character's being made (who.rs).
         self.who.creating(self.creation.active());

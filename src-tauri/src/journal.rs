@@ -195,6 +195,39 @@ fn entry(row: &rusqlite::Row) -> rusqlite::Result<Entry> {
 
 const COLUMNS: &str = "id, book, channel, speaker, speaker_key, text, at, mine, heard";
 
+/// A typed LAST's answer: the channel, how many were asked, and its
+/// newest lines, oldest first.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastAnswer {
+    pub channel: String,
+    pub count: usize,
+    pub entries: Vec<Entry>,
+}
+
+/// The channels CoffeeMUD comes with (`coffeemud.ini`'s CHANNELS): a
+/// LAST for one is answered from the log even before it's heard any.
+pub const STOCK_CHANNELS: [&str; 10] = ["GOSSIP", "GRATZ", "CHAT", "OOC", "QUESTCHAT", "WIZ", "CLANTALK", "INFO", "WIZINFO", "ICOFF"];
+/// LAST's count when none is given, as the game's (`Commands/Channel.java`).
+pub const LAST_COUNT: usize = 10;
+/// LAST's most, as the game's for a player.
+pub const LAST_MOST: usize = 100;
+
+/// A channel's LAST, typed (`OOC LAST 10`, `GOSSIP LAST`, `ooc prev 5`):
+/// the channel's word and how many. The game takes `last` in short, or
+/// `list` or `previous` (`Commands/Channel.java`); a count of 0 is 1.
+pub fn last_asked(line: &str) -> Option<(String, usize)> {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let (channel, word, count) = match words.as_slice() {
+        [channel, word] => (channel, word, LAST_COUNT),
+        [channel, word, n] => (channel, word, n.parse::<usize>().ok()?),
+        _ => return None,
+    };
+    let word = word.to_ascii_lowercase();
+    let last = word.len() >= 2 && ("last".starts_with(&word) || "list".starts_with(&word) || "previous".starts_with(&word));
+    (last && channel.chars().all(char::is_alphanumeric)).then(|| (channel.to_ascii_uppercase(), count.clamp(1, LAST_MOST)))
+}
+
 impl Journal {
     pub fn open(path: &Path) -> Result<Self, String> {
         Self::prepare(Connection::open(path).map_err(failed)?)
@@ -323,6 +356,38 @@ impl Journal {
             .map_err(failed)?;
         let entries = statement.query_map(params![scope.world, scope.character, book.name()], entry).map_err(failed)?.collect::<Result<_, _>>().map_err(failed);
         entries
+    }
+
+    /// A channel's newest `count` lines, oldest first, from either book,
+    /// for a typed LAST. `word` is the channel as typed: its name, or the
+    /// start of one (three letters at least) that only it has. None when
+    /// it's no channel Coupler knows (the stock ones, and any heard).
+    pub fn last(&self, scope: Scope, word: &str, count: usize) -> Result<Option<(String, Vec<Entry>)>, String> {
+        let mut statement = self
+            .db
+            .prepare("SELECT DISTINCT UPPER(channel) FROM entries WHERE world = ?1 AND character = ?2 AND book = 'log'")
+            .map_err(failed)?;
+        let mut known: Vec<String> = statement.query_map(params![scope.world, scope.character], |r| r.get(0)).map_err(failed)?.collect::<Result<_, _>>().map_err(failed)?;
+        known.extend(STOCK_CHANNELS.iter().map(|c| c.to_string()));
+        known.sort();
+        known.dedup();
+        let word = word.to_ascii_uppercase();
+        let channel = if known.contains(&word) {
+            word
+        } else {
+            let starting: Vec<&String> = known.iter().filter(|c| word.len() >= 3 && c.starts_with(&word)).collect();
+            match starting.as_slice() {
+                [only] => (*only).clone(),
+                _ => return Ok(None),
+            }
+        };
+        let mut statement = self
+            .db
+            .prepare(&format!("SELECT {COLUMNS} FROM entries WHERE world = ?1 AND character = ?2 AND UPPER(channel) = ?3 ORDER BY id DESC LIMIT {count}"))
+            .map_err(failed)?;
+        let mut entries: Vec<Entry> = statement.query_map(params![scope.world, scope.character, channel], entry).map_err(failed)?.collect::<Result<_, _>>().map_err(failed)?;
+        entries.reverse();
+        Ok(Some((channel, entries)))
     }
 
     /// Marks lines heard (or not). Returns how many changed.
@@ -463,5 +528,37 @@ mod tests {
         // The newest of many, still oldest first.
         let last = j.list(HERE, Book::Journal, "", None, 2).unwrap();
         assert_eq!((last.matching, last.entries.iter().map(|e| e.at).collect::<Vec<_>>()), (3, vec![1, 2]));
+    }
+
+    #[test]
+    fn a_typed_last_is_read() {
+        assert_eq!(last_asked("OOC LAST 10"), Some(("OOC".into(), 10)));
+        assert_eq!(last_asked("gossip last"), Some(("GOSSIP".into(), LAST_COUNT)));
+        assert_eq!(last_asked("ooc prev 5"), Some(("OOC".into(), 5)));
+        assert_eq!(last_asked("ooc la 500"), Some(("OOC".into(), LAST_MOST)));
+        assert_eq!(last_asked("ooc lastly"), None);
+        assert_eq!(last_asked("ooc last ten"), None);
+        assert_eq!(last_asked("ooc hello there"), None);
+        assert_eq!(last_asked("ooc l"), None);
+    }
+
+    #[test]
+    fn last_answers_a_channel_from_the_log() {
+        let j = Journal::in_memory().unwrap();
+        let ooc = |text: &str| talk(TalkKind::Channel, "OOC", "bob", text);
+        for n in 1..=4 {
+            j.record(HERE, &ooc(&format!("Bob OOC: 'line {n}'")), "Bob", true, n).unwrap();
+        }
+        j.record(HERE, &talk(TalkKind::Channel, "GOSSIP", "ann", "Ann gossips 'hi'"), "Ann", true, 9).unwrap();
+        let (channel, entries) = j.last(HERE, "ooc", 2).unwrap().unwrap();
+        assert_eq!(channel, "OOC");
+        assert_eq!(entries.iter().map(|e| e.text.as_str()).collect::<Vec<_>>(), ["Bob OOC: 'line 3'", "Bob OOC: 'line 4'"]);
+        // A stock channel never heard: known, with nothing in it.
+        assert_eq!(j.last(HERE, "GRATZ", 5).unwrap().unwrap().1.len(), 0);
+        // The start of one: GOS is GOSSIP.
+        assert_eq!(j.last(HERE, "gos", 5).unwrap().unwrap().0, "GOSSIP");
+        // Not a channel: the game's to answer.
+        assert_eq!(j.last(HERE, "say", 5).unwrap(), None);
+        assert_eq!(j.last(HERE, "WI", 5).unwrap(), None);
     }
 }

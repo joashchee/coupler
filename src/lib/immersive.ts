@@ -56,6 +56,8 @@ interface Immersive {
   vitals: mud.Vitals | null;
   /** The player hid the guide to making a character (components/CreationDialog.tsx), which says each question in few words while it's open. */
   guideHidden: boolean;
+  /** The player hid the account menu's dialog (components/AccountMenuDialog.tsx), which says the menu itself while it's open. */
+  accountHidden: boolean;
 }
 
 /** A blow worth a thud: this share of the maximum or more, at once. */
@@ -147,9 +149,9 @@ export function fightCues(before: Fight, opponent: mud.Opponent | null) {
   else if (opponent && quarter !== null && before.quarter !== null && quarter < before.quarter) earcons.opponentAt(quarter);
 }
 
-export function useImmersive({ cues, voice: voiced, connected, snapshot, opponent, vitals, guideHidden }: Immersive) {
-  const on = useRef({ cues, voiced, connected, guideHidden });
-  on.current = { cues, voiced, connected, guideHidden };
+export function useImmersive({ cues, voice: voiced, connected, snapshot, opponent, vitals, guideHidden, accountHidden }: Immersive) {
+  const on = useRef({ cues, voiced, connected, guideHidden, accountHidden });
+  on.current = { cues, voiced, connected, guideHidden, accountHidden };
 
   // ---- Moving: a step, what's new, then the exits ----
   const was = useRef<Whereabouts>({ id: null, zone: null, known: 0 });
@@ -197,6 +199,8 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
   const unfinished = useRef<string | null>(null);
   /** Between "Connecting to CoffeeMUD" and the game's welcome: the intro's art and words aren't said. */
   const connecting = useRef(false);
+  /** The game's showing the account menu: its dialog says it (App.tsx), not its lines (unless the player hid it). */
+  const accountMenu = useRef(false);
   /** A hook went off for the read about to come (its `hook-fired` comes just before its `mud-output`). */
   const hooked = useRef(false);
   useEffect(() => {
@@ -243,6 +247,11 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         }
         // Making a character, the guide says the question, not the screens of text before it.
         if (inGame.current || (creating.current && !on.current.guideHidden)) return;
+        // The account menu's dialog says the menu, in few words.
+        if (accountMenu.current && !on.current.accountHidden && !connecting.current) {
+          lastPrompt.current = e.partial ? e.partial.map((s) => s.text).join("").trim() : "";
+          return;
+        }
         e.lines.forEach((line, i) => {
           const text = line.map((s) => s.text).join("");
           if (CONNECTING.test(text)) {
@@ -267,6 +276,9 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
       }),
       mud.onCreation((step) => {
         creating.current = step !== null;
+      }),
+      mud.onAccountMenu((menu) => {
+        accountMenu.current = menu !== null;
       }),
       mud.onClosed(() => {
         talk.current?.stop();

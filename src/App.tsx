@@ -10,7 +10,7 @@ import { LicensesDialog } from "./components/LicensesDialog";
 import { MapPanel } from "./components/MapPanel";
 import { MixerDialog } from "./components/MixerDialog";
 import { MusicEditorDialog } from "./components/MusicEditorDialog";
-import { ArrangeContext, KeptContext, Movable, PICTURE_Z } from "./components/Movable";
+import { ArrangeContext, KeptContext, LayoutScopeContext, Movable, PICTURE_Z } from "./components/Movable";
 import { ScenePanel } from "./components/ScenePanel";
 import { ScreenReadout } from "./components/ScreenReadout";
 import { ShrinkDialog } from "./components/ShrinkDialog";
@@ -18,6 +18,8 @@ import { RestoreDialog, type RestoreOffer } from "./components/RestoreDialog";
 import * as backup from "./lib/backup";
 import { SpeechDialog } from "./components/SpeechDialog";
 import { TutorialDialog } from "./components/TutorialDialog";
+import { AccountMenuDialog } from "./components/AccountMenuDialog";
+import { ControlPanel } from "./components/ControlPanel";
 import { CreationDialog } from "./components/CreationDialog";
 import { CuesDialog } from "./components/CuesDialog";
 import { ArtisanDialog } from "./components/ArtisanDialog";
@@ -42,6 +44,8 @@ import * as sound from "./lib/assets";
 import * as creation from "./lib/creation";
 import * as earcons from "./lib/earcons";
 import * as echoes from "./lib/echoes";
+import * as account from "./lib/account";
+import { CONTROLS, loadArranging, loadControls, saveArranging, saveControls, type ControlId, type Controls } from "./lib/controlPanel";
 import { useImmersive } from "./lib/immersive";
 import { ExitsReader, promptCut } from "./lib/output";
 import * as mud from "./lib/mud";
@@ -93,21 +97,38 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
   if (ux === "workshop") return defaultLayout(theme, showing);
   const ansi = theme === "ansiapps";
   if (ux === "terminal" && textSize > 1) return bigTextLayout(theme, showing, textSize);
+  // The game output on the left, the Control Panel and what it shows on the right.
   if (ux === "terminal") {
     return ansi
       ? {
-          terminal: { at: { x: 304, y: showing.connected ? 0 : 208 } },
-          ports: { at: { x: 304, y: 0 }, size: { width: 672, height: showing.output ? 192 : undefined } },
-          command: { at: { x: 304, y: 688 }, size: { width: 672, height: 16 } },
-          messages: { at: { x: 304, y: 704 }, size: { width: 672, height: 16 } },
-          gear: { at: { x: 984, y: 0 } },
+          terminal: { at: { x: 0, y: showing.connected ? 0 : 208 } },
+          ports: { at: { x: 0, y: 0 }, size: { width: 672, height: showing.output ? 192 : undefined } },
+          command: { at: { x: 0, y: 688 }, size: { width: 672, height: 16 } },
+          messages: { at: { x: 0, y: 704 }, size: { width: 672, height: 16 } },
+          gear: { at: { x: 1240, y: 0 } },
+          control: { at: { x: 680, y: 16 }, size: { width: 600, height: 272 } },
+          vitals: { at: { x: 680, y: 288 }, size: { width: 600, height: 64 } },
+          map: { at: { x: 680, y: 352 }, size: { width: 600, height: 336 } },
+          picture: { at: { x: 680, y: 352 }, size: { width: 600, height: 256 } },
+          heard: { at: { x: 680, y: 528 }, size: { width: 600, height: 160 } },
+          journal: { at: { x: 680, y: 688 } },
+          log: { at: { x: 680, y: 704 } },
+          hooks: { at: { x: 816, y: 688 } },
         }
       : {
-          terminal: { at: { x: 286, y: showing.connected ? 12 : 180 } },
-          ports: { at: { x: 286, y: 12 }, size: { width: 708, height: showing.output ? 160 : undefined } },
-          command: { at: { x: 286, y: 640 }, size: { width: 708 } },
-          messages: { at: { x: 286, y: 686 }, size: { width: 708, height: 28 } },
-          gear: { at: { x: 1004, y: 12 } },
+          terminal: { at: { x: 12, y: showing.connected ? 12 : 180 } },
+          ports: { at: { x: 12, y: 12 }, size: { width: 708, height: showing.output ? 160 : undefined } },
+          command: { at: { x: 12, y: 640 }, size: { width: 708 } },
+          messages: { at: { x: 12, y: 686 }, size: { width: 708, height: 28 } },
+          gear: { at: { x: 1227, y: 12 } },
+          control: { at: { x: 732, y: 50 }, size: { width: 536, height: 262 } },
+          vitals: { at: { x: 732, y: 318 }, size: { width: 536, height: 66 } },
+          map: { at: { x: 732, y: 392 }, size: { width: 536, height: 280 } },
+          picture: { at: { x: 732, y: 392 }, size: { width: 536, height: 260 } },
+          heard: { at: { x: 732, y: 532 }, size: { width: 536, height: 140 } },
+          journal: { at: { x: 732, y: 680 } },
+          log: { at: { x: 732, y: 700 } },
+          hooks: { at: { x: 880, y: 690 } },
         };
   }
   const workshop = defaultLayout(theme, showing);
@@ -326,6 +347,9 @@ const ALL_SHORTCUTS: [string, string][] = [
 ];
 const SHORTCUTS = WEB ? ALL_SHORTCUTS.filter(([, keys]) => !(keys.startsWith("Cmd+Shift+") && DESKTOP_ONLY_KEYS.includes(keys.slice(-1).toLowerCase()))) : ALL_SHORTCUTS;
 
+/** A line that may be a channel's LAST (OOC LAST 10): Rust says whether it is (journal.rs `last_asked`). */
+const LAST_LIKE = /^\S+\s+\S+(\s+\d+)?$/;
+
 /** How long the say key waits for the WHO it asked. */
 const WHO_WAITS = 6000;
 
@@ -398,6 +422,9 @@ function App() {
   const [newRelease, setNewRelease] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(() => stored(MAP_KEY) !== "off");
+  /** Terminal's Control Panel: what shows beside the game output, and whether it's being arranged (lib/controlPanel.ts). */
+  const [controls, setControls] = useState<Controls>(loadControls);
+  const [terminalArranging, setTerminalArranging] = useState(loadArranging);
   const [snapshot, setSnapshot] = useState<mud.MapSnapshot | null>(null);
   /** The fight (src-tauri/src/combat.rs): Combat mode while there's one, Explore mode otherwise. */
   const [opponent, setOpponent] = useState<mud.Opponent | null>(null);
@@ -446,13 +473,24 @@ function App() {
   const creationModeRef = useRef(creationMode);
   creationModeRef.current = creationMode;
   const [guideHidden, setGuideHidden] = useState(() => creation.loadMode() === "standard");
-  const guideOpen = creationStep !== null && !guideHidden && connected;
+  /** The account menu (src-tauri/src/account.rs) while the game shows it, and whether the player hid its dialog to type instead. */
+  const [accountMenu, setAccountMenu] = useState<mud.AccountMenu | null>(null);
+  const [accountHidden, setAccountHidden] = useState(false);
+  const accountOpen = accountMenu !== null && !accountHidden && connected;
+  const accountOpenRef = useRef(accountOpen);
+  accountOpenRef.current = accountOpen;
+  /** A y/N the game will ask that the account menu's dialog already asked (lib/account.ts), and until when it's waited for. */
+  const pendingConfirm = useRef<{ confirm: account.Confirm; until: number } | null>(null);
+  // The account menu's dialog takes the place of the guide's account menu.
+  const guideOpen = creationStep !== null && !guideHidden && connected && !(accountOpen && creationStep.kind === "accountMenu");
   /** What's typed is a password: the server echoes, or the guide knows it's asking for one (CoffeeMUD doesn't hide the account's). */
   const secret = serverEchoes || (creationStep?.secret ?? false);
   const creationRef = useRef<mud.CreationStep | null>(null);
   /** Kept at once when a question comes, so the output of the same read is already the guide's. */
   const guideOpenRef = useRef(guideOpen);
   guideOpenRef.current = guideOpen;
+  const accountHiddenRef = useRef(accountHidden);
+  accountHiddenRef.current = accountHidden;
   const guideHiddenRef = useRef(guideHidden);
   guideHiddenRef.current = guideHidden;
   /** A character is in the game (it sent `room.info` or `char.vitals`), past the login, whose questions always show. */
@@ -570,7 +608,7 @@ function App() {
   const hear = useCallback((text: string, kind: SpokenKind) => {
     if (voicedRef.current || reviewingRef.current || !spokenRef.current[kind] || text.trim() === "") return;
     // While the guide to making a character is open, it says the question in few words: not the screens of text.
-    if (guideOpenRef.current && (kind === "game" || kind === "prompt")) return;
+    if ((guideOpenRef.current || accountOpenRef.current) && (kind === "game" || kind === "prompt")) return;
     setHeard((list) => list.slice(-(HEARD_KEPT - 1)).concat({ id: nextHeardId.current++, text: voice.pronounce(text) }));
   }, []);
 
@@ -605,6 +643,13 @@ function App() {
             }),
           );
         setPartial(e.partial);
+        // The y/N the account menu's dialog already asked: answered yes.
+        const asked = pendingConfirm.current;
+        if (asked && Date.now() > asked.until) pendingConfirm.current = null;
+        else if (asked && unfinished.current && account.asksToConfirm(asked.confirm, unfinished.current)) {
+          pendingConfirm.current = null;
+          mud.sendLine("y").catch((err) => setError(String(err)));
+        }
         // A finished prompt was already read as it came.
         e.lines.forEach((line, i) => {
           const kind = e.kinds[i] ?? "game";
@@ -619,10 +664,16 @@ function App() {
         }
       }),
       mud.onEcho(setServerEchoes),
+      mud.onAccountMenu((menu) => {
+        // Known at once, so this read's output is already the dialog's.
+        accountOpenRef.current = menu !== null && !accountHiddenRef.current;
+        setAccountMenu(menu);
+        if (!menu) setAccountHidden(false);
+      }),
       mud.onCreation((step) => {
         const before = creationRef.current;
         creationRef.current = step;
-        guideOpenRef.current = step !== null && !guideHiddenRef.current;
+        guideOpenRef.current = step !== null && !guideHiddenRef.current && !(accountOpenRef.current && step.kind === "accountMenu");
         setCreationStep(step);
         if (step) return;
         setGuideHidden(creationModeRef.current === "standard");
@@ -650,6 +701,8 @@ function App() {
         setInGame(false);
         creationRef.current = null;
         setCreationStep(null);
+        setAccountMenu(null);
+        pendingConfirm.current = null;
         setGuideHidden(creationModeRef.current === "standard");
         lastPrompt.current = "";
         // Off the game, nothing it set off goes on: the sounds stop and the pictures close.
@@ -702,7 +755,13 @@ function App() {
   const textSize: TextSize = ux === "terminal" ? display.textSize : 1;
   const usual = uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
   /** Whether a thing is on this way to play's screen. */
-  const has = (id: string) => !(WEB && DESKTOP_ONLY.has(id)) && (ux === "workshop" ? (shown[id] ?? true) : UX_PARTS[ux].has(id));
+  /** Terminal has its Control Panel beside the game output, but with big text (the game output the screen's width). */
+  const controlPanel = ux === "terminal" && textSize === 1;
+  const has = (id: string) =>
+    !(WEB && DESKTOP_ONLY.has(id)) &&
+    (ux === "workshop"
+      ? (shown[id] ?? true)
+      : UX_PARTS[ux].has(id) || (controlPanel && (id === "control" || (controls as Record<string, boolean>)[id] === true)));
   linesRef.current = lines;
   /** In Immersive, talk isn't in the game output (it's in the journal and the log, and the pop-up shows it while it's said), nor the time of day (the narrator says it). */
   /** Nor the player's prompt, once in the game: Immersive has no need of it to look at. Nor the exits: the cues play them. */
@@ -838,6 +897,45 @@ function App() {
     }
   }
 
+  /** The account menu's dialog: a line for the game, and a y/N to answer yes to if the dialog asked it already. */
+  const accountSend = useCallback(
+    (line: string, confirm?: account.Confirm) => {
+      sentAt.current = nextLineId.current;
+      append([{ id: nextLineId.current++, kind: "sent", line: [{ text: line }] }]);
+      pendingConfirm.current = confirm ? { confirm, until: Date.now() + 10_000 } : null;
+      voice.asked();
+      mud.sendLine(line).catch((e) => setError(String(e)));
+    },
+    [append],
+  );
+  /** A command whose questions are the game's, answered on the command line (a password hidden there). */
+  const accountTyped = useCallback(
+    (line: string, what: string) => {
+      accountSend(line);
+      setAccountHidden(true);
+      setError(null);
+      setStatus(`${what}: answer the game's questions on the command line.`);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    },
+    [accountSend],
+  );
+  const accountTypeInstead = useCallback(() => {
+    setAccountHidden(true);
+    setError(null);
+    setStatus("The account menu is hidden: type its commands, or a character's name. Cmd+Shift+G shows it again.");
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+  // The narrator says the menu when it opens, and again with the names once the list is read.
+  const accountSaid = useRef("");
+  useEffect(() => {
+    if (!accountMenu) accountSaid.current = "";
+    if (!accountOpen || !accountMenu) return;
+    const text = account.spokenMenu(accountMenu);
+    if (text === accountSaid.current) return;
+    accountSaid.current = text;
+    if (narratedRef.current) voice.speak(text, true);
+  }, [accountMenu, accountOpen]);
+
   /** An answer from the guide to making a character: written in the output (a password as stars), never in the history. */
   const sendAnswer = useCallback((line: string, secret: boolean) => {
     sentAt.current = nextLineId.current;
@@ -888,7 +986,30 @@ function App() {
     historyAt.current = history.current.length;
     // What's said next answers it: "Let's see…" if it has to be rendered.
     voice.asked();
+    // A channel's LAST (OOC LAST 10) is answered from the log, not the game.
+    if (!secret && !WEB && LAST_LIKE.test(line.trim())) {
+      const answer = await mud.journalLast(line.trim()).catch(() => null);
+      if (answer) return tellLast(answer);
+    }
     await send(line);
+  }
+
+  /**
+   * A channel's LAST, from Coupler's log: its lines written in the
+   * output, then said as the journal says them (each marked heard once
+   * it's said to the end); with no voice, marked heard as they're shown.
+   */
+  function tellLast({ channel, count, entries }: mud.LastAnswer) {
+    if (entries.length === 0) {
+      note(`*** Nothing from ${channel} is in Coupler's log yet.`);
+      if (narratedRef.current) voice.speak(`Nothing from ${channel} yet.`, true);
+      return;
+    }
+    const shown = entries.length < count ? `all ${entries.length}` : `the last ${entries.length}`;
+    note(`*** ${channel}, ${shown} from Coupler's log:`);
+    entries.forEach((e) => note(e.text));
+    if (narratedRef.current) void journal.play(entries);
+    else void mud.journalSetHeard(entries.map((e) => e.id), true).catch(() => {});
   }
 
   /** A map action: a bar while it runs, a status on success, an error on failure. */
@@ -1031,7 +1152,7 @@ function App() {
   );
 
   // Immersive's cues and voice (lib/immersive.ts).
-  useImmersive({ cues, voice: voiced, connected, snapshot, opponent, vitals, guideHidden });
+  useImmersive({ cues, voice: voiced, connected, snapshot, opponent, vitals, guideHidden, accountHidden });
 
   /** Chooses a way to play: the screen changes, and it's said. */
   const chooseUx = useCallback(
@@ -1078,11 +1199,30 @@ function App() {
     showStatus(`Sound cues ${next.cues ? "on" : "off"}, Coupler's voice ${next.voice ? "on" : "off"}, in Workshop.`);
   }
 
+  /** A Control Panel checkbox: shown or hidden in Terminal, and kept. */
+  const toggleControl = useCallback((id: ControlId, on: boolean) => {
+    setControls((was) => {
+      const next = { ...was, [id]: on };
+      saveControls(next);
+      return next;
+    });
+    const name = CONTROLS.find((c) => c.id === id)?.name ?? id;
+    setError(null);
+    setStatus(`${name} ${on ? "shown" : "hidden"}.`);
+  }, []);
+  const toggleTerminalArranging = useCallback((on: boolean) => {
+    saveArranging(on);
+    setTerminalArranging(on);
+    setError(null);
+    setStatus(on ? "Arranging: drag or Tab to a corner, then the arrow keys. Untick Arrange when done." : "Arranging done.");
+  }, []);
+
   const toggleMap = useCallback(() => {
+    if (controlPanel) return toggleControl("map", !controls.map);
     store(MAP_KEY, mapOpen ? "off" : "on");
     setStatus(mapOpen ? "Map hidden." : "Map shown.");
     setMapOpen(!mapOpen);
-  }, [mapOpen]);
+  }, [mapOpen, controlPanel, controls.map, toggleControl]);
 
   const toggleFullscreen = useCallback(() => {
     const on = !fullscreen;
@@ -1464,7 +1604,7 @@ function App() {
     };
   }, [onFired]);
 
-  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || displayOpen || picturesOpen || castOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   // With Coupler's voice on, a problem is heard: a low buzz, then the words.
   useEffect(() => {
@@ -1531,7 +1671,8 @@ function App() {
         whereAmI();
       } else if (chord && e.key.toLowerCase() === "g") {
         e.preventDefault();
-        if (creationStep) setGuideHidden(false);
+        if (accountMenu && accountHidden) setAccountHidden(false);
+        else if (creationStep) setGuideHidden(false);
         else showStatus("No character is being made: the guide opens when you make one.");
       } else if (chord && e.key.toLowerCase() === "m") {
         e.preventDefault();
@@ -1565,7 +1706,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anyDialogOpen, gearOpen, connected, creationStep, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom]);
+  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom]);
 
   useEffect(() => {
     if (!gearOpen) return;
@@ -1631,8 +1772,9 @@ function App() {
           in a Movable, where the user left it or in its default place
           (defaultLayout). The order here is the Tab and reading order,
           whatever the arrangement. */}
-      <KeptContext.Provider value={ux === "workshop"}>
-      <ArrangeContext.Provider value={arranging && ux === "workshop"}>
+      <LayoutScopeContext.Provider value={controlPanel ? "terminal:" : ""}>
+      <KeptContext.Provider value={ux === "workshop" || controlPanel}>
+      <ArrangeContext.Provider value={(arranging && ux === "workshop") || (controlPanel && terminalArranging)}>
       {/* Built afresh for each way to play: each has its own layout. */}
       <main className={`desk ux-${ux}${textSize > 1 ? ` text-${textSize}x` : ""}`} key={`${ux}-${textSize}`}>
         {/* The menu bar's strip, behind the things that sit on it. */}
@@ -1707,7 +1849,7 @@ function App() {
           </button>
         </Movable>
         )}
-        <Movable id="gear" label="gear button" usual={usual.gear} className="menu-bar menu-chip" front={gearOpen} announce={announcePanel}>
+        <Movable fixed={controlPanel} id="gear" label="gear button" usual={usual.gear} className="menu-bar menu-chip" front={gearOpen} announce={announcePanel}>
           <div className="gear-menu-wrap" ref={gearRef}>
             <button
               type="button"
@@ -2053,7 +2195,7 @@ function App() {
         {/* The game output comes before the ways to play so they, which
             share its place until one is moved, are in front of it. */}
         {showTerminal && (
-          <Movable id="terminal" label="game output" usual={usual.terminal} resizable={false} tier={1} announce={announcePanel}>
+          <Movable fixed={controlPanel} id="terminal" label="game output" usual={usual.terminal} resizable={false} tier={1} announce={announcePanel}>
             <Terminal
               lines={lines}
               partial={partial}
@@ -2069,7 +2211,7 @@ function App() {
         {/* Back in front each time it comes back (after a disconnect), even
             if the game output was brought in front of it since. */}
         {!connected && (
-          <Movable id="ports" label="ways to play" usual={usual.ports} least={PANEL_LEAST} tier={1} frontOnShow announce={announcePanel}>
+          <Movable fixed={controlPanel} id="ports" label="ways to play" usual={usual.ports} least={PANEL_LEAST} tier={1} frontOnShow announce={announcePanel}>
             <section className="ports panel" aria-labelledby="ports-title" data-testid="ports">
               <h2 id="ports-title">Choose how to play</h2>
               {/* The frame doesn't scroll (its title sits in the top edge); this does. */}
@@ -2121,7 +2263,7 @@ function App() {
           </Movable>
         )}
 
-        <Movable id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
+        <Movable fixed={controlPanel} id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
           <div className="input-row">
             <input
               ref={inputRef}
@@ -2166,25 +2308,39 @@ function App() {
             />
           </Movable>
         )}
+        {controlPanel && (
+          <Movable fixed id="control" label="Control Panel" usual={usual.control} tier={1} announce={announcePanel}>
+            <ControlPanel
+              controls={controls}
+              onToggle={toggleControl}
+              arranging={terminalArranging}
+              onArranging={toggleTerminalArranging}
+              onReset={() => {
+                forgetLayout("terminal:");
+                showStatus("Everything beside the game is back in its default place and size.");
+              }}
+            />
+          </Movable>
+        )}
         {has("heard") && (
           <Movable id="heard" label="Heard panel" usual={usual.heard} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <HeardPanel captions={display.captions} />
           </Movable>
         )}
 
-        {ux === "workshop" && has("vitals") && connected && (
+        {ux !== "immersive" && has("vitals") && connected && (
           <Movable id="vitals" label="You panel" usual={usual.vitals} least={VITALS_LEAST} tier={1} announce={announcePanel}>
             <VitalsPanel vitals={vitals} opponent={opponent} />
           </Movable>
         )}
 
-        {!WEB && ux === "workshop" && has("picture") && (
+        {!WEB && ux !== "immersive" && has("picture") && (
           <Movable id="picture" label="Picture panel" usual={usual.picture} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <PicturePanel scene={pictureScene} settings={pictureSettings} shows={pictureOn} />
           </Movable>
         )}
 
-        {ux === "workshop" && mapOpen && (
+        {((ux === "workshop" && mapOpen) || (controlPanel && has("map"))) && (
           <Movable id="map" label="map" usual={usual.map} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <MapPanel snapshot={snapshot} connected={connected} walking={walking} run={runMap} onAskClear={() => setClearMapOpen(true)} />
           </Movable>
@@ -2213,7 +2369,7 @@ function App() {
           </div>
         )}
 
-        <Movable id="messages" tier={2} label="message bar" usual={usual.messages} announce={announcePanel}>
+        <Movable fixed={controlPanel} id="messages" tier={2} label="message bar" usual={usual.messages} announce={announcePanel}>
           <div className="status-bar">
         <div className="status-bar-message">
           <ActivityStatus activities={activities} />
@@ -2275,6 +2431,7 @@ function App() {
       </main>
       </ArrangeContext.Provider>
       </KeptContext.Provider>
+      </LayoutScopeContext.Provider>
 
       <Dialog
         open={aboutOpen}
@@ -2423,6 +2580,7 @@ function App() {
       <EchoesDialog open={echoesOpen} onClose={() => setEchoesOpen(false)} onStatus={showStatus} />
       <ArtisanDialog open={artisanOpen} onClose={() => setArtisanOpen(false)} voiced={voiced} />
 
+      <AccountMenuDialog open={accountOpen} menu={accountMenu} onSend={accountSend} onTyped={accountTyped} onTypeInstead={accountTypeInstead} />
       <CreationDialog open={guideOpen} step={creationStep} voiced={voiced} cues={cues} portraits={pictureSettings.portraits} onSend={sendAnswer} onClose={hideGuide} onStandard={() => chooseCreationMode("standard")} />
 
       <TutorialDialog

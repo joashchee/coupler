@@ -303,6 +303,43 @@ export interface Unheard {
 }
 export const NOTHING_UNHEARD: Unheard = { journal: 0, log: 0, speakers: [], channels: [] };
 export const journalList = (book: Book, query: string, who: string | null) => invoke<JournalListing>("journal_list", { book, query, who });
+// ---- The account menu (src-tauri/src/account.rs) ----
+
+/** One of the account's characters, as the game's list shows it. */
+export interface AccountCharacter {
+  name: string;
+  race: string;
+  level: string;
+  class: string;
+  /** When last played, as the game writes it, or empty. */
+  last: string;
+  /** Days left before an idle character is purged, or empty. */
+  remain: string;
+  /** Playing now, on another connection. */
+  online: boolean;
+}
+
+/** The account menu: its characters once read, and what the game offers. */
+export interface AccountMenu {
+  characters: AccountCharacter[] | null;
+  remaining: string | null;
+  import: boolean;
+  export: boolean;
+  email: boolean;
+  totalHours: number | null;
+}
+
+/** The account menu opened or changed, or null once it's gone (a question, the game, hanging up). */
+export const onAccountMenu = (f: (menu: AccountMenu | null) => void): Promise<UnlistenFn> => listen<AccountMenu | null>("account-menu", (e) => f(e.payload));
+
+/** A typed channel LAST's answer (src-tauri/src/journal.rs). */
+export interface LastAnswer {
+  channel: string;
+  count: number;
+  entries: JournalEntry[];
+}
+/** A typed channel LAST (`OOC LAST 10`) answered from the log, or null when the line is the game's. */
+export const journalLast = (line: string) => invoke<LastAnswer | null>("journal_last", { line });
 export const journalUnheard = () => invoke<Unheard>("journal_unheard");
 export const journalUnheardEntries = (book: Book) => invoke<JournalEntry[]>("journal_unheard_entries", { book });
 export const journalSetHeard = (ids: number[], heard: boolean) => invoke<void>("journal_set_heard", { ids, heard });

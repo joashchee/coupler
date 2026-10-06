@@ -97,10 +97,16 @@ export function fitRect(wanted: Rect, least: Size | null, area: Size, snap: bool
 /** Tells every panel on screen that the layout was forgotten (components/Movable.tsx listens). */
 export const LAYOUT_FORGOTTEN = "coupler-layout-forgotten";
 
-/** Forgets everything the user arranged: every panel is back to its usual place, size and order. */
-export function forgetLayout() {
+/**
+ * Forgets what the user arranged in one scope: every panel is back to
+ * its usual place, size and order. `scope` "" is Workshop's (every ID
+ * with no scope), "terminal:" Terminal's.
+ */
+export function forgetLayout(scope = "") {
   try {
-    localStorage.removeItem(LAYOUT_KEY);
+    const layout = loadLayout();
+    for (const id of Object.keys(layout)) if (scope ? id.startsWith(scope) : !id.includes(":")) delete layout[id];
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
   } catch {
     // Nothing was kept, then.
   }

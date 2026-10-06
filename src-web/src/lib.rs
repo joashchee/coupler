@@ -12,6 +12,8 @@
 // The shared modules carry what only the desktop calls.
 #![allow(dead_code)]
 
+#[path = "../../src-tauri/src/account.rs"]
+mod account;
 #[path = "../../src-tauri/src/ambient.rs"]
 mod ambient;
 #[path = "../../src-tauri/src/ansi.rs"]

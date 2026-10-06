@@ -129,6 +129,10 @@ header.top .header-actions { margin-left: auto; }
 /* About dialog (same as Diskette's) */
 .about-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text); margin: 18px 0 4px; }
 .about-section-desc { font-size: 12px; margin: 0 0 8px; }
+.account-chars { list-style: none; margin: 0 0 8px; padding: 0; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.account-chars button { width: 100%; text-align: left; white-space: pre; }
+.account-name { font-weight: 600; }
+.account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
 .about-links { display: flex; gap: 8px; margin: 0 0 8px; }
 
 /* Buttons */
@@ -652,6 +656,12 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 /* Here (ScenePanel) and Heard (HeardPanel): Immersive's panels. */
 .scene-panel,
 .heard-panel { display: flex; flex-direction: column; }
+.control-panel { display: flex; flex-direction: column; }
+.control-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.control-help { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.control-list { border: none; margin: 0; padding: 0; }
+.control-about { color: var(--muted); }
+.control-arrange { display: flex; align-items: center; gap: 12px; }
 /* Immersive's pop-up (SpeakingPopup.tsx): the line being said, at the
    top of the screen, in stage pixels (never centered by the browser),
    in front of the panels. Up to eight lines; a longer line is cut. */

@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager, State};
 
+mod account;
 mod ambient;
 // Public for the web mirror tool (examples/web_mirror.rs), not an API.
 #[doc(hidden)]
@@ -178,6 +179,13 @@ fn map_clear(app: AppHandle, session: State<'_, Session>) {
 #[tauri::command]
 fn journal_list(app: AppHandle, book: String, query: String, who: Option<String>, session: State<'_, Session>) -> Result<journal::Listing, String> {
     session.journal_list(&app, &book, &query, who.as_deref())
+}
+
+/// A typed channel LAST (`OOC LAST 10`), answered from the log, or
+/// None for a line that's the game's.
+#[tauri::command]
+fn journal_last(app: AppHandle, line: String, session: State<'_, Session>) -> Result<Option<journal::LastAnswer>, String> {
+    session.journal_last(&app, &line)
 }
 
 /// What's still unheard in the journal and the log.
@@ -789,6 +797,7 @@ pub fn run() {
             cast_reset,
             cast_forget,
             journal_list,
+            journal_last,
             journal_unheard,
             journal_unheard_entries,
             journal_set_heard,
