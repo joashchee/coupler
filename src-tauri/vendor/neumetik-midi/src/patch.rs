@@ -1,4 +1,4 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! What a Neumetik instrument is: a `Patch`, a handful of numbers, and
 //! the `const fn` steps the banks build them with
@@ -75,84 +75,85 @@ pub struct Adsr {
 /// 4', 2 2/3', 2' and 1'.
 pub const BAR_HARMONICS: [f32; 7] = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 8.0];
 
+/// An instrument: its name, and the numbers its engine plays it by.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Patch {
     pub name: &'static str,
     /// The instrument and preset it's after, for the classic banks;
     /// empty in GM's and GS's.
-    pub after: &'static str,
-    pub engine: Engine,
-    pub wave1: Wave,
-    pub wave2: Wave,
+    pub(crate) after: &'static str,
+    pub(crate) engine: Engine,
+    pub(crate) wave1: Wave,
+    pub(crate) wave2: Wave,
     /// Osc 2's frequency as a multiple of the note's; Fm's modulator's.
-    pub ratio2: f32,
+    pub(crate) ratio2: f32,
     /// Osc 2's level (osc 1's is 1).
-    pub mix2: f32,
+    pub(crate) mix2: f32,
     /// Cents osc 2 (and the tine) is tuned off.
-    pub detune: f32,
-    pub pw: f32,
+    pub(crate) detune: f32,
+    pub(crate) pw: f32,
     /// Osc 2 hard-synced to osc 1, swept this many semitones up by the
     /// filter envelope.
-    pub sync: Option<f32>,
+    pub(crate) sync: Option<f32>,
     /// Copies of osc 1, spread `spread` cents across, for a supersaw.
-    pub unison: u8,
-    pub spread: f32,
-    pub noise: f32,
-    pub bars: [f32; 7],
+    pub(crate) unison: u8,
+    pub(crate) spread: f32,
+    pub(crate) noise: f32,
+    pub(crate) bars: [f32; 7],
     /// Fm: the index's peak, how long it falls and where it rests.
-    pub index: f32,
-    pub index_decay: f32,
-    pub index_sus: f32,
-    pub feedback: f32,
+    pub(crate) index: f32,
+    pub(crate) index_decay: f32,
+    pub(crate) index_sus: f32,
+    pub(crate) feedback: f32,
     /// The tine: its level, the carrier's and modulator's ratios, its
     /// index and decay.
-    pub tine: f32,
-    pub tine_ratio: f32,
-    pub tine_mod: f32,
-    pub tine_index: f32,
-    pub tine_decay: f32,
+    pub(crate) tine: f32,
+    pub(crate) tine_ratio: f32,
+    pub(crate) tine_mod: f32,
+    pub(crate) tine_index: f32,
+    pub(crate) tine_decay: f32,
     /// Pluck: how bright the string is, 0 dull to 1 bright; it rings for
     /// the amp envelope's decay.
-    pub bright: f32,
-    pub filter: Filter,
+    pub(crate) bright: f32,
+    pub(crate) filter: Filter,
     /// Hz, at middle C.
-    pub cutoff: f32,
+    pub(crate) cutoff: f32,
     /// 0 to 1, 1 short of self-oscillating.
-    pub reso: f32,
+    pub(crate) reso: f32,
     /// Octaves the filter envelope opens the filter.
-    pub env_amt: f32,
+    pub(crate) env_amt: f32,
     /// How far the cutoff follows the key, 0 to 1.
-    pub key_track: f32,
+    pub(crate) key_track: f32,
     /// Octaves the filter closes at the softest velocity.
-    pub vel_filter: f32,
-    pub fenv: Adsr,
-    pub aenv: Adsr,
+    pub(crate) vel_filter: f32,
+    pub(crate) fenv: Adsr,
+    pub(crate) aenv: Adsr,
     /// Semitones the pitch starts above the note, falling over the filter
     /// envelope's decay: toms, zaps, the 808's thump.
-    pub sweep: f32,
+    pub(crate) sweep: f32,
     /// How much shorter the decay is up the keyboard (a piano's high
     /// strings die sooner), 0 to 1.
-    pub key_decay: f32,
-    pub lfo: Lfo,
-    pub lfo_rate: f32,
+    pub(crate) key_decay: f32,
+    pub(crate) lfo: Lfo,
+    pub(crate) lfo_rate: f32,
     /// Seconds before the LFO fades in.
-    pub lfo_delay: f32,
+    pub(crate) lfo_delay: f32,
     /// Cents.
-    pub vibrato: f32,
+    pub(crate) vibrato: f32,
     /// 0 to 1.
-    pub tremolo: f32,
+    pub(crate) tremolo: f32,
     /// How far the LFO sweeps a pulse's width.
-    pub pwm: f32,
+    pub(crate) pwm: f32,
     /// Octaves the LFO sweeps the cutoff: the wobble.
-    pub wobble: f32,
+    pub(crate) wobble: f32,
     /// Soft clipping, 0 for none: overdrive, distortion.
-    pub drive: f32,
+    pub(crate) drive: f32,
     /// The patch's own chorus and reverb, added to the channel's sends.
-    pub chorus: f32,
-    pub reverb: f32,
-    pub gain: f32,
+    pub(crate) chorus: f32,
+    pub(crate) reverb: f32,
+    pub(crate) gain: f32,
     /// Semitones.
-    pub transpose: f32,
+    pub(crate) transpose: f32,
 }
 
 pub const BASE: Patch = Patch {

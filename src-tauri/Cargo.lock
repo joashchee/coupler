@@ -597,7 +597,7 @@ dependencies = [
  "lewton",
  "libc",
  "log",
- "neumetik",
+ "neumetik-midi",
  "ogg 0.9.2",
  "opusic-sys",
  "pocket-tts",
@@ -2646,7 +2646,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "neumetik"
+name = "neumetik-midi"
 version = "0.1.0"
 
 [[package]]

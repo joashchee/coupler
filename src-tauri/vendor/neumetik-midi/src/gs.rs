@@ -1,4 +1,4 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! Roland GS's variation tones: the Sound Canvas (SC-55) put its other
 //! sounds on the same program numbers as GM's, in banks picked by Bank

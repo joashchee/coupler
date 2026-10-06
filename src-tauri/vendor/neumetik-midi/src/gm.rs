@@ -1,4 +1,4 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! General MIDI's 128 instruments, in GM's order, each built from
 //! Neumetik's engines. The names are GM's own.

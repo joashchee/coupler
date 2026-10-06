@@ -489,7 +489,7 @@ mod tests {
             assert_eq!((a.channel, a.program, &a.notes, &a.kept), (b.channel, b.program, &b.notes, &b.kept));
         }
         // Neumetik can play it, and it's as long as its bar.
-        let samples = neumetik::render(&preview(&again, 0, 1), 22_050, 0.0, 60.0).unwrap();
+        let samples = neumetik_midi::render(&preview(&again, 0, 1), 22_050, 0.0, 60.0).unwrap();
         let seconds = samples.len() as f64 / 2.0 / 22_050.0;
         assert!((seconds - 1.8).abs() < 0.01, "3 beats at 100: {seconds}");
     }

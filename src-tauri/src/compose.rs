@@ -1,6 +1,6 @@
 //! Coupler's composer: a short piece of music made from a few words the
 //! player types (gear's Hooks, Assets, Create Asset), written as a MIDI
-//! file for Neumetik to play (`vendor/neumetik`). No model and no
+//! file for Neumetik to play (`vendor/neumetik-midi`). No model and no
 //! samples: the words pick a mood (a mode, a tempo, a meter, the
 //! instruments, the drums), then a seeded hand writes the drums, a bass
 //! that follows them, held chords, a tune in two-bar phrases, and
@@ -420,7 +420,7 @@ impl Drums {
         }
     }
 
-    /// The kit's program on the drum part (`neumetik::drums::KITS`).
+    /// The kit's program on the drum part (`neumetik_midi::drums::KITS`).
     fn kit(self) -> u8 {
         match self {
             Drums::Battle | Drums::Low | Drums::March => 48,
@@ -2318,7 +2318,7 @@ mod tests {
             for (take, options) in lengths.iter().enumerate() {
                 let piece = compose(mood.words[0], take as u32, options);
                 let rate = 8_000;
-                let samples = neumetik::render(&piece.midi, rate, 0.0, 120.0).unwrap();
+                let samples = neumetik_midi::render(&piece.midi, rate, 0.0, 120.0).unwrap();
                 // The file is exactly the loop: no tail, nothing cut.
                 let frames = samples.len() as f64 / 2.0;
                 assert!((frames - piece.seconds * f64::from(rate)).abs() <= 2.0, "{} take {take}: {frames} frames for {}s", mood.name, piece.seconds);
@@ -2362,6 +2362,6 @@ mod tests {
 
     #[test]
     fn the_sample_plays() {
-        assert!(neumetik::render(&sample(), 8_000, 0.0, 60.0).unwrap().len() > 8_000);
+        assert!(neumetik_midi::render(&sample(), 8_000, 0.0, 60.0).unwrap().len() > 8_000);
     }
 }

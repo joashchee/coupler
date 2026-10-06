@@ -1,0 +1,19 @@
+[package]
+name = "neumetik-midi"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["ansiapps"]
+license = "MIT"
+description = "General MIDI and GS music for games with no SoundFont: a tiny, dependency-free synthesizer that turns MIDI into samples"
+readme = "README.md"
+keywords = ["midi", "synthesizer", "gamedev", "audio", "general-midi"]
+categories = ["multimedia::audio", "game-development"]
+exclude = ["demo/", "dist/", "scripts/"]
+
+[dependencies]
+
+# The tests render minutes of sound: optimized, but still checking for
+# overflow.
+[profile.test]
+opt-level = 3

@@ -43,9 +43,9 @@ web-mirror/
 # Tauri writes this when building on Linux (a cloud session); Coupler is macOS first.
 src-tauri/gen/schemas/linux-schema.json
 
-# Neumetik's own tests (scripts/neumetik-sync.sh) write a lockfile beside it;
-# Coupler's Cargo.lock is the one that counts.
-src-tauri/vendor/neumetik/Cargo.lock
+# Neumetik MIDI's own tests (scripts/neumetik-sync.sh) write a lockfile
+# beside it; Coupler's Cargo.lock is the one that counts.
+src-tauri/vendor/neumetik-midi/Cargo.lock
 
 # The maintainer's private notes, linked in from the notes repository.
 CLAUDE.local.md

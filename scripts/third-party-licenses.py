@@ -34,10 +34,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Coupler's own crates, vendored from ansiapps' private repositories
-# (vendor/neumetik/README.md): Coupler's code under Coupler's license,
-# not a third party's.
-OWN = {"neumetik"}
+# ansiapps' own crates, vendored from ansiapps' repositories
+# (vendor/neumetik-midi/README.md): ansiapps' code, not a third party's.
+OWN = {"neumetik-midi"}
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "third-party-licenses.txt"

@@ -250,18 +250,20 @@ and its order is in the roadmap's phase 2.
   rule-based generator (its code isn't published; this is Coupler's
   own). The same words make the same asset; again, the next take
   (`name (2)`).
-- `src-tauri/vendor/neumetik/`: **Neumetik**, Coupler's own synthesizer,
-  its own crate (standard library only), pure and unit-tested: GM and
-  GS MIDI without a SoundFont, no samples. **The original is ansiapps'
-  private `neumetik` repository** (proprietary, so ansiapps' closed
-  apps can use it too); this is Coupler's copy, Apache-2.0 as Coupler.
-  Change it there and copy it here with `scripts/neumetik-sync.sh`
-  (`../neumetik` by default), never only here; the license scripts
-  skip it as Coupler's own (`OWN`). Three engines (subtractive with
+- `src-tauri/vendor/neumetik-midi/`: **Neumetik MIDI**, ansiapps'
+  synthesizer, the `neumetik-midi` crate (standard library only), pure
+  and unit-tested: GM and GS MIDI without a SoundFont, no samples. **MIT
+  licensed, its own `LICENSE`.** **The original is `midi/` in ansiapps'
+  `neumetik` repository** (which also has the proprietary BGN; only the
+  MIDI crate comes here). Change it there and copy it here with
+  `scripts/neumetik-sync.sh` (`../neumetik` by default), never only
+  here; the license scripts skip it as ansiapps' own (`OWN`). Coupler
+  calls it as `neumetik_midi::render`; it also has a game `Player`
+  (loops, seek, fades) and live play that Coupler doesn't use yet. Three engines (subtractive with
   supersaw unison and sync, two-operator FM with a "tine" pair,
   Karplus-Strong plucked strings), an SVF filter, envelopes, LFO,
-  chorus and reverb sends (`voice.rs`, `lib.rs`); `smf.rs` reads the
-  file. Banks by Bank Select MSB: GM's 128 (`gm.rs`), the SC-55's
+  chorus and reverb sends (`voice.rs`, `synth.rs`, `effects.rs`);
+  `smf.rs` reads the file. Banks by Bank Select MSB: GM's 128 (`gm.rs`), the SC-55's
   variation tones falling back to GM's (`gs.rs`), and the classic
   synth sounds, 80 the eighties, 81 the nineties, 82 the 2000s to now
   (`classics.rs`, each patch's `after` names what it's after). Drums
@@ -699,8 +701,8 @@ and its order is in the roadmap's phase 2.
 - Before calling a change done: `cargo test --manifest-path
   src-tauri/Cargo.toml`, `cargo clippy --manifest-path
   src-tauri/Cargo.toml --all-targets`, `npx tsc --noEmit`. When
-  Neumetik changed, also `cargo test --manifest-path
-  src-tauri/vendor/neumetik/Cargo.toml` (a dependency's tests don't run
+  Neumetik MIDI changed, also `cargo test --manifest-path
+  src-tauri/vendor/neumetik-midi/Cargo.toml` (a dependency's tests don't run
   with Coupler's). When a
   shared module or `src-web/` changed, also `cargo test` and `cargo
   clippy --all-targets` in `src-web/`, and `npm run build:web` (it runs

@@ -58,9 +58,10 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 
 ## Neumetik
 
-`src-tauri/vendor/neumetik/` is a copy of ansiapps' synthesizer, kept
-in step with its own private repository. Coupler doesn't take changes
-to that folder: open an issue describing the problem instead.
+`src-tauri/vendor/neumetik-midi/` is a copy of Neumetik MIDI,
+ansiapps' synthesizer (MIT), kept in step with its own repository.
+Coupler doesn't take changes to that folder: open an issue describing
+the problem instead.
 
 ## Signing off your commits
 

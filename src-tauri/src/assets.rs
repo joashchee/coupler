@@ -19,7 +19,7 @@
 //! Plus `.sf2`, a SoundFont: MIDI is only notes, and a SoundFont is the
 //! instruments that play them. Coupler ships none (a good one is tens of
 //! megabytes): MIDI plays through Neumetik, Coupler's own synthesizer
-//! (`vendor/neumetik`, GM and GS without samples), whatever SoundFonts there
+//! (`vendor/neumetik-midi`, GM and GS without samples), whatever SoundFonts there
 //! are. The player can choose a SoundFont for one MIDI file (`set_font`,
 //! kept in `.soundfonts.json`); if that SoundFont leaves the folder, the
 //! file plays through Neumetik again. A SoundFont itself plays a sample
@@ -652,7 +652,7 @@ fn midi_to_wav(bytes: &[u8], font: &Path, looping: bool) -> Result<Vec<u8>, Stri
 /// MIDI through Neumetik, Coupler's own synthesizer: no SoundFont needed.
 fn neumetik_to_wav(bytes: &[u8], looping: bool) -> Result<Vec<u8>, String> {
     let tail = if looping { 0.0 } else { 2.0 };
-    let samples = neumetik::render(bytes, RATE, tail, LONGEST_SECONDS as f64)?;
+    let samples = neumetik_midi::render(bytes, RATE, tail, LONGEST_SECONDS as f64)?;
     Ok(wav(2, RATE, &louder(&samples)))
 }
 

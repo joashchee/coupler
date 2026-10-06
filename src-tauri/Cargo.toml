@@ -62,10 +62,10 @@ flite-rs = { version = "0.2", default-features = false, features = ["kal16"] }
 # (vendor/pocket-tts/README.md). Its weights and voices aren't in git:
 # scripts/pocket-tts-voices.py fetches them, pinned, into resources/.
 pocket-tts = { path = "vendor/pocket-tts" }
-# Neumetik, Coupler's own synthesizer: MIDI without a SoundFont
-# (assets.rs, compose.rs, music.rs). ansiapps' original is a private
-# repository; this is its copy (vendor/neumetik/README.md).
-neumetik = { path = "vendor/neumetik" }
+# Neumetik MIDI, ansiapps' synthesizer (MIT): MIDI without a SoundFont
+# (assets.rs, compose.rs, music.rs). The original is in ansiapps'
+# Neumetik repository; this is its copy (vendor/neumetik-midi/README.md).
+neumetik-midi = { path = "vendor/neumetik-midi" }
 # The update check (update.rs), only when the player asks for it: one
 # HTTPS GET of GitHub's latest Coupler release. reqwest is already in the
 # tree through Tauri; native-tls is the system's own TLS (Security
@@ -98,7 +98,7 @@ opt-level = 3
 
 [profile.dev.package.rustysynth]
 opt-level = 3
-[profile.dev.package.neumetik]
+[profile.dev.package.neumetik-midi]
 opt-level = 3
 [profile.dev.package.xmrsplayer]
 opt-level = 3

@@ -1,4 +1,4 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! One sounding note: a patch's engine, filter, envelopes and LFO, or a
 //! drum. Everything slow (pitch, the filter's coefficients, envelopes,
@@ -47,7 +47,8 @@ const fn sine_table() -> [f32; SINE_SIZE + 1] {
 #[inline]
 fn sine(phase: f32) -> f32 {
     let p = (phase - phase.floor()) * SINE_SIZE as f32;
-    let i = p as usize;
+    // A phase a hair below a whole number rounds to exactly 1 here.
+    let i = (p as usize).min(SINE_SIZE - 1);
     let f = p - i as f32;
     SINE[i] + (SINE[i + 1] - SINE[i]) * f
 }
@@ -345,6 +346,11 @@ impl Voice {
     }
 
     /// How loud it is now, for choosing which to steal.
+    /// The memory it holds, in bytes.
+    pub fn memory_bytes(&self) -> usize {
+        std::mem::size_of::<Voice>() + self.string.capacity() * 4
+    }
+
     pub fn loudness(&self) -> f32 {
         self.amp_now * self.vel
     }

@@ -1,4 +1,4 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! Neumetik's drums: every key of GM's and GS's drum map (27 to 87) as
 //! a recipe of three parts, each with its own decay, and the kits a drum

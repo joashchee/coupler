@@ -1,8 +1,11 @@
-// Copyright 2026 ansiapps. Neumetik: see README.md for its license.
+// Copyright 2026 ansiapps. Neumetik MIDI, MIT licensed: see LICENSE.
 
 //! Standard MIDI Files (formats 0, 1 and 2, and RIFF's RMID wrapper)
 //! read into one list of events in seconds, every track merged and the
-//! tempo map applied. Pure and unit-tested.
+//! tempo map applied, and where the file says to loop. Pure and
+//! unit-tested.
+
+use crate::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message {
@@ -18,37 +21,48 @@ pub struct Event {
     pub message: Message,
 }
 
+/// A whole file read: its events, where it ends (its last End of Track,
+/// or its last event if that's later), and its loop points, if it marks
+/// them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Parsed {
+    pub events: Vec<Event>,
+    pub end: f64,
+    pub loop_start: Option<f64>,
+    pub loop_end: Option<f64>,
+}
+
 struct Reader<'a> {
     bytes: &'a [u8],
     at: usize,
 }
 
 impl<'a> Reader<'a> {
-    fn byte(&mut self) -> Result<u8, String> {
-        let b = *self.bytes.get(self.at).ok_or("it ends too soon")?;
+    fn byte(&mut self) -> Result<u8, Error> {
+        let b = *self.bytes.get(self.at).ok_or(Error::Truncated)?;
         self.at += 1;
         Ok(b)
     }
 
-    fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
-        let end = self.at.checked_add(n).filter(|&e| e <= self.bytes.len()).ok_or("it ends too soon")?;
+    fn take(&mut self, n: usize) -> Result<&'a [u8], Error> {
+        let end = self.at.checked_add(n).filter(|&e| e <= self.bytes.len()).ok_or(Error::Truncated)?;
         let s = &self.bytes[self.at..end];
         self.at = end;
         Ok(s)
     }
 
-    fn u16(&mut self) -> Result<u16, String> {
+    fn u16(&mut self) -> Result<u16, Error> {
         let b = self.take(2)?;
         Ok(u16::from_be_bytes([b[0], b[1]]))
     }
 
-    fn u32(&mut self) -> Result<u32, String> {
+    fn u32(&mut self) -> Result<u32, Error> {
         let b = self.take(4)?;
         Ok(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     /// A variable-length number: seven bits a byte, the top bit says more.
-    fn vlq(&mut self) -> Result<u32, String> {
+    fn vlq(&mut self) -> Result<u32, Error> {
         let mut n = 0u32;
         for _ in 0..4 {
             let b = self.byte()?;
@@ -57,7 +71,7 @@ impl<'a> Reader<'a> {
                 return Ok(n);
             }
         }
-        Err("a length is too long".into())
+        Err(Error::Truncated)
     }
 }
 
@@ -72,15 +86,26 @@ enum What {
     Message(Message),
     /// Microseconds a quarter note.
     Tempo(u32),
+    /// A track's End of Track.
+    End,
+    /// A loop point: a marker named loopStart or loopEnd (any case, with
+    /// or without a space, `_` or `-`), or CC 111 as RPG Maker writes it.
+    LoopStart,
+    LoopEnd,
 }
 
 /// Every event in the file, by time.
-pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, String> {
+pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, Error> {
+    Ok(parse_song(bytes)?.events)
+}
+
+/// Every event in the file, by time, with its end and loop points.
+pub fn parse_song(bytes: &[u8]) -> Result<Parsed, Error> {
     let bytes = unwrap_rmid(bytes);
-    let mut r = Reader { bytes, at: 0 };
-    if r.take(4)? != b"MThd" {
-        return Err("it isn't a MIDI file".into());
+    if !bytes.starts_with(b"MThd") {
+        return Err(Error::NotMidi);
     }
+    let mut r = Reader { bytes, at: 4 };
     let len = r.u32()? as usize;
     let start = r.at;
     let format = r.u16()?;
@@ -88,7 +113,7 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, String> {
     let division = r.u16()?;
     r.at = start + len;
     if division == 0 {
-        return Err("its timing is zero".into());
+        return Err(Error::BadTiming);
     }
 
     let mut timed = Vec::new();
@@ -109,8 +134,8 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, String> {
             offset = end;
         }
     }
-    if timed.is_empty() {
-        return Err("it has no music in it".into());
+    if !timed.iter().any(|t| matches!(t.what, What::Message(_))) {
+        return Err(Error::NoMusic);
     }
     timed.sort_by_key(|t| (t.tick, t.order));
 
@@ -129,6 +154,7 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, String> {
     let mut tempo = 500_000.0;
     let (mut last_tick, mut seconds) = (0u64, 0f64);
     let mut events = Vec::with_capacity(timed.len());
+    let (mut end, mut loop_start, mut loop_end) = (0f64, None, None);
     for t in timed {
         let ticks = (t.tick - last_tick) as f64;
         seconds += if smpte { ticks / ticks_per_second } else { ticks * tempo / 1e6 / per_quarter };
@@ -136,9 +162,23 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Event>, String> {
         match t.what {
             What::Tempo(us) => tempo = f64::from(us.max(1)),
             What::Message(message) => events.push(Event { seconds, message }),
+            What::End => end = end.max(seconds),
+            What::LoopStart => loop_start = loop_start.or(Some(seconds)),
+            What::LoopEnd => loop_end = loop_end.or(Some(seconds)),
         }
     }
-    Ok(events)
+    let end = end.max(events.last().map_or(0.0, |e| e.seconds));
+    Ok(Parsed { events, end, loop_start, loop_end })
+}
+
+/// A marker's text says where a loop starts or ends.
+fn loop_marker(text: &[u8]) -> Option<What> {
+    let name: Vec<u8> = text.iter().filter(|b| !matches!(b, b' ' | b'_' | b'-')).map(u8::to_ascii_lowercase).collect();
+    match name.as_slice() {
+        b"loopstart" => Some(What::LoopStart),
+        b"loopend" => Some(What::LoopEnd),
+        _ => None,
+    }
 }
 
 /// A RIFF RMID file is a MIDI file in a wrapper: the MIDI file inside it.
@@ -168,7 +208,16 @@ fn read_track(body: &[u8], offset: u64, out: &mut Vec<Timed>) -> u64 {
                 let (Ok(kind), Ok(len)) = (r.byte(), r.vlq()) else { break };
                 let Ok(data) = r.take(len as usize) else { break };
                 match kind {
-                    0x2f => break,
+                    0x2f => {
+                        push(What::End);
+                        break;
+                    }
+                    // A marker (or, as some editors write them, a cue point).
+                    0x06 | 0x07 => {
+                        if let Some(what) = loop_marker(data) {
+                            push(what);
+                        }
+                    }
                     0x51 if data.len() == 3 => {
                         push(What::Tempo(u32::from(data[0]) << 16 | u32::from(data[1]) << 8 | u32::from(data[2])));
                     }
@@ -201,6 +250,9 @@ fn read_track(body: &[u8], offset: u64, out: &mut Vec<Timed>) -> u64 {
                     let Ok(b) = r.byte() else { break };
                     b
                 };
+                if status & 0xf0 == 0xb0 && first == 111 {
+                    push(What::LoopStart);
+                }
                 push(What::Message(Message::Channel(status, first & 0x7f, second & 0x7f)));
             }
         }
@@ -258,11 +310,41 @@ pub mod tests {
 
     #[test]
     fn a_broken_file_is_refused_or_kept_as_far_as_it_goes() {
-        assert!(parse(b"MThd").is_err());
-        assert!(parse(b"hello there").is_err());
+        assert_eq!(parse(b"MThd"), Err(Error::Truncated));
+        assert_eq!(parse(b"hello there"), Err(Error::NotMidi));
+        assert_eq!(parse(&[1, 2, 3]), Err(Error::NotMidi));
         let mut f = file(0, &[vec![0, 0x90, 60, 100, 10, 0x90]]);
         f.truncate(f.len() - 4);
         assert_eq!(parse(&f).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_end_of_track_and_loop_markers_are_kept() {
+        // A note for a quarter, a loopStart marker there, a loop_end
+        // marker a quarter on, and the track ending a quarter after that.
+        let t = vec![
+            0, 0x90, 60, 100, 96, 0x80, 60, 0, 0, 0xff, 0x06, 9, b'l', b'o', b'o', b'p', b'S', b't', b'a', b'r', b't', //
+            96, 0xff, 0x06, 8, b'L', b'O', b'O', b'P', b'_', b'E', b'N', b'D', 96,
+        ];
+        let mut f = file(0, &[t]);
+        // `file` ends the track at once: move its End of Track to where
+        // the last delta (96) leaves it.
+        let at = f.len() - 4;
+        f.truncate(at);
+        f.extend_from_slice(&[0xff, 0x2f, 0]);
+        let len = (f.len() - 22) as u32;
+        f[18..22].copy_from_slice(&len.to_be_bytes());
+        let song = parse_song(&f).unwrap();
+        assert_eq!(song.events.len(), 2);
+        assert_eq!(song.loop_start, Some(0.5));
+        assert_eq!(song.loop_end, Some(1.0));
+        assert!((song.end - 1.5).abs() < 1e-9, "{}", song.end);
+    }
+
+    #[test]
+    fn cc_111_starts_a_loop() {
+        let t = vec![0, 0x90, 60, 100, 96, 0xb0, 111, 0, 96, 0x80, 60, 0];
+        assert_eq!(parse_song(&file(0, &[t])).unwrap().loop_start, Some(0.5));
     }
 
     #[test]

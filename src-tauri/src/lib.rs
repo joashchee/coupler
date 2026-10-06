@@ -659,8 +659,8 @@ struct InstrumentBank {
 #[tauri::command]
 fn music_instruments() -> Instruments {
     Instruments {
-        banks: neumetik::BANKS.iter().map(|b| InstrumentBank { msb: b.msb, names: b.patches.iter().map(|p| p.name).collect() }).collect(),
-        kits: neumetik::drums::KITS.to_vec(),
+        banks: neumetik_midi::BANKS.iter().map(|b| InstrumentBank { msb: b.msb, names: b.patches.iter().map(|p| p.name).collect() }).collect(),
+        kits: neumetik_midi::drums::KITS.to_vec(),
     }
 }
 
