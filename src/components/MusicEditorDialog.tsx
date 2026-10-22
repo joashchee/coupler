@@ -59,7 +59,7 @@ type Ask = null | "over" | "as" | { discard: () => void };
 export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onStatus, onError }: MusicEditorDialogProps) {
   const id = useId();
   const [files, setFiles] = useState<string[]>([]);
-  /** The SoundFonts in the Assets folder, and the one chosen to play through ("" is Neumetik, the default). */
+  /** The SoundFonts (and DLS banks) in the Assets folder, and the one chosen to play through ("" is Neumetik, the default). */
   const [fonts, setFonts] = useState<string[]>([]);
   const [font, setFont] = useState("");
   const [chosen, setChosen] = useState("");
@@ -92,15 +92,33 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
         const midi = l.assets.filter((a) => mud.isMidi(a.path)).map((a) => a.path);
         setFiles(midi);
         setChosen((c) => (c && midi.includes(c) ? c : (midi[0] ?? "")));
-        const sf2 = l.assets.filter((a) => a.path.startsWith("sf2/")).map((a) => a.path);
-        setFonts(sf2);
+        const banks = l.assets.filter((a) => a.kind === "soundfont").map((a) => a.path);
+        setFonts(banks);
         // A SoundFont that's left the folder: back to Neumetik.
-        setFont((f) => (f && sf2.includes(f) ? f : ""));
+        setFont((f) => (f && banks.includes(f) ? f : ""));
       })
       .catch((e) => onError(String(e)));
-    if (!inst) music.instruments().then(setInst).catch((e) => onError(String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, assetsVersion]);
+
+  // What the parts can play: Neumetik's instruments, or the SoundFont's
+  // (Neumetik's for what it hasn't), named as they play.
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    music
+      .instruments(font || null)
+      .then((i) => current && setInst(i))
+      .catch((e) => {
+        if (!current) return;
+        onError(String(e));
+        setFont("");
+      });
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, font, assetsVersion]);
 
   // Closing stops what it was playing.
   useEffect(() => {
@@ -416,7 +434,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
 
   const instrumentOptions = useMemo(() => {
     if (!inst) return [];
-    return inst.banks.map((b) => ({ label: music.BANK_NAMES[b.msb] ?? `Bank ${b.msb}`, items: b.names.map((n, i) => ({ value: `${b.msb}:${i}`, name: `${i + 1} ${n}` })) }));
+    return inst.banks.map((b) => ({ label: music.bankName(b.msb), items: b.programs.map(([p, n]) => ({ value: `${b.msb}:${p}`, name: `${p + 1} ${n}` })) }));
   }, [inst]);
 
   function addPart(drums: boolean) {
@@ -604,7 +622,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
                       id={`${id}-inst`}
                       className="music-instrument"
                       data-testid="music-instrument"
-                      value={`${inst?.banks.some((b) => b.msb === current.bank) ? current.bank : 0}:${current.program}`}
+                      value={`${music.hasProgram(inst, current.bank, current.program) ? current.bank : 0}:${current.program}`}
                       onChange={(e) => {
                         const [bank, program] = e.currentTarget.value.split(":").map(Number);
                         edit(music.setPart(song, part, { bank, program }));
@@ -695,7 +713,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
                 <option value="">Neumetik</option>
                 {fonts.map((f) => (
                   <option key={f} value={f}>
-                    {`SoundFont: ${mud.assetTitle(f)}`}
+                    {`${f.startsWith("dls/") ? "DLS" : "SoundFont"}: ${mud.assetTitle(f)}`}
                   </option>
                 ))}
               </select>

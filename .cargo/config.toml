@@ -4,3 +4,14 @@
 # wavpack-sys builds WavPack with a CMakeLists.txt that asks for CMake < 3.5,
 # which CMake 4 refuses unless told the minimum policy to assume.
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+
+# The iPhone: Candle's gemm-f16 (Pocket TTS) uses half-precision NEON
+# instructions, which Rust's iOS targets leave off but every iPhone
+# Coupler runs on has (the A11 and later: iOS 16, the deployment target
+# in tauri.conf.json and gen/apple/project.yml). The simulator runs on an
+# Apple Silicon Mac, which has them too.
+[target.aarch64-apple-ios]
+rustflags = ["-C", "target-feature=+fp16"]
+
+[target.aarch64-apple-ios-sim]
+rustflags = ["-C", "target-feature=+fp16"]

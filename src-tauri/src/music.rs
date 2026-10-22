@@ -435,6 +435,60 @@ pub fn preview(song: &Song, from: u32, to: u32) -> Vec<u8> {
     write(&cut)
 }
 
+// ---- What the parts play ----
+
+/// What the Music Editor's parts can play, bank by bank, and the drum
+/// kits: Neumetik's own (General MIDI, the GS variation tones, the
+/// classic synths), or, through a SoundFont or DLS bank, what that bank
+/// has as well, each named as it plays (the bank's preset where it has
+/// one, else Neumetik's, as Neumetik MIDI picks them).
+#[derive(Serialize)]
+pub struct Instruments {
+    banks: Vec<InstrumentBank>,
+    kits: Vec<(u8, String)>,
+}
+
+/// A bank's programs and their names; every bank but General MIDI's
+/// and the classic synths' has only some.
+#[derive(Serialize)]
+pub struct InstrumentBank {
+    msb: u8,
+    programs: Vec<(u8, String)>,
+}
+
+pub fn instruments(bank: Option<std::sync::Arc<neumetik_midi::SoundBank>>) -> Instruments {
+    use std::collections::{BTreeMap, BTreeSet};
+    // Each bank's programs: Neumetik's, the bank's own too.
+    let mut programs: BTreeMap<u8, BTreeSet<u8>> = BTreeMap::new();
+    for b in &neumetik_midi::BANKS {
+        programs.entry(b.msb).or_default().extend(0..b.patches.len() as u8);
+    }
+    for (msb, program, _) in neumetik_midi::variations() {
+        programs.entry(msb).or_default().insert(program);
+    }
+    let mut kits: BTreeSet<u8> = neumetik_midi::drums::KITS.iter().map(|(p, _)| *p).collect();
+    if let Some(bank) = &bank {
+        for i in bank.instruments() {
+            if i.drums {
+                kits.insert(i.program);
+            } else if i.bank < 128 {
+                programs.entry(i.bank).or_default().insert(i.program);
+            }
+        }
+    }
+    // Named by what plays them, as the synthesizer chooses.
+    let mut synth = neumetik_midi::Synth::new(neumetik_midi::MIN_RATE);
+    synth.set_sound_bank(bank);
+    let mut name = |channel: u8, msb: u8, program: u8| {
+        synth.set_instrument(channel, msb, program);
+        synth.instrument_name(channel).to_string()
+    };
+    Instruments {
+        banks: programs.into_iter().map(|(msb, ps)| InstrumentBank { msb, programs: ps.into_iter().map(|p| (p, name(0, msb, p))).collect() }).collect(),
+        kits: kits.into_iter().map(|p| (p, name(9, 0, p))).collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -535,5 +589,20 @@ mod tests {
         vlq(128, &mut out);
         vlq(0x0fff_ffff, &mut out);
         assert_eq!(out, vec![0, 0x7f, 0x81, 0x00, 0xff, 0xff, 0xff, 0x7f]);
+    }
+
+    #[test]
+    fn instruments_are_named_as_they_play() {
+        let own = instruments(None);
+        let gm = own.banks.iter().find(|b| b.msb == 0).unwrap();
+        assert_eq!(gm.programs.len(), 128);
+        assert!(own.banks.iter().any(|b| b.msb == 80) && own.banks.iter().any(|b| (1..64).contains(&b.msb)), "the classic synths and the GS variations");
+        assert!(own.kits.iter().any(|(p, _)| *p == 0));
+        // Through a bank: its piano is its own sine; the rest, Neumetik's.
+        let bank = std::sync::Arc::new(neumetik_midi::SoundBank::from_bytes(&neumetik_midi::doc_bank()).unwrap());
+        let through = instruments(Some(bank));
+        let gm = through.banks.iter().find(|b| b.msb == 0).unwrap();
+        assert_eq!(gm.programs[0], (0, "Sine".to_string()));
+        assert_eq!(gm.programs[1].1, own.banks[0].programs[1].1);
     }
 }

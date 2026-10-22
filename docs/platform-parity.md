@@ -20,8 +20,30 @@ milestone. Unresearched beyond naming the mechanism.
 | The update check's TLS (`update.rs`, reqwest `native-tls`) | Security framework | SChannel | The system's OpenSSL, linked (`libssl-dev` in `linux.yml`), never bundled |
 | Keyboard shortcuts (`lib/keys.ts`) | Cmd+Shift+letter, Ctrl+Cmd+key, Option+arrow, Cmd+Period; written that way | Cmd is Ctrl, Ctrl+Cmd is Ctrl+Alt, Option is Alt, Return is Enter, matched and written (`keys.keys`) alike: the Windows key belongs to the system. Ctrl+Alt is AltGr on some layouts | Same as Windows; the Super key belongs to the desktop |
 | Is a screen reader running (`screen_reader.rs`) | VoiceOver's process, `pgrep -x VoiceOver`, every 5 seconds | `SystemParametersInfoW(SPI_GETSCREENREADER)`, set by NVDA, JAWS and Narrator (built, untested) | GNOME's `screen-reader-enabled`, or Orca's process (built, untested) |
+| Bundle ID (`tauri.conf.json`, rule 4) | `com.scorelessmusic.coupler`; 0.28.0 and before were `com.ansiapps.coupler`, whose `~/Library/Application Support` and `~/Library/WebKit` folders `moved.rs` renames at launch | `com.ansiapps.coupler` (`tauri.windows.conf.json`), unchanged | `com.ansiapps.coupler` (`tauri.linux.conf.json`), unchanged |
 | Quit Coupler (gear menu) | `AppHandle::exit`; Cmd+Q from the app menu too | Same call | Same call |
 | Fixed window size | `resizable: false` greys out the green button; a window taller than the screen is shrunk by the system, and the stage scales down to fit | Check 1366×768 with the taskbar: the window is taller than the work area | Check tiling window managers, which ignore fixed sizes (the stage scales to whatever it's given) |
+
+## The iPhone (begun 2026-10-19)
+
+The phone screen (`lib/formFactor.ts`, `phoneLayout` in `App.tsx`,
+`src/phone.css`): upright only, iPhone only, played by touch. The same
+code as the Mac's; what differs:
+
+| Feature | iPhone | Note |
+|---|---|---|
+| The screen | 48 cells across, as many rows as show above the keyboard (`lib/stage.ts` `phoneFit`), scaled to the width; the bar, the touch pad and the command line 3 rows (48 px) each | The desktop's 1280 by 720 is untouched |
+| Minimum iOS | iOS 16 (the iPhone 8 and later): Candle's `gemm-f16` needs the A11's half-precision instructions, turned on in `.cargo/config.toml` | |
+| Orientation and devices | Portrait only, iPhone only (`project.yml`: `UISupportedInterfaceOrientations`, `TARGETED_DEVICE_FAMILY` 1); an iPad runs it as an iPhone app | An iPad layout would be its own profile |
+| The keyboard | `visualViewport` sizes the frame to what shows, so the command line sits on the keyboard; fields at 16 px so iOS doesn't zoom | |
+| Notch and home indicator | `viewport-fit=cover` and `env(safe-area-inset-*)` on the frame | |
+| The first-run warning | None: App Review turns down an app calling itself unfinished (`mod first_run` is desktop only) | |
+| Is a screen reader running (`screen_reader.rs`) | `UIAccessibilityIsVoiceOverRunning` (an iPhone app can't start `pgrep`) | |
+| About's Discord and Reddit | Left out: `update.rs` opens pages by a desktop's own opener | Needs the iOS opener (`tauri-plugin-opener` or `UIApplication.open`) |
+| App Store privacy manifest | `gen/apple/coupler_iOS/PrivacyInfo.xcprivacy`: no tracking, nothing collected, the reasons for file times, boot time, disk space, user defaults | Keep it in step with new system APIs |
+| Sound with the ring switch on silent | `navigator.audioSession.type = "playback"` (iOS 16.4 and later) | Earlier iOS: the switch mutes it |
+| Full screen, Quit, Keyboard, backups, the update check, arranging | Left out of the gear menu | An App Store app is never quit, updated or side-loaded from inside |
+| Signing and release | Xcode's Apple Distribution and the App Store (`npx tauri ios build`, team in `tauri.conf.json` `bundle.iOS`) | Not yet: running in the background, the screen reader's check (`screen_reader.rs`) |
 
 The connection itself (`std::net::TcpStream`, `flate2`) is the same on
 every platform. Planned, add a row when each lands: saved passwords

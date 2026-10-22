@@ -9,6 +9,8 @@ use std::f32::consts::PI;
 
 use super::drums::{Drum, METAL_RATIOS};
 use super::patch::{Adsr, Engine, Filter, Lfo, Patch, Wave, BAR_HARMONICS};
+use crate::bank::Region;
+use crate::sampled::Sampled;
 
 /// A radian as a fraction of a cycle: FM's indexes are in radians, as
 /// the textbooks' (and the DX7's, near enough) are.
@@ -18,7 +20,7 @@ const RADIAN: f32 = 1.0 / (2.0 * PI);
 pub const BLOCK: usize = 16;
 
 const SINE_SIZE: usize = 4096;
-/// One cycle of a sine and its first point again, made when Coupler is
+/// One cycle of a sine and its first point again, made when the crate is
 /// compiled (a Taylor series, in f64, accurate far past f32's needs).
 static SINE: [f32; SINE_SIZE + 1] = sine_table();
 
@@ -120,14 +122,14 @@ impl Noise {
 
 /// A state-variable filter (Cytomic's trapezoidal one): stable at any
 /// cutoff, low, band and high from the same two states.
-#[derive(Clone, Copy, Default)]
-struct Svf {
+#[derive(Clone, Copy, Default, Debug)]
+pub(crate) struct Svf {
     ic1: f32,
     ic2: f32,
 }
 
-#[derive(Clone, Copy, Default)]
-struct Coef {
+#[derive(Clone, Copy, Default, Debug)]
+pub(crate) struct Coef {
     a1: f32,
     a2: f32,
     a3: f32,
@@ -141,11 +143,20 @@ impl Coef {
         let a1 = 1.0 / (1.0 + g * (g + k));
         Coef { a1, a2: g * a1, a3: g * g * a1, k }
     }
+
+    /// A low-pass with its resonance as a sound bank gives it: the peak's
+    /// height in decibels (0 for none, as flat as it goes).
+    pub(crate) fn lowpass(cutoff: f32, q_db: f32, rate: f32) -> Coef {
+        let g = (PI * cutoff.clamp(20.0, rate * 0.45) / rate).tan();
+        let k = (1.0 / 10f32.powf(q_db.clamp(0.0, 40.0) / 20.0)).min(std::f32::consts::SQRT_2);
+        let a1 = 1.0 / (1.0 + g * (g + k));
+        Coef { a1, a2: g * a1, a3: g * g * a1, k }
+    }
 }
 
 impl Svf {
     #[inline]
-    fn tick(&mut self, c: &Coef, kind: Filter, v0: f32) -> f32 {
+    pub(crate) fn tick(&mut self, c: &Coef, kind: Filter, v0: f32) -> f32 {
         let v3 = v0 - self.ic2;
         let v1 = c.a1 * self.ic1 + c.a2 * v3;
         let v2 = self.ic2 + c.a2 * self.ic1 + c.a3 * v3;
@@ -256,6 +267,8 @@ pub struct Voice {
     gate: f32,
     pub patch: Patch,
     drum: Option<Drum>,
+    /// A note from a sound bank's sample, in place of a patch or a drum.
+    sampled: Option<Sampled>,
     rate: f32,
     vel: f32,
     t: f32,
@@ -310,6 +323,7 @@ impl Voice {
             gate: 1.0,
             patch: super::patch::BASE,
             drum: None,
+            sampled: None,
             rate,
             vel: 0.0,
             t: 0.0,
@@ -352,7 +366,10 @@ impl Voice {
     }
 
     pub fn loudness(&self) -> f32 {
-        self.amp_now * self.vel
+        match &self.sampled {
+            Some(s) => s.loudness(),
+            None => self.amp_now * self.vel,
+        }
     }
 
     fn reset(&mut self, channel: u8, key: u8, vel: u8, started: u64) {
@@ -391,6 +408,7 @@ impl Voice {
         self.reset(channel, key, vel, started);
         self.patch = *patch;
         self.drum = None;
+        self.sampled = None;
         self.choke = 0;
         if patch.engine == Engine::Pluck {
             self.pluck(key);
@@ -400,6 +418,7 @@ impl Voice {
     pub fn start_drum(&mut self, channel: u8, key: u8, vel: u8, drum: Drum, started: u64) {
         self.reset(channel, key, vel, started);
         self.drum = Some(drum);
+        self.sampled = None;
         self.choke = drum.choke;
         self.patch = super::patch::BASE;
         self.metal_hp = Coef::new(drum.metal_hp, 0.2, self.rate);
@@ -407,6 +426,25 @@ impl Voice {
         for p in &mut self.phase[..6] {
             *p = (self.noise.next() + 1.0) * 0.5;
         }
+    }
+
+    /// A note from a sound bank: one of its regions.
+    pub fn start_sampled(&mut self, channel: u8, key: u8, vel: u8, region: &Region, started: u64) {
+        self.reset(channel, key, vel, started);
+        self.patch = super::patch::BASE;
+        self.drum = None;
+        self.choke = 0;
+        self.sampled = Some(Sampled::new(region, key, vel));
+    }
+
+    /// Plays a sound bank's sample.
+    pub fn is_sampled(&self) -> bool {
+        self.sampled.is_some()
+    }
+
+    /// Its sound bank's exclusive class (0 for none, or not from a bank).
+    pub fn exclusive(&self) -> u16 {
+        self.sampled.as_ref().map_or(0, Sampled::exclusive)
     }
 
     /// Fills the string with a burst of noise, as bright as the patch and
@@ -446,6 +484,10 @@ impl Voice {
 
     pub fn release(&mut self) {
         self.sustained = false;
+        if let Some(s) = &mut self.sampled {
+            s.release();
+            return;
+        }
         // A drum plays out whatever the key does.
         if self.drum.is_none() {
             self.amp.release();
@@ -471,9 +513,15 @@ impl Voice {
         }
     }
 
-    /// Renders `n` samples (at most `BLOCK`) into `out`, which is zeroed.
-    pub fn render(&mut self, out: &mut [f32], ctl: &Controls) {
-        if let Some(drum) = self.drum {
+    /// Renders `n` samples (at most `BLOCK`) into `out`, which is zeroed;
+    /// a sampled note reads its bank's `samples`.
+    pub fn render(&mut self, out: &mut [f32], ctl: &Controls, samples: &[i16]) {
+        if let Some(s) = &mut self.sampled {
+            s.render(out, ctl, samples, self.rate);
+            if s.done {
+                self.active = false;
+            }
+        } else if let Some(drum) = self.drum {
             self.render_drum(&drum, out);
         } else {
             self.render_note(out, ctl);
@@ -737,13 +785,27 @@ impl Voice {
         }
     }
 
-    /// Pans a drum by its place in the kit.
-    pub fn drum_pan(&self) -> Option<f32> {
-        self.drum.map(|d| d.pan)
+    /// Its own pan, added to the channel's: a drum's by its place in the
+    /// kit, a sample's as its bank sets it.
+    pub fn own_pan(&self) -> f32 {
+        match (&self.sampled, &self.drum) {
+            (Some(s), _) => s.pan(),
+            (_, Some(d)) => d.pan,
+            _ => 0.0,
+        }
     }
 
-    pub fn drum_reverb(&self) -> f32 {
-        self.drum.map_or(0.0, |d| d.reverb)
+    /// Its own reverb and chorus, added to the channel's sends.
+    pub fn own_reverb(&self) -> f32 {
+        match (&self.sampled, &self.drum) {
+            (Some(s), _) => s.reverb(),
+            (_, Some(d)) => d.reverb,
+            _ => self.patch.reverb,
+        }
+    }
+
+    pub fn own_chorus(&self) -> f32 {
+        self.sampled.as_ref().map_or(self.patch.chorus, Sampled::chorus)
     }
 }
 
@@ -796,7 +858,7 @@ mod tests {
         v.start(0, key, 100, patch, 0);
         let mut out = vec![0.0; (seconds * 44_100.0) as usize];
         for chunk in out.chunks_mut(BLOCK) {
-            v.render(chunk, &Controls::default());
+            v.render(chunk, &Controls::default(), &[]);
         }
         out
     }
@@ -842,7 +904,7 @@ mod tests {
         v.start(0, 60, 100, &Patch::fm("bell", 3.5, 2.0).amp(0.0, 0.2, 0.0, 0.1), 0);
         let mut out = [0.0; BLOCK];
         for _ in 0..(44_100 / BLOCK) {
-            v.render(&mut out, &Controls::default());
+            v.render(&mut out, &Controls::default(), &[]);
         }
         assert!(!v.active);
     }
@@ -855,7 +917,7 @@ mod tests {
         let mut loud: f32 = 0.0;
         for _ in 0..(44_100 / BLOCK) {
             out.fill(0.0);
-            v.render(&mut out, &Controls::default());
+            v.render(&mut out, &Controls::default(), &[]);
             loud = loud.max(out.iter().fold(0.0, |m, x| m.max(x.abs())));
         }
         assert!(loud > 0.1);

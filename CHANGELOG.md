@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- **Neumetik MIDI 0.2.0, and SoundFonts through it** (2026-10-22): MIDI
+  through a SoundFont is now played by Neumetik MIDI itself, in place of
+  rustysynth (one fewer dependency), its own instruments filling in what
+  a SoundFont hasn't. **DLS banks** (`.dls`, levels 1 and 2) can be
+  added as SoundFonts are, and chosen in Plays through. A SoundFont or
+  DLS bank is read as it comes in, and a damaged one, or a compressed
+  `.sf3`, is turned away with the reason instead of failing when a hook
+  plays it. The Music Editor's Instrument and Kit menus list what plays:
+  the GS variation tones as banks of their own, and, through a
+  SoundFont, its presets and kits by their own names.
+- **Bundle ID `com.scorelessmusic.coupler`** on the Mac and the iPhone
+  (2026-10-19), as every ansiapps app on Apple's platforms is released;
+  Windows and Linux keep `com.ansiapps.coupler`. At launch the Mac moves
+  what the old ID kept (the app data and the WebView's settings) to the
+  new name, once and never over data already there (`moved.rs`).
+- **The iPhone, begun** (2026-10-19): a phone screen, upright and played
+  by touch, from the same code (`lib/formFactor.ts`, `src/phone.css`).
+  48 columns and as many rows as show above the keyboard (`phoneFit` in
+  `lib/stage.ts`); the bar at the top (the connection, Hang Up, the
+  gear), the game output, a touch pad (`components/TouchPad.tsx`: the six
+  ways, an exit the map knows marked in yellow and in words, Look, the
+  last command back), the command line and the messages, each touched
+  thing 48 px tall. Dialogs and the gear menu fit the phone; full
+  screen, Quit, the keyboard list, backups, the update check and
+  arranging are left out there. The iOS project (`src-tauri/gen/apple`):
+  portrait only, iPhone only, Coupler's icon; no first-run warning
+  there (desktop only: App Review turns down an app calling itself
+  unfinished). VoiceOver found by UIKit there; About's
+  Discord and Reddit left out until the iPhone can open a browser; a
+  privacy manifest (`PrivacyInfo.xcprivacy`). Sounds play with the ring
+  switch on silent. iOS 16 and later (the iPhone 8 on: Pocket TTS needs
+  the A11's half-precision math). WavPack (`vendor/wavpack-sys`)
+  is linked static so the iPhone build gets it. In a dev build, `coupler.phone` = `on` shows it on
+  the Mac.
 - **Keys on every platform** (2026-10-06): on Windows and Linux, Cmd is
   Ctrl, Ctrl+Cmd is Ctrl+Alt and Option is Alt, in what's matched and in
   everything that names a key, shown or spoken (`lib/keys.ts`). Before,

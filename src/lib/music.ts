@@ -37,8 +37,9 @@ export interface Song {
   parts: Part[];
   kept: Kept[];
 }
+/** What the parts can play: each bank's programs (General MIDI's and the classic synths' all 128, the rest some), and the drum kits, each named as it plays. */
 export interface Instruments {
-  banks: { msb: number; names: string[] }[];
+  banks: { msb: number; programs: [number, string][] }[];
   kits: [number, string][];
 }
 
@@ -48,13 +49,18 @@ export const open = (path: string) => invoke<Song>("music_open", { path });
 export const fresh = () => invoke<Song>("music_new");
 export const save = (path: string, song: Song) => invoke<void>("music_save", { path, song });
 export const saveAs = (name: string, song: Song) => invoke<Asset>("music_save_as", { name, song });
-/** The bars `from` to `to` (from 0, `to` not included) as WAV bytes, through Neumetik or `font` (a SoundFont asset). */
+/** The bars `from` to `to` (from 0, `to` not included) as WAV bytes, through Neumetik or `font` (a SoundFont or DLS asset). */
 export const render = (font: string | null, song: Song, from: number, to: number, looping: boolean) =>
   invoke<ArrayBuffer>("music_render", { font, song, from, to, looping });
-export const instruments = () => invoke<Instruments>("music_instruments");
+/** What plays through Neumetik, or through `font` (a SoundFont or DLS asset) with Neumetik for what it hasn't. */
+export const instruments = (font: string | null) => invoke<Instruments>("music_instruments", { font });
 
 /** The banks' names, by Bank Select MSB. */
 export const BANK_NAMES: Record<number, string> = { 0: "General MIDI", 80: "Classic synths: the 1980s", 81: "Classic synths: the 1990s", 82: "Classic synths: the 2000s to now" };
+/** A bank's name: 1 to 63 are GS's variation tones (or a SoundFont's banks there). */
+export const bankName = (msb: number) => BANK_NAMES[msb] ?? (msb >= 1 && msb <= 63 ? `Variations, bank ${msb}` : `Bank ${msb}`);
+/** Whether a bank has a program (else it plays bank 0's). */
+export const hasProgram = (inst: Instruments | null, bank: number, program: number) => !!inst?.banks.find((b) => b.msb === bank)?.programs.some(([p]) => p === program);
 
 // ---- The grid ----
 
@@ -104,8 +110,8 @@ export function stepWords(s: Song, step: number): string {
 export function instrumentName(part: Part, inst: Instruments | null): string {
   if (!inst) return "";
   if (part.channel === DRUMS) return [...inst.kits].reverse().find(([p]) => p <= part.program)?.[1] ?? "Standard";
-  const bank = inst.banks.find((b) => b.msb === part.bank) ?? inst.banks[0];
-  return bank?.names[part.program] ?? inst.banks[0]?.names[part.program] ?? `Program ${part.program + 1}`;
+  const named = (msb: number) => inst.banks.find((b) => b.msb === msb)?.programs.find(([p]) => p === part.program)?.[1];
+  return named(part.bank) ?? named(0) ?? `Program ${part.program + 1}`;
 }
 
 // ---- Looking ----

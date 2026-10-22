@@ -37,6 +37,9 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 8. **A fixed screen on the ANSIapps grid.** The window is 1280 by 720.
    Lay out in stage pixels on the 8 by 16 grid (`docs/ansiapps-theme.md`)
    and run the dev gear menu's Check the Grid on what you changed.
+   The iPhone has its own fixed screen, 48 cells across
+   (`src/lib/formFactor.ts`, `phoneLayout` in `src/App.tsx`,
+   `src/phone.css`); anything touched there is at least 48 px tall.
 9. **Pictures are Coupler's painter's first** (`painter.rs`,
    `portrait.rs`). Other sources are the player's choice, never the
    default.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ActivityStatus } from "./components/ActivityStatus";
 import { AppTesting } from "./components/AppTesting";
 import { Dialog } from "./components/Dialog";
@@ -55,7 +55,9 @@ import { checkGrid, installRowSnap } from "./lib/grid";
 import { loadDisplay, saveDisplay, type Display, type TextSize } from "./lib/display";
 import { loadSpoken, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
 import { forgetLayout, layoutText } from "./lib/layout";
-import { stageScale } from "./lib/stage";
+import { CELL_HEIGHT, PHONE_WIDTH, phoneFit, stageScale, type PhoneFit } from "./lib/stage";
+import { PHONE } from "./lib/formFactor";
+import { TouchPad } from "./components/TouchPad";
 import { applyTheme, loadTheme, type Theme } from "./lib/theme";
 import { loadLayers, loadShown, loadUx, storeLayers, storeShown, storeUx, UXES, type Layers, type Ux } from "./lib/ux";
 import * as keys from "./lib/keys";
@@ -197,6 +199,39 @@ function bigTextLayout(theme: Theme, showing: Showing, size: TextSize): Record<s
     messages: { at: { x: 12, y: command + field + 4 }, size: { width: 1256, height: 720 - command - field - 4 } },
   };
 }
+
+/**
+ * The phone's layout (lib/formFactor.ts): one for every way to play, in
+ * the phone's 48 columns and as many rows as show (lib/stage.ts,
+ * `phoneFit`). Three rows for anything touched (48 px, the least a
+ * finger hits): the bar at the top (the connection, Hang Up, the gear),
+ * the game output (or, offline, the ways to play) in every row left,
+ * the touch pad, the command line, and two rows of messages at the
+ * foot. The keyboard showing takes its rows from the game output.
+ */
+function phoneLayout(rows: number): Record<string, Usual> {
+  const bar = 48;
+  const foot = 2 * 16;
+  const output = rows * 16 - bar - 2 * bar - foot - bar;
+  const pad = bar + output;
+  return {
+    state: { at: { x: 0, y: 0 }, size: { width: 216, height: bar } },
+    hangup: { at: { x: 224, y: 0 }, size: { width: 104, height: bar } },
+    gear: { at: { x: 336, y: 0 }, size: { width: 48, height: bar } },
+    terminal: { at: { x: 0, y: bar } },
+    ports: { at: { x: 0, y: bar }, size: { width: PHONE_WIDTH, height: output } },
+    pad: { at: { x: 0, y: pad }, size: { width: PHONE_WIDTH, height: bar } },
+    command: { at: { x: 0, y: pad + bar }, size: { width: PHONE_WIDTH, height: bar } },
+    messages: { at: { x: 0, y: pad + 2 * bar }, size: { width: PHONE_WIDTH, height: foot } },
+  };
+}
+/** The game output's rows on the phone: what phoneLayout leaves it, in the theme's line height. */
+function phoneTerminalRows(theme: Theme, rows: number): number {
+  const output = rows * 16 - 4 * 48 - 2 * 16;
+  return Math.max(4, Math.floor(output / (theme === "ansiapps" ? 16 : 14 * 1.3)));
+}
+/** What the phone shows, whichever the way to play. */
+const PHONE_PARTS = new Set(["state", "hangup", "gear", "terminal", "ports", "pad", "command", "messages"]);
 
 /** What each way to play has on its screen; Workshop has everything, less what the player hid. */
 const UX_PARTS: Record<Exclude<Ux, "workshop">, Set<string>> = {
@@ -551,6 +586,9 @@ function App() {
   const nextHeardId = useRef(0);
   /** The fixed screen's scale: 1 in the window, more in full screen. */
   const [scale, setScale] = useState(stageScale);
+  /** The phone's stage (lib/stage.ts): its scale and rows, set from the frame once it's measured. */
+  const [phone, setPhone] = useState<PhoneFit & { left: number }>(() => ({ ...phoneFit(window.innerWidth, window.innerHeight, window.innerHeight), left: 0 }));
+  const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const history = useRef<string[]>([]);
   /** Where Up/Down is in `history`; history.length means the new line. */
@@ -599,6 +637,7 @@ function App() {
   // The window is one fixed size; full screen scales the same screen up.
   // The system's own controls can leave full screen too, so ask after any resize.
   useEffect(() => {
+    if (PHONE) return;
     const onResize = () => {
       setScale(stageScale());
       mud
@@ -612,6 +651,39 @@ function App() {
     onResize();
     if (stored(FULLSCREEN_KEY) === "on") mud.setFullscreen(true).catch((e) => setError(String(e)));
     return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // The phone: the stage fills the frame's width (inside the notch and the
+  // home indicator), as many rows as show above the keyboard. iOS pans the
+  // page to show a focused field; the frame follows what's visible instead.
+  useEffect(() => {
+    if (!PHONE) return;
+    const view = window.visualViewport;
+    const fit = () => {
+      const frame = frameRef.current;
+      if (!frame) return;
+      const keyboard = !!view && view.height < window.innerHeight - 100;
+      document.documentElement.toggleAttribute("data-keyboard", keyboard);
+      if (view) {
+        frame.style.top = `${view.offsetTop}px`;
+        frame.style.height = `${view.height}px`;
+      }
+      const style = getComputedStyle(frame);
+      const width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const visible = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const next = phoneFit(width, window.innerHeight, visible);
+      const left = parseFloat(style.paddingLeft) + Math.max(0, (width - PHONE_WIDTH * next.scale) / 2);
+      setPhone((was) => (was.scale === next.scale && was.rows === next.rows && was.left === left ? was : { ...next, left }));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    view?.addEventListener("resize", fit);
+    view?.addEventListener("scroll", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      view?.removeEventListener("resize", fit);
+      view?.removeEventListener("scroll", fit);
+    };
   }, []);
 
   const append = useCallback((added: TermLine[]) => {
@@ -774,11 +846,12 @@ function App() {
   const pictureOn = pictureShows(pictureSettings, pictureScene, pictureLandmark, pictureAskedFor);
   /** Big text is Terminal's: the other ways to play have too much on the screen for it. */
   const textSize: TextSize = ux === "terminal" ? display.textSize : 1;
-  const usual = uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
+  const usual = PHONE ? phoneLayout(phone.rows) : uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
   /** Whether a thing is on this way to play's screen. */
   /** Terminal has its Control Panel beside the game output, but with big text (the game output the screen's width). */
-  const controlPanel = ux === "terminal" && textSize === 1;
+  const controlPanel = !PHONE && ux === "terminal" && textSize === 1;
   const has = (id: string) =>
+    PHONE ? PHONE_PARTS.has(id) :
     !(WEB && DESKTOP_ONLY.has(id)) &&
     (ux === "workshop"
       ? (shown[id] ?? true)
@@ -832,7 +905,7 @@ function App() {
     greeted.current = true;
     // Only asked of GitHub when the player turned automatic checks on,
     // once a day at most; a failed check says nothing.
-    const release = updates.autoDue() ? updates.check().catch(() => null) : Promise.resolve(null);
+    const release = updates.autoDue() && !PHONE ? updates.check().catch(() => null) : Promise.resolve(null);
     // No counts, no greeting: playing doesn't need it.
     void Promise.all([mud.launchCounts(portId ?? "standard").catch(() => null), release]).then(([counts, found]) => {
       const newer = found?.newer ? updates.describe(found) : null;
@@ -990,9 +1063,11 @@ function App() {
     }
   }, []);
 
-  async function handleSend() {
-    const line = input;
-    setInput("");
+  /** Sends the command line, or `tapped`, a touch pad's command (never while a password's asked). */
+  async function handleSend(tapped?: string) {
+    if (tapped !== undefined && secret) return;
+    const line = tapped ?? input;
+    if (tapped === undefined) setInput("");
     sentAt.current = nextLineId.current;
     reviewLive(true);
     if (secret) {
@@ -1728,7 +1803,7 @@ function App() {
       } else if (chord && key === "a") {
         e.preventDefault();
         setArtisanOpen(true);
-      } else if (keys.ctrlCmd(e) && key === "f") {
+      } else if (keys.ctrlCmd(e) && key === "f" && !PHONE) {
         e.preventDefault();
         toggleFullscreen();
       } else if (e.key === "Escape" && !gearOpen && connected) {
@@ -1808,8 +1883,16 @@ function App() {
   const host = server?.host ?? "CoffeeMUD";
 
   return (
-    <div className="stage-frame">
-    <div className="app client" ref={stageRef} style={{ transform: `scale(${scale})` }}>
+    <div className="stage-frame" ref={frameRef}>
+    <div
+      className="app client"
+      ref={stageRef}
+      style={
+        PHONE
+          ? ({ width: PHONE_WIDTH, height: phone.rows * CELL_HEIGHT, top: 0, left: phone.left, margin: 0, transformOrigin: "0 0", transform: `scale(${phone.scale})`, "--phone-rows": phone.rows } as CSSProperties)
+          : { transform: `scale(${scale})` }
+      }
+    >
       <StartupScreen
         progress={1 - startupPending.length / STARTUP_STEPS.length}
         label={startupPending.length > 0 ? STARTUP_LABELS[startupPending[0]] : ""}
@@ -1820,8 +1903,8 @@ function App() {
           (defaultLayout). The order here is the Tab and reading order,
           whatever the arrangement. */}
       <LayoutScopeContext.Provider value={controlPanel ? "terminal:" : ""}>
-      <KeptContext.Provider value={ux === "workshop" || controlPanel}>
-      <ArrangeContext.Provider value={(arranging && ux === "workshop") || (controlPanel && terminalArranging)}>
+      <KeptContext.Provider value={!PHONE && (ux === "workshop" || controlPanel)}>
+      <ArrangeContext.Provider value={!PHONE && ((arranging && ux === "workshop") || (controlPanel && terminalArranging))}>
       {/* Built afresh for each way to play: each has its own layout. */}
       <main className={`desk ux-${ux}${textSize > 1 ? ` text-${textSize}x` : ""}`} key={`${ux}-${textSize}`}>
         {/* The menu bar's strip, behind the things that sit on it. */}
@@ -1930,10 +2013,12 @@ function App() {
                 />
                 <span>ANSIapps theme (old-school DOS look)</span>
               </label>
+              {!PHONE && (
               <label className="menu-item menu-item-checkbox">
                 <input type="checkbox" data-testid="fullscreen-toggle" checked={fullscreen} onChange={toggleFullscreen} />
                 <span>{keys.keys("Full screen (Ctrl+Cmd+F)")}</span>
               </label>
+              )}
               <div className="menu-sep" />
               {/* Making a character: Coupler's guide or CoffeeMUD's own way (lib/creation.ts). */}
               <div role="radiogroup" aria-label="Making a character" className="menu-group">
@@ -1946,7 +2031,7 @@ function App() {
                   <span>Make characters CoffeeMUD's way</span>
                 </label>
               </div>
-              {ux === "workshop" && (
+              {ux === "workshop" && !PHONE && (
                 <>
                   <label className="menu-item menu-item-checkbox">
                     <input type="checkbox" data-testid="arrange-toggle" checked={arranging} onChange={toggleArranging} />
@@ -2121,7 +2206,9 @@ function App() {
                 <span>Characters' Voices…</span>
               </button>
               )}
-              {!WEB && (
+              {/* Not on the phone: a backup is a file to save or pick, and an
+                  iPhone app comes from the App Store, never a download. */}
+              {!WEB && !PHONE && (
                 <>
                   <div className="menu-sep" />
                   <button
@@ -2187,6 +2274,7 @@ function App() {
                   <div className="menu-sep" />
                 </>
               )}
+              {!PHONE && (
               <button
                 type="button"
                 className="menu-item"
@@ -2199,6 +2287,7 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>Keyboard</span>
               </button>
+              )}
               <button
                 type="button"
                 className="menu-item"
@@ -2210,7 +2299,8 @@ function App() {
                 <InfoIcon aria-hidden="true" />
                 <span>About Coupler</span>
               </button>
-              {!WEB && (
+              {/* An iPhone app is never quit from inside it. */}
+              {!WEB && !PHONE && (
                 <>
                   <div className="menu-sep" />
                   <button type="button" className="menu-item" data-testid="quit-button" onClick={quitApp}>
@@ -2268,7 +2358,7 @@ function App() {
               lines={lines}
               partial={partial}
               onSize={onSize}
-              rows={ux === "terminal" ? terminalRows(theme, connected, textSize) : 25}
+              rows={PHONE ? phoneTerminalRows(theme, phone.rows) : ux === "terminal" ? terminalRows(theme, connected, textSize) : 25}
               colors={display.colors}
               hide={hide}
               reviewing={reviewId}
@@ -2331,7 +2421,18 @@ function App() {
           </Movable>
         )}
 
-        <Movable fixed={controlPanel} id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
+        {has("pad") && (
+          <Movable fixed id="pad" tier={2} label="touch pad" usual={usual.pad} announce={announcePanel}>
+            <TouchPad exits={snapshot?.room?.exits ?? []} disabled={!connected || secret} onCommand={(line) => void handleSend(line)} onRecall={() => {
+              const h = history.current;
+              if (h.length === 0) return;
+              historyAt.current = Math.max(0, Math.min(h.length, historyAt.current) - 1);
+              setInput(h[historyAt.current]);
+              inputRef.current?.focus();
+            }} />
+          </Movable>
+        )}
+        <Movable fixed={controlPanel || PHONE} id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
           <div className="input-row">
             <input
               ref={inputRef}
@@ -2346,6 +2447,7 @@ function App() {
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
+              enterKeyHint="send"
               onChange={(e) => setInput(e.currentTarget.value)}
               onKeyDown={handleKey}
             />
@@ -2525,9 +2627,12 @@ function App() {
       >
         <p>
           Coupler {__APP_VERSION__} is a client made for one game: CoffeeMUD. It connects to {host} and nowhere else, and keeps nothing about you or your
-          characters anywhere but this computer. The map it draws as you explore is kept on this computer too.
+          characters anywhere but {PHONE ? "this iPhone" : "this computer"}. The map it draws as you explore is kept there too.
         </p>
         <p>Coupler is free and open source, under the Apache License 2.0.</p>
+        {/* Not on the iPhone yet: these open the browser by a desktop's own opener (update.rs). */}
+        {!PHONE && (
+        <>
         <h3 className="about-section-title">Community</h3>
         <p className="about-section-desc">Talk about Coupler, ask for help and share what you've made with other players. Each opens in your browser.</p>
         <div className="about-links">
@@ -2538,6 +2643,8 @@ function App() {
             r/coupler_app on Reddit
           </button>
         </div>
+        </>
+        )}
         <h3 className="about-section-title">Credits</h3>
         <p className="about-section-desc" data-testid="about-credits">
           CoffeeMUD is by Bo Zimmerman and its contributors (coffeemud.net). Coupler's handling of the game's protocols follows Sip, CoffeeMUD's own client by

@@ -35,10 +35,10 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # already in the tree through Tauri.
 brotli = "9"
 # Assets (assets.rs): what the WebView can't play itself, rendered to
-# WAV in pure Rust. Ogg Vorbis (lewton), MIDI through a SoundFont the
-# player adds (rustysynth), tracker modules: MOD, XM, S3M, IT (xmrsplayer).
+# WAV in pure Rust. Ogg Vorbis (lewton), tracker modules: MOD, XM, S3M,
+# IT (xmrsplayer). MIDI, through a SoundFont the player adds or not, is
+# Neumetik MIDI's (vendor/neumetik-midi).
 lewton = "0.10"
-rustysynth = "1.3"
 xmrsplayer = { version = "0.15", default-features = false, features = ["std", "import_mod", "import_xm", "import_s3m", "import_it"] }
 xmrs = { version = "0.15", default-features = false, features = ["std", "import_mod", "import_xm", "import_s3m", "import_it"] }
 # Opus and WavPack, played and made (codecs.rs): an imported WAV is
@@ -96,8 +96,6 @@ opt-level = 3
 [profile.dev.package.gemm-f32]
 opt-level = 3
 
-[profile.dev.package.rustysynth]
-opt-level = 3
 [profile.dev.package.neumetik-midi]
 opt-level = 3
 [profile.dev.package.xmrsplayer]
@@ -121,3 +119,8 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# wavpack-sys with its library linked static, so the iPhone's Xcode
+# project gets it (vendor/wavpack-sys/README.md).
+[patch.crates-io]
+wavpack-sys = { path = "vendor/wavpack-sys" }

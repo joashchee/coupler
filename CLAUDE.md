@@ -73,7 +73,12 @@ and its order is in the roadmap's phase 2.
    a plain file, localStorage or a log. A password typed while the
    server echoes is never echoed, logged or kept in history (today:
    `secret` in `App.tsx`).
-4. **Bundle ID `com.ansiapps.coupler`.** Never change it once a build
+4. **Bundle ID `com.scorelessmusic.coupler`** on the Mac and the iPhone
+   (decided 2026-10-19: every ansiapps app on Apple's platforms is released
+   by Scoreless Music); Windows and Linux keep `com.ansiapps.coupler`
+   (`tauri.windows.conf.json`, `tauri.linux.conf.json`). The Mac shipped
+   up to 0.28.0 as `com.ansiapps.coupler`: `moved.rs` moves that ID's
+   app data and WebKit storage to the new name at launch. Never change it again once a build
    ships: it keys the app-data folder.
 5. **Coupler is free and open source, Apache-2.0** (`LICENSE`, `NOTICE`;
    decided 2026-10-02, to match CoffeeMUD and Sip). So the global rule's
@@ -125,7 +130,9 @@ and its order is in the roadmap's phase 2.
 
 - **In-development warning on first run**: `src-tauri/src/first_run.rs`.
   The main window is `"create": false` and built in `setup` only once
-  it's accepted.
+  it's accepted. **Desktop only** (decided 2026-10-19): the iPhone build
+  goes to the App Store, where App Review turns down an app calling
+  itself unfinished, so there `start` opens the window at once.
 - **Loading screen from the first paint**: the `index.html` splash and
   `components/StartupScreen.tsx`, kept in step. Launch-time work joins
   `STARTUP_STEPS` in `App.tsx` with its own label.
@@ -148,6 +155,16 @@ and its order is in the roadmap's phase 2.
   pixels: no `vw`, `vh` or media queries. Messages go in the status bar
   (bottom, fixed height), never in a row that appears and pushes the
   screen. `src/lib/stage.ts`.
+- **The iPhone** (begun 2026-10-19, `lib/formFactor.ts` `PHONE`): its
+  own fixed screen, not the desktop's shrunk: 48 cells across, as many
+  rows as show above the keyboard (`phoneFit`), upright only, iPhone
+  only. One component tree: `phoneLayout` in `App.tsx` places the parts
+  `PHONE_PARTS` lists, `src/phone.css` (under `html[data-form="phone"]`)
+  sizes them, anything touched at least 3 rows (48 px). The touch pad is
+  `components/TouchPad.tsx`. Anything new says whether the phone has it.
+  The iOS project is `src-tauri/gen/apple` (`project.yml`; run
+  `xcodegen generate` there after changing it). `coupler.phone` = `on`
+  shows it on the Mac in a dev build.
 - **The ANSIapps grid is the rule**: every character sits in a cell of
   the 8 by 16 grid. Spacing in multiples of 8px across and 16px down,
   16px lines, no borders on anything holding text (frames are `::before`
@@ -210,15 +227,16 @@ and its order is in the roadmap's phase 2.
 - `src-tauri/src/assets.rs`: the **Assets** folder (`Assets` in app
   data, made at launch): dropped or chosen files copied into a folder
   per file type; the three kinds (SFX `.wav .ogg .opus .wv`, BGM `.mid .mp3
-  .mod .xm .s3m .it`, ART `.png .jpg .ans .asc`) and SoundFonts (`.sf2`, for
-  MIDI); a frontend path is only ever `type/name` inside it. An import
+  .mod .xm .s3m .it`, ART `.png .jpg .ans .asc`) and SoundFonts (`.sf2`
+  and DLS `.dls`, for MIDI; each read by Neumetik as it comes in, a
+  damaged one or an `.sf3` refused with the reason, `check_bank`); a frontend path is only ever `type/name` inside it. An import
   reports progress over a Tauri `Channel` (bytes read, each file's
   step) and what became of each file. Renders
   what the WebView can't play to WAV: Ogg (`lewton`), Opus and WavPack
   (`codecs.rs`), MIDI through Neumetik (below) unless the player
   chose one of their SoundFonts for that file (`set_font`,
   `.soundfonts.json` in Assets; a SoundFont gone falls back to
-  Neumetik; `rustysynth`), a SoundFont as a sample tune
+  Neumetik; Neumetik MIDI plays SoundFonts too), a SoundFont as a sample tune
   (`compose::sample`), modules (`xmrsplayer`). Unit-tested. A WAV coming in is also made as
   Opus and WavPack and the smallest waits in `Assets/.smaller/`
   (cleared at launch); the import's `smaller` offers it, and
@@ -276,7 +294,8 @@ and its order is in the roadmap's phase 2.
   tour of the banks (`OUT`).
 - `src-tauri/src/codecs.rs`: WAV reading, and Opus (libopus via
   `opusic-sys`, Ogg pages by `ogg`, `rubato` to 48 kHz) and WavPack
-  (`wavpack-sys`) both ways, pure and unit-tested. Both C libraries
+  (`wavpack-sys`, vendored in `src-tauri/vendor/wavpack-sys` to link it
+  static for the iPhone) both ways, pure and unit-tested. Both C libraries
   build from bundled source with cmake; WavPack needs
   the root `.cargo/config.toml`'s CMake policy line (found
   from the repo root or any folder in it).
@@ -308,7 +327,9 @@ and its order is in the roadmap's phase 2.
   play. `lib/music.ts` is the edits, `components/MusicEditorDialog.tsx`
   the screen (Workshop's BGM button beside the Mixer): the pattern, the
   piano roll, Play Bar and Play Song looping (`playPreviewBytes`)
-  through Neumetik unless a SoundFont is picked there (Plays through),
+  through Neumetik unless a SoundFont is picked there (Plays through;
+  the instrument menus then list what that bank plays, `music::instruments`,
+  with the GS variation tones as their own banks),
   Save… and Save as… (`music_save`, `music_save_as`, never over another
   file). Desktop only.
 - `src-tauri/src/ambient.rs`: ambience, pure and unit-tested: BGN
@@ -721,8 +742,8 @@ and its order is in the roadmap's phase 2.
   `scripts/build-release.sh --bundles app`. DMG only when asked. The
   script builds universal (Apple Silicon and Intel), signs with the
   maintainer's Developer ID and the hardened runtime, notarizes with
-  notarytool's keychain profile (`coupler`, or
-  `COUPLER_NOTARY_PROFILE`) and staples, so a download opens on any
+  notarytool's keychain profile (`scorelessmusic`, shared by every
+  Scoreless Music app, or `COUPLER_NOTARY_PROFILE`) and staples, so a download opens on any
   Mac; it strips `$HOME` paths, fails if any survive or if any of
   universal, signed, notarized or Gatekeeper's yes is missing, zips the
   app for the release (`Coupler_<version>_universal.app.zip`, beside

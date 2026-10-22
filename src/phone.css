@@ -1,0 +1,82 @@
+/* The phone (src/lib/formFactor.ts): Coupler on an iPhone, upright,
+   played by touch. Only under html[data-form="phone"], so the desktop
+   is untouched. The stage is 48 cells wide and as many rows as show
+   (lib/stage.ts, phoneFit); the layout is phoneLayout in App.tsx, in
+   stage pixels like the desktop's. Anything touched is at least three
+   rows tall: 48 px, the least a finger hits. */
+
+/* The frame keeps clear of the notch, the rounded corners and the home
+   indicator (index.html's viewport-fit=cover); with the keyboard up the
+   home indicator is under it, so its inset isn't kept. */
+html[data-form="phone"] .stage-frame {
+  bottom: auto;
+  height: 100%;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+html[data-form="phone"][data-keyboard] .stage-frame { padding-bottom: 0; }
+html[data-form="phone"] .stage-frame,
+html[data-form="phone"] body { background: var(--bg); }
+
+/* Touch: no double-tap zoom, no long-press callout or text selection
+   on the controls (the game output stays selectable, to copy from). */
+html[data-form="phone"] body { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+html[data-form="phone"] button,
+html[data-form="phone"] .touch-pad { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+/* No sticky hover after a tap. */
+@media (hover: none) {
+  :root[data-theme="ansiapps"][data-form="phone"] button:hover { background: var(--dos-lightgray); }
+  :root[data-theme="ansiapps"][data-form="phone"] button.primary:hover,
+  :root[data-theme="ansiapps"][data-form="phone"] .touch-pad button.exit:hover { background: var(--dos-yellow); }
+}
+
+/* The bar at the top: the connection, Hang Up and the gear, three rows tall. */
+html[data-form="phone"] .movable.menu-chip button,
+html[data-form="phone"] .movable.menu-chip .connection-state { height: 48px; padding-top: 16px; box-sizing: border-box; }
+html[data-form="phone"] .movable .connection-state { text-align: left; padding-left: 8px; }
+html[data-form="phone"] .gear-menu-wrap { height: 48px; }
+html[data-form="phone"] .gear-btn { width: 48px; justify-content: center; }
+/* The gear menu fits the phone's width and scrolls in what's left of its height. */
+html[data-form="phone"] .client .gear-menu {
+  width: 368px;
+  max-width: 368px;
+  max-height: calc(var(--phone-rows, 40) * 16px - 64px);
+  overflow-y: auto;
+}
+html[data-form="phone"] .gear-menu .menu-item { min-height: 48px; padding-top: 16px; box-sizing: border-box; }
+
+/* The game output fills the width: 48 columns, no room kept for a
+   scrollbar (iOS draws its own over the text). */
+:root[data-form="phone"] .terminal { width: 384px; }
+:root[data-theme="ansiapps"][data-form="phone"] .terminal { width: 384px; padding: 0 8px; }
+html[data-form="phone"] .terminal::-webkit-scrollbar { display: none; }
+
+/* The touch pad: eight buttons of six cells by three rows. */
+.touch-pad { display: flex; width: 384px; height: 48px; }
+.touch-pad button { width: 48px; height: 48px; min-height: 48px; margin: 0; padding: 16px 0 0 16px; box-sizing: border-box; border-radius: 0; text-align: left; }
+.touch-pad button[data-testid="pad-look"] { padding-left: 8px; }
+:root[data-theme="ansiapps"] .touch-pad button.exit { background: var(--dos-yellow); color: var(--dos-black); }
+:root:not([data-theme="ansiapps"]) .touch-pad { gap: 0; }
+:root:not([data-theme="ansiapps"]) .touch-pad button { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0; text-align: center; }
+:root:not([data-theme="ansiapps"]) .touch-pad button.exit { background: var(--accent); color: #000000; }
+
+/* The command line, three rows tall. At 16 px, so iOS doesn't zoom the
+   page when it's touched (it does for any field under 16 px). */
+html[data-form="phone"] .input-row { height: 48px; }
+html[data-form="phone"] .input-row input { height: 48px; font-size: 16px; box-sizing: border-box; padding: 16px 8px 16px; line-height: 16px; }
+
+/* Dialogs: the phone's width, from under the top bar, their body
+   scrolling in what's left. */
+:root[data-form="phone"] .dialog-overlay { align-items: flex-start; justify-content: flex-start; padding: 48px 0 0 0; }
+:root[data-form="phone"] .dialog-box,
+:root[data-form="phone"] .dialog-box.dialog-wide {
+  width: 384px;
+  max-width: 384px;
+  max-height: calc(var(--phone-rows, 40) * 16px - 48px);
+  box-sizing: border-box;
+}
+:root[data-theme="ansiapps"][data-form="phone"] .dialog-overlay,
+:root[data-theme="ansiapps"][data-form="phone"] .dialog-overlay:has(.dialog-wide) { padding: 48px 0 0 0; }
+:root[data-theme="ansiapps"][data-form="phone"] .dialog-box { padding: 32px 16px; }
+html[data-form="phone"] .dialog-body { overflow-x: auto; }
+html[data-form="phone"] .dialog-actions button { min-height: 48px; }

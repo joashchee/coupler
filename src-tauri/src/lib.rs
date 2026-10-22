@@ -28,8 +28,13 @@ mod create;
 mod daytime;
 mod creation;
 mod echo;
+// The in-development warning: desktop only. An App Store app is a
+// finished release; App Review turns down one calling itself unfinished.
+#[cfg(desktop)]
 mod first_run;
 mod hidden;
+#[cfg(target_os = "macos")]
+mod moved;
 #[doc(hidden)]
 pub mod hooks;
 mod journal;
@@ -592,10 +597,18 @@ fn mud_resize(columns: u16, rows: u16, session: State<'_, Session>) -> Result<()
 
 /// Full screen on or off. The window is one fixed size otherwise
 /// (tauri.conf.json: 1280 by 720, not resizable), and in full screen the
-/// frontend scales that same screen up to fit (src/lib/stage.ts).
+/// frontend scales that same screen up to fit (src/lib/stage.ts). The
+/// iPhone has no full screen to switch to (and its gear menu no choice).
 #[tauri::command]
+#[cfg(desktop)]
 fn window_set_fullscreen(window: tauri::WebviewWindow, on: bool) -> Result<(), String> {
     window.set_fullscreen(on).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[cfg(mobile)]
+fn window_set_fullscreen(_window: tauri::WebviewWindow, _on: bool) -> Result<(), String> {
+    Err("The iPhone is always full screen.".into())
 }
 
 #[tauri::command]
@@ -644,25 +657,12 @@ async fn music_render(app: AppHandle, font: Option<String>, song: music::Song, f
         .map_err(|e| e.to_string())?
 }
 
-/// Neumetik's instruments, bank by bank, and its drum kits.
-#[derive(serde::Serialize)]
-struct Instruments {
-    banks: Vec<InstrumentBank>,
-    kits: Vec<(u8, &'static str)>,
-}
-
-#[derive(serde::Serialize)]
-struct InstrumentBank {
-    msb: u8,
-    names: Vec<&'static str>,
-}
-
+/// What the Music Editor's parts can play (`music::instruments`), through
+/// Neumetik or the SoundFont `font` the editor plays through.
 #[tauri::command]
-fn music_instruments() -> Instruments {
-    Instruments {
-        banks: neumetik_midi::BANKS.iter().map(|b| InstrumentBank { msb: b.msb, names: b.patches.iter().map(|p| p.name).collect() }).collect(),
-        kits: neumetik_midi::drums::KITS.to_vec(),
-    }
+fn music_instruments(app: AppHandle, font: Option<String>) -> Result<music::Instruments, String> {
+    let bank = font.map(|f| assets::bank(&assets_dir(&app)?, &f)).transpose()?;
+    Ok(music::instruments(bank))
 }
 
 // ---- Coupler Backup (backup.rs) ----
@@ -734,7 +734,8 @@ fn export_app_testing_report(path: String, report: String) -> Result<(), String>
     std::fs::write(&path, report).map_err(|e| e.to_string())
 }
 
-/// Creates the main window, once the first-run warning is accepted.
+/// Creates the main window: on the desktop once the first-run warning
+/// is accepted, on the iPhone at once.
 fn start(app: &AppHandle) {
     let config = &app.config().app.windows[0];
     // A backup just restored: its settings go in before the page's scripts run.
@@ -760,6 +761,13 @@ pub fn run() {
         .manage(synth::Engines::default())
         .manage(Renders::default())
         .setup(|app| {
+            // The Mac's data under the bundle ID it shipped with moves to the new one first.
+            #[cfg(target_os = "macos")]
+            if let Ok(home) = app.path().home_dir() {
+                for kind in moved::from_old_id(&home.join("Library"), &app.config().identifier) {
+                    log::info!("Coupler's {kind} folder moved to its new name.");
+                }
+            }
             let app_data_dir = app.path().app_data_dir().expect("failed to resolve app data dir");
             // A backup restored last run takes its place before anything's opened.
             match backup::apply(&app_data_dir) {
@@ -781,12 +789,16 @@ pub fn run() {
             // Lines of talk rendered before they're wanted (voicecache.rs).
             start_renders(app.handle(), app_data_dir.join("voice-cache"));
             // The main window has `"create": false` in tauri.conf.json, so
-            // nothing is drawn until the first-run warning is answered.
+            // on the desktop nothing is drawn until the first-run warning is
+            // answered. The iPhone has none (see `mod first_run`).
+            #[cfg(desktop)]
             if first_run::accepted(&app_data_dir) {
                 start(app.handle());
             } else {
                 first_run::ask(app.handle(), &app_data_dir, start);
             }
+            #[cfg(mobile)]
+            start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

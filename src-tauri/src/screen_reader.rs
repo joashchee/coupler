@@ -7,14 +7,16 @@
 //! - Windows: `SystemParametersInfoW(SPI_GETSCREENREADER)`, the flag
 //!   NVDA, JAWS and Narrator set while they run.
 //! - Linux: GNOME's `screen-reader-enabled` setting, or Orca's process.
+//! - iOS: UIKit's `UIAccessibilityIsVoiceOverRunning` (an app there can't
+//!   start another process).
 //!
 //! Nothing here is sent anywhere; it's asked again every few seconds.
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 use std::process::{Command, Stdio};
 
 /// Whether a process of exactly this name is running (`pgrep -x`).
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "ios")))]
 fn process_running(name: &str) -> bool {
     Command::new("pgrep")
         .args(["-x", name])
@@ -44,7 +46,17 @@ pub fn running() -> bool {
     ok != 0 && on != 0
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "ios")]
+pub fn running() -> bool {
+    #[link(name = "UIKit", kind = "framework")]
+    extern "C" {
+        fn UIAccessibilityIsVoiceOverRunning() -> bool;
+    }
+    // SAFETY: takes nothing and returns a BOOL; safe from any thread.
+    unsafe { UIAccessibilityIsVoiceOverRunning() }
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
 pub fn running() -> bool {
     let gnome = Command::new("gsettings")
         .args(["get", "org.gnome.desktop.a11y.applications", "screen-reader-enabled"])

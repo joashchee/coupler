@@ -49,8 +49,12 @@ struct Args {
 
 fn args() -> Result<Args, String> {
     let home = std::env::var_os("HOME").ok_or("HOME isn't set; pass --from.")?;
-    // Tauri's app-data folder on macOS for com.ansiapps.coupler (CLAUDE.md rule 4).
-    let mut a = Args { from: Path::new(&home).join("Library/Application Support/com.ansiapps.coupler"), to: PathBuf::from("web-mirror"), allow_private: false };
+    // Tauri's app-data folder on macOS for com.scorelessmusic.coupler (CLAUDE.md
+    // rule 4); the old ID's until this Mac's Coupler has launched since (moved.rs).
+    let support = Path::new(&home).join("Library/Application Support");
+    let new = support.join("com.scorelessmusic.coupler");
+    let from = if new.is_dir() { new } else { support.join("com.ansiapps.coupler") };
+    let mut a = Args { from, to: PathBuf::from("web-mirror"), allow_private: false };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {

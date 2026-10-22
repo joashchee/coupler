@@ -788,7 +788,7 @@ export function sizeInWords(bytes: number): string {
 }
 
 /** The file types the Assets folder takes, for the file chooser. */
-export const ASSET_TYPES = ["wav", "ogg", "opus", "wv", "mid", "midi", "mp3", "mod", "xm", "s3m", "it", "png", "jpg", "jpeg", "ans", "asc", "sf2"];
+export const ASSET_TYPES = ["wav", "ogg", "opus", "wv", "mid", "midi", "mp3", "mod", "xm", "s3m", "it", "png", "jpg", "jpeg", "ans", "asc", "sf2", "dls"];
 
 /** ANSI art drawn into rows of styled characters (src-tauri/src/ansi_art.rs). */
 export interface AnsiArt {

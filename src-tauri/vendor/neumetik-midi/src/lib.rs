@@ -4,7 +4,7 @@
 //! without a SoundFont or any samples. Every instrument is a few numbers
 //! for three small synthesis engines (subtractive, FM and plucked string)
 //! and every drum a recipe, so there's nothing to download: the whole
-//! synthesizer is about 60 KB of WebAssembly, gzipped. No dependencies, no
+//! synthesizer is about 80 KB of WebAssembly, gzipped. No dependencies, no
 //! audio API: it turns MIDI into samples and your engine plays them.
 //!
 //! ```
@@ -38,9 +38,30 @@
 //! channel GS makes a drum part): every key 27 to 87, and GS's kits at
 //! their program numbers.
 //!
+//! **Or through a SoundFont or DLS bank**, for sampled instruments: read
+//! one with [`SoundBank::from_bytes`] (a `.sf2`, or a `.dls` of DLS level
+//! 1 or 2) and give it to the synthesizer with
+//! [`Synth::set_sound_bank`] (or [`Player::set_sound_bank`]). What the bank
+//! hasn't, Neumetik plays itself.
+//!
+//! ```
+//! use std::sync::Arc;
+//! use neumetik_midi::{Player, SoundBank};
+//! # let midi = neumetik_midi::doc_song();
+//! # let bank_bytes = neumetik_midi::doc_bank();
+//!
+//! let bank = Arc::new(SoundBank::from_bytes(&bank_bytes)?); // a .sf2 or .dls file's bytes
+//! let mut player = Player::new(48_000);
+//! player.set_sound_bank(Some(bank));
+//! player.load(&midi)?;
+//! player.play();
+//! # Ok::<(), neumetik_midi::Error>(())
+//! ```
+//!
 //! Rendering never allocates, locks or panics, and the same MIDI always
 //! makes the same samples.
 
+mod bank;
 mod classics;
 pub mod drums;
 mod effects;
@@ -50,11 +71,13 @@ mod gs;
 mod output;
 mod patch;
 mod player;
+mod sampled;
 mod sequencer;
 mod smf;
 mod synth;
 mod voice;
 
+pub use bank::{Instrument, SoundBank, SoundBankKind};
 pub use error::Error;
 pub use output::wav;
 pub use patch::Patch;
@@ -83,6 +106,15 @@ pub static BANKS: [Bank; 4] = [
     Bank { msb: 82, patches: classics::NOW },
 ];
 
+/// Roland GS's variation tones Neumetik has, as (bank, program, name), by
+/// program then bank, as the SC-55 lists them: what a Bank Select of 1
+/// to 63 picks beside GM's.
+pub fn variations() -> impl Iterator<Item = (u8, u8, &'static str)> {
+    let mut v: Vec<(u8, u8, &'static str)> = gs::GS.iter().map(|(m, p, patch)| (*m, *p, patch.name)).collect();
+    v.sort_by_key(|(m, p, _)| (*p, *m));
+    v.into_iter()
+}
+
 /// The patch a bank and program play: a classic bank's, a GS variation,
 /// or else GM's own.
 pub fn patch(msb: u8, program: u8) -> &'static Patch {
@@ -104,8 +136,15 @@ pub fn patch(msb: u8, program: u8) -> &'static Patch {
 /// stereo at `sample_rate`, as long as the music and then `tail` seconds
 /// for the last notes to ring, `longest` seconds at most.
 pub fn render(bytes: &[u8], sample_rate: u32, tail: f64, longest: f64) -> Result<Vec<f32>, Error> {
+    render_through(bytes, None, sample_rate, tail, longest)
+}
+
+/// [`render`], through a SoundFont or DLS bank (or with `None`,
+/// Neumetik's own instruments).
+pub fn render_through(bytes: &[u8], bank: Option<std::sync::Arc<SoundBank>>, sample_rate: u32, tail: f64, longest: f64) -> Result<Vec<f32>, Error> {
     let events = smf::parse(bytes)?;
     let mut synth = Synth::new(sample_rate);
+    synth.set_sound_bank(bank);
     let rate = f64::from(synth.sample_rate());
     let length = events.last().map_or(0.0, |e| e.seconds);
     let frames = ((length + tail).min(longest).max(0.0) * rate) as usize;
@@ -143,6 +182,13 @@ pub fn doc_song() -> Vec<u8> {
     f.extend_from_slice(&(track.len() as u32).to_be_bytes());
     f.extend_from_slice(&track);
     f
+}
+
+/// A little SoundFont for the examples in these docs: a sine for General
+/// MIDI's piano.
+#[doc(hidden)]
+pub fn doc_bank() -> Vec<u8> {
+    bank::make::sf2(&[(0, 0, "Sine", vec![(vec![(54, 1)], 0)])], &[bank::make::sine(100, 4, 44_100, 69)])
 }
 
 #[cfg(test)]

@@ -16,8 +16,12 @@
 //!   `.asc` (classic CP437 art with SAUCE, or UTF-8 with the 256 and
 //!   24-bit colors Coupler reads from the game; `ansi_art.rs` draws it).
 //!
-//! Plus `.sf2`, a SoundFont: MIDI is only notes, and a SoundFont is the
-//! instruments that play them. Coupler ships none (a good one is tens of
+//! Plus `.sf2`, a SoundFont, and `.dls`, a DLS bank (Downloadable Sounds,
+//! levels 1 and 2): MIDI is only notes, and a bank is the instruments
+//! that play them. Both are "SoundFonts" to the player, and both are
+//! read and played by Neumetik MIDI, which checks one as it comes in
+//! (`check_bank`: a damaged one, or a compressed `.sf3`, is refused with
+//! the reason). Coupler ships none (a good one is tens of
 //! megabytes): MIDI plays through Neumetik, Coupler's own synthesizer
 //! (`vendor/neumetik-midi`, GM and GS without samples), whatever SoundFonts there
 //! are. The player can choose a SoundFont for one MIDI file (`set_font`,
@@ -32,7 +36,7 @@
 //! The WebView plays WAV and MP3 itself. The rest is rendered here to a
 //! WAV it can play: Ogg Vorbis decoded (`lewton`), Opus and WavPack
 //! (`codecs.rs`, libopus and libwavpack), MIDI through Neumetik or the
-//! SoundFont chosen for it (`rustysynth`), modules through a tracker player (`xmrsplayer`). A
+//! SoundFont chosen for it (Neumetik MIDI plays both), modules through a tracker player (`xmrsplayer`). A
 //! path from the frontend is only ever a type's folder and a file name
 //! inside Assets; nothing else can be read.
 //!
@@ -76,7 +80,7 @@ pub fn kind_of(extension: &str) -> Option<Kind> {
         "wav" | "ogg" | "opus" | "wv" => Some(Kind::Sfx),
         "mid" | "midi" | "mp3" | "mod" | "xm" | "s3m" | "it" => Some(Kind::Bgm),
         "png" | "jpg" | "jpeg" | "ans" | "asc" => Some(Kind::Art),
-        "sf2" => Some(Kind::SoundFont),
+        "sf2" | "dls" => Some(Kind::SoundFont),
         _ => None,
     }
 }
@@ -238,18 +242,24 @@ fn import_one(root: &Path, file: &Path, tell: &mut impl FnMut(Step, u64)) -> Res
         return Err("it's a folder. Drop the files in it instead.".into());
     }
     let ext = extension(file).ok_or("it has no type (no .wav, .png or the like on its name).")?;
+    if ext == "sf3" {
+        return Err("it's a compressed SoundFont (.sf3), which Coupler can't play. Add the .sf2 it was made from.".into());
+    }
     let kind = kind_of(&ext)
-        .ok_or_else(|| format!(".{ext} isn't a type Coupler uses. It takes .wav, .ogg, .opus and .wv sounds; .mid, .mp3, .mod, .xm, .s3m and .it music; .png and .jpg pictures and .ans and .asc ANSI art; and .sf2 SoundFonts."))?;
+        .ok_or_else(|| format!(".{ext} isn't a type Coupler uses. It takes .wav, .ogg, .opus and .wv sounds; .mid, .mp3, .mod, .xm, .s3m and .it music; .png and .jpg pictures and .ans and .asc ANSI art; and .sf2 and .dls SoundFonts."))?;
     if meta.len() > LARGEST_FILE {
         return Err("it's bigger than 256 MB.".into());
     }
     let name = file.file_name().and_then(|n| n.to_str()).ok_or("its name can't be used.")?;
-    let dir = root.join(&ext);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("the {ext} folder couldn't be made. ({e})"))?;
     tell(Step::Reading, 0);
     let bytes = read_counted(file, meta.len(), tell).map_err(|_| "it couldn't be read.".to_string())?;
     let read = meta.len();
     tell(Step::Checking, read);
+    if kind == Kind::SoundFont {
+        check_bank(&bytes)?;
+    }
+    let dir = root.join(&ext);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("the {ext} folder couldn't be made. ({e})"))?;
     let (kept, how) = match same_file(&dir, &bytes) {
         Some(already) => (already, How::Already),
         None => {
@@ -268,6 +278,12 @@ fn import_one(root: &Path, file: &Path, tell: &mut impl FnMut(Step, u64)) -> Res
         None
     };
     Ok((Asset { path, name: kept, kind, uses: 0 }, how, smaller))
+}
+
+/// Whether a SoundFont or DLS bank can be played, read as Neumetik MIDI
+/// will read it to play; if not, why.
+fn check_bank(bytes: &[u8]) -> Result<(), String> {
+    neumetik_midi::SoundBank::from_bytes(bytes).map(|_| ()).map_err(|e| format!("it can't be played as a SoundFont: {e}."))
 }
 
 /// Where smaller copies wait for the player's answer.
@@ -477,7 +493,7 @@ pub fn audio(root: &Path, path: &str, looping: bool) -> Result<Vec<u8>, String> 
         }
         .map_err(|e| format!("{path} couldn't be played. ({e})")),
         "mod" | "xm" | "s3m" | "it" => module_to_wav(&bytes).map_err(|e| format!("{path} couldn't be played. ({e})")),
-        "sf2" => midi_to_wav(&crate::compose::sample(), &file, false).map_err(|e| format!("{path} couldn't be played. ({e})")),
+        "sf2" | "dls" => midi_to_wav(&crate::compose::sample(), &file, false).map_err(|e| format!("{path} couldn't be played. ({e})")),
         _ => Err(format!("{path} isn't a sound.")),
     }
 }
@@ -487,7 +503,7 @@ pub fn audio(root: &Path, path: &str, looping: bool) -> Result<Vec<u8>, String> 
 pub fn midi_audio(root: &Path, font: Option<&str>, bytes: &[u8], looping: bool) -> Result<Vec<u8>, String> {
     match font {
         Some(font) => {
-            if folder_of(font) != "sf2" {
+            if !is_bank(font) {
                 return Err(format!("{font} isn't a SoundFont."));
             }
             midi_to_wav(bytes, &resolve(root, font)?, looping)
@@ -520,6 +536,11 @@ fn is_midi(path: &str) -> bool {
     matches!(folder_of(path), "mid" | "midi")
 }
 
+/// Whether an asset is a SoundFont or a DLS bank.
+pub fn is_bank(path: &str) -> bool {
+    kind_of(folder_of(path)) == Some(Kind::SoundFont)
+}
+
 /// Each MIDI file the player chose a SoundFont for, and the SoundFont
 /// (both asset paths). The SoundFont may have left the folder since.
 pub fn fonts(root: &Path) -> BTreeMap<String, String> {
@@ -536,7 +557,7 @@ pub fn set_font(root: &Path, path: &str, font: Option<&str>) -> Result<(), Strin
     match font {
         Some(font) => {
             resolve(root, font)?;
-            if folder_of(font) != "sf2" {
+            if !is_bank(font) {
                 return Err(format!("{font} isn't a SoundFont."));
             }
             all.insert(path.into(), font.into());
@@ -555,7 +576,7 @@ pub fn set_font(root: &Path, path: &str, font: Option<&str>) -> Result<(), Strin
 /// it's still in the folder; else none, and Neumetik plays it.
 fn font_for(root: &Path, path: &str) -> Option<PathBuf> {
     let font = fonts(root).remove(path)?;
-    (folder_of(&font) == "sf2").then(|| resolve(root, &font).ok()).flatten()
+    is_bank(&font).then(|| resolve(root, &font).ok()).flatten()
 }
 
 // ---- Made from the player's words ----
@@ -621,31 +642,27 @@ fn ogg_to_wav(bytes: &[u8]) -> Result<Vec<u8>, String> {
     Ok(wav(channels, rate, &samples))
 }
 
-fn midi_to_wav(bytes: &[u8], font: &Path, looping: bool) -> Result<Vec<u8>, String> {
-    use rustysynth::{MidiFile, MidiFileSequencer, SoundFont, Synthesizer, SynthesizerSettings};
+/// A SoundFont or DLS asset, read for Neumetik MIDI to play through.
+pub fn bank(root: &Path, font: &str) -> Result<Arc<neumetik_midi::SoundBank>, String> {
+    if !is_bank(font) {
+        return Err(format!("{font} isn't a SoundFont."));
+    }
+    load_bank(&resolve(root, font)?)
+}
+
+fn load_bank(font: &Path) -> Result<Arc<neumetik_midi::SoundBank>, String> {
     let font = std::fs::read(font).map_err(|e| format!("the SoundFont couldn't be read: {e}"))?;
-    let font = Arc::new(SoundFont::new(&mut Cursor::new(font)).map_err(|e| format!("the SoundFont couldn't be used: {e:?}"))?);
-    let midi = Arc::new(MidiFile::new(&mut Cursor::new(bytes)).map_err(|e| format!("{e:?}"))?);
-    let synth = Synthesizer::new(&font, &SynthesizerSettings::new(RATE as i32)).map_err(|e| format!("{e:?}"))?;
-    let mut sequencer = MidiFileSequencer::new(synth);
-    sequencer.play(&midi, false);
+    Ok(Arc::new(neumetik_midi::SoundBank::from_bytes(&font).map_err(|e| format!("the SoundFont couldn't be used: {e}"))?))
+}
+
+/// MIDI through a SoundFont or DLS bank, which Neumetik MIDI reads and
+/// plays (what the bank hasn't, Neumetik's own instruments play).
+fn midi_to_wav(bytes: &[u8], font: &Path, looping: bool) -> Result<Vec<u8>, String> {
+    let font = load_bank(font)?;
     // Once, the last notes ring out for two seconds; in a loop, the next
     // time round starts right away.
     let tail = if looping { 0.0 } else { 2.0 };
-    let seconds = (midi.get_length() + tail).min(LONGEST_SECONDS as f64);
-    let frames = (seconds * f64::from(RATE)) as usize;
-    let mut samples = Vec::with_capacity(frames * 2);
-    let (mut left, mut right) = (vec![0f32; 4096], vec![0f32; 4096]);
-    let mut done = 0;
-    while done < frames {
-        let n = (frames - done).min(4096);
-        sequencer.render(&mut left[..n], &mut right[..n]);
-        for i in 0..n {
-            samples.push(left[i]);
-            samples.push(right[i]);
-        }
-        done += n;
-    }
+    let samples = neumetik_midi::render_through(bytes, Some(font), RATE, tail, LONGEST_SECONDS as f64)?;
     Ok(wav(2, RATE, &louder(&samples)))
 }
 
@@ -716,6 +733,8 @@ mod tests {
         assert_eq!(kind_of("ANS"), Some(Kind::Art));
         assert_eq!(kind_of("asc"), Some(Kind::Art));
         assert_eq!(kind_of("sf2"), Some(Kind::SoundFont));
+        assert_eq!(kind_of("DLS"), Some(Kind::SoundFont));
+        assert_eq!(kind_of("sf3"), None);
         assert_eq!(kind_of("txt"), None);
         assert_eq!(kind_of("gif"), None);
     }
@@ -891,6 +910,47 @@ mod tests {
         // The choices' file isn't an asset.
         assert!(list(&root.0).iter().all(|a| !a.path.contains("soundfonts")));
         assert!(resolve(&root.0, FONTS).is_err());
+    }
+
+    #[test]
+    fn a_midi_file_plays_through_its_soundfont() {
+        let root = TempDir::new("font");
+        std::fs::create_dir_all(root.0.join("mid")).unwrap();
+        std::fs::create_dir_all(root.0.join("sf2")).unwrap();
+        // Middle C on a piano, and Neumetik MIDI's little SoundFont of one
+        // sine as its piano.
+        let mut town = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk\0\0\0\x0c".to_vec();
+        town.extend_from_slice(&[0, 0x90, 60, 100, 0x60, 0x80, 60, 0, 0, 0xff, 0x2f, 0]);
+        std::fs::write(root.0.join("mid/town.mid"), &town).unwrap();
+        std::fs::write(root.0.join("sf2/sine.sf2"), neumetik_midi::doc_bank()).unwrap();
+        let own = audio(&root.0, "mid/town.mid", false).unwrap();
+        set_font(&root.0, "mid/town.mid", Some("sf2/sine.sf2")).unwrap();
+        let through = audio(&root.0, "mid/town.mid", false).unwrap();
+        assert_eq!(through.len(), own.len());
+        assert_ne!(through, own, "the SoundFont's sine, not Neumetik's piano");
+        // The SoundFont's own sample tune, too.
+        assert!(codecs::read_wav(&audio(&root.0, "sf2/sine.sf2", false).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn a_soundfont_is_checked_as_it_comes_in() {
+        let (from, root) = (TempDir::new("banks-from"), TempDir::new("banks"));
+        std::fs::write(from.0.join("sine.sf2"), neumetik_midi::doc_bank()).unwrap();
+        std::fs::write(from.0.join("broken.sf2"), b"RIFF\x04\0\0\0sfbk").unwrap();
+        std::fs::write(from.0.join("words.dls"), b"not a bank at all").unwrap();
+        std::fs::write(from.0.join("small.sf3"), b"RIFF").unwrap();
+        let done = import(&root.0, &["sine.sf2", "broken.sf2", "words.dls", "small.sf3"].map(|f| from.0.join(f)), |_| ());
+        assert_eq!(done.added.iter().map(|a| (a.asset.path.as_str(), a.asset.kind)).collect::<Vec<_>>(), vec![("sf2/sine.sf2", Kind::SoundFont)]);
+        assert_eq!(done.skipped.len(), 3);
+        assert!(done.skipped[0].starts_with("broken.sf2: it can't be played as a SoundFont: it's damaged"), "{}", done.skipped[0]);
+        assert!(done.skipped[1].starts_with("words.dls: it can't be played as a SoundFont: it isn't a SoundFont or a DLS file"), "{}", done.skipped[1]);
+        assert!(done.skipped[2].contains("compressed SoundFont (.sf3)"), "{}", done.skipped[2]);
+        // Nothing refused is kept.
+        assert!(!root.0.join("sf2/broken.sf2").exists() && !root.0.join("dls").exists());
+        // A bank's read for the Music Editor; a MIDI file isn't one.
+        assert!(bank(&root.0, "sf2/sine.sf2").is_ok());
+        assert!(bank(&root.0, "mid/town.mid").unwrap_err().contains("isn't a SoundFont"));
+        assert!(is_bank("dls/gm.dls") && is_bank("sf2/a.sf2") && !is_bank("mid/a.mid"));
     }
 
     #[test]

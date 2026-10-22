@@ -19,6 +19,8 @@ fi
 
 rm -rf "$to/src"
 cp -R "$from/src" "$to/src"
+# Nothing hidden (.DS_Store, an editor's or agent's folder) comes along.
+find "$to/src" -name '.*' -prune -exec rm -rf {} +
 cp "$from/Cargo.toml" "$from/LICENSE" "$to/"
 git status --short -- "$to"
 cargo test --quiet --manifest-path "$to/Cargo.toml" --target-dir src-tauri/target

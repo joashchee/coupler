@@ -19,8 +19,9 @@
 #      (Xcode > Settings > Accounts > Manage Certificates > +, or the
 #      developer site). Found by itself; with more than one, name it in
 #      APPLE_SIGNING_IDENTITY.
-#   2. notarytool's credentials in the keychain, under a profile:
-#        xcrun notarytool store-credentials coupler \
+#   2. notarytool's credentials in the keychain, under the profile every
+#      Scoreless Music app shares:
+#        xcrun notarytool store-credentials scorelessmusic \
 #          --apple-id you@example.com --team-id TEAMID
 #      (it asks for an app-specific password from account.apple.com).
 #      Another profile name: COUPLER_NOTARY_PROFILE.
@@ -32,7 +33,7 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-PROFILE="${COUPLER_NOTARY_PROFILE:-coupler}"
+PROFILE="${COUPLER_NOTARY_PROFILE:-scorelessmusic}"
 UNSIGNED="${COUPLER_UNSIGNED:-}"
 
 # The signing identity, checked before the long build.

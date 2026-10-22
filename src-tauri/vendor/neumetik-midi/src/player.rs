@@ -252,6 +252,12 @@ impl Player {
         self.synth.channel_muted(channel)
     }
 
+    /// Plays through a SoundFont or DLS bank, or with `None`, Neumetik's
+    /// own instruments: [`Synth::set_sound_bank`].
+    pub fn set_sound_bank(&mut self, bank: Option<std::sync::Arc<crate::SoundBank>>) {
+        self.synth.set_sound_bank(bank);
+    }
+
     /// The synthesizer it plays through: what a channel plays, how many
     /// voices are sounding.
     pub fn synth(&self) -> &Synth {

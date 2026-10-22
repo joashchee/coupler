@@ -4,7 +4,7 @@ Coupler includes the software below, each used under the license
 that follows its name. Coupler itself is licensed under the Apache
 License 2.0.
 
-391 packages, 233 license texts. Built for aarch64-apple-darwin.
+390 packages, 232 license texts. Built for aarch64-apple-darwin.
 
 ========================================================================
 @tauri-apps/api 2.12.0 (Apache-2.0 OR MIT)
@@ -11950,32 +11950,6 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
-========================================================================
-rustysynth 1.3.6 (MIT): its package has no license file; the standard MIT text, its authors as holders
-------------------------------------------------------------------------
-
-MIT License
-
-Copyright (c) Nobuaki Tanaka
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 ========================================================================
 ryu 1.0.23 (Apache-2.0 OR BSL-1.0)

@@ -5,7 +5,9 @@
 //! a buffer at a time.
 
 use std::f32::consts::FRAC_PI_2;
+use std::sync::Arc;
 
+use crate::bank::SoundBank;
 use crate::effects::{Chorus, Reverb};
 use crate::output;
 use crate::patch::Patch;
@@ -17,6 +19,10 @@ use crate::{drums, gm, patch, POLYPHONY};
 /// are clamped to them.
 pub const MIN_RATE: u32 = 8_000;
 pub const MAX_RATE: u32 = 192_000;
+
+/// A sound bank's voices against Neumetik's own: the level that puts a
+/// General MIDI SoundFont's instruments about as loud as Neumetik's.
+const SAMPLED_LEVEL: f32 = 2.0;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Channel {
@@ -265,6 +271,11 @@ pub struct Synth {
     volume: f32,
     fade_to: f32,
     fade_step: f32,
+    /// Each channel's peak since [`Synth::take_levels`], dry (before the
+    /// effects and the player's volume), for meters.
+    levels: [f32; 16],
+    /// The SoundFont or DLS bank it plays through, if any.
+    bank: Option<Arc<SoundBank>>,
 }
 
 impl Synth {
@@ -285,7 +296,26 @@ impl Synth {
             volume: 1.0,
             fade_to: 1.0,
             fade_step: 0.0,
+            levels: [0.0; 16],
+            bank: None,
         }
+    }
+
+    /// Plays through a SoundFont or DLS bank ([`SoundBank`]), or with
+    /// `None`, Neumetik's own instruments again. What the bank hasn't
+    /// (an instrument, a kit, a bank of Neumetik's classics) Neumetik
+    /// plays itself, so nothing goes silent. Notes sounding from the bank
+    /// that was set stop at once.
+    pub fn set_sound_bank(&mut self, bank: Option<Arc<SoundBank>>) {
+        for v in self.voices.iter_mut().filter(|v| v.is_sampled()) {
+            v.active = false;
+        }
+        self.bank = bank;
+    }
+
+    /// The sound bank it plays through, if any.
+    pub fn sound_bank(&self) -> Option<&Arc<SoundBank>> {
+        self.bank.as_ref()
     }
 
     /// The sample rate it runs at.
@@ -461,14 +491,25 @@ impl Synth {
         }
     }
 
+    /// Each channel's peak level since the last time they were taken
+    /// (dry, as the channel's volume and pan leave it), and starts again.
+    pub fn take_levels(&mut self) -> [f32; 16] {
+        std::mem::take(&mut self.levels)
+    }
+
     /// Voices sounding now (at most [`POLYPHONY`]).
     pub fn active_voices(&self) -> usize {
         self.voices.iter().filter(|v| v.active).count()
     }
 
-    /// The name of the instrument (or drum kit) a channel plays.
-    pub fn instrument_name(&self, channel: u8) -> &'static str {
+    /// The name of the instrument (or drum kit) a channel plays: the sound
+    /// bank's, if it has it.
+    pub fn instrument_name(&self, channel: u8) -> &str {
         let Some(c) = self.state.channels.get(usize::from(channel)) else { return "" };
+        let (bank, program) = if c.drums { (0, c.program) } else { (c.bank, c.program) };
+        if let Some(name) = self.bank.as_ref().and_then(|b| b.preset_name(c.drums, bank, program)) {
+            return name;
+        }
         if c.drums {
             drums::KITS.iter().find(|(p, _)| *p == c.kit).map_or("Standard", |(_, name)| name)
         } else {
@@ -476,7 +517,8 @@ impl Synth {
         }
     }
 
-    /// Roughly how much memory it holds, in bytes.
+    /// Roughly how much memory it holds, in bytes (not counting its sound
+    /// bank's, which is shared: [`SoundBank::memory_bytes`]).
     pub fn memory_bytes(&self) -> usize {
         std::mem::size_of::<Synth>() + self.voices.iter().map(Voice::memory_bytes).sum::<usize>() + self.chorus.memory_bytes() + self.reverb.memory_bytes()
     }
@@ -551,6 +593,10 @@ impl Synth {
     fn note_start(&mut self, ch: usize, key: u8, vel: u8) {
         self.clock += 1;
         let c = self.state.channels[ch];
+        if self.bank.as_ref().is_some_and(|b| b.has(c.drums, c.bank, c.program)) {
+            self.sampled_start(ch, key, vel);
+            return;
+        }
         if c.drums {
             let Some(drum) = drums::drum(c.kit, key) else { return };
             if drum.choke != 0 {
@@ -570,16 +616,49 @@ impl Synth {
         }
     }
 
+    /// A note from the sound bank: a voice for each region its key and
+    /// velocity fall in (a stereo sample is two, a layered sound more).
+    fn sampled_start(&mut self, ch: usize, key: u8, vel: u8) {
+        // Holding the bank here only counts it: the synth's own keeps it,
+        // so nothing is freed while rendering.
+        let Some(bank) = self.bank.clone() else { return };
+        let c = self.state.channels[ch];
+        let Some(regions) = bank.regions_for(c.drums, c.bank, c.program, key, vel) else { return };
+        let mut first = true;
+        for i in regions {
+            let region = &bank.regions[i];
+            if first {
+                first = false;
+                // The same key again ends the last one, but a drum's,
+                // which rings on as drums do.
+                if !c.drums {
+                    for v in self.voices.iter_mut().filter(|v| v.active && v.channel as usize == ch && v.key == key && !v.released) {
+                        v.note_off(false);
+                    }
+                }
+            }
+            if region.exclusive != 0 {
+                for v in self.voices.iter_mut().filter(|v| v.active && v.channel as usize == ch && v.exclusive() == region.exclusive && v.started != self.clock) {
+                    v.choke_now();
+                }
+            }
+            let i = self.free_voice();
+            self.voices[i].start_sampled(ch as u8, key, vel, region, self.clock);
+        }
+    }
+
     /// A voice to play: a silent one, else the quietest of those let go,
-    /// else the quietest.
+    /// else the quietest, but never one the note just started.
     fn free_voice(&mut self) -> usize {
         if let Some(i) = self.voices.iter().position(|v| !v.active) {
             return i;
         }
+        let clock = self.clock;
         let quietest = |released: bool| {
             self.voices
                 .iter()
                 .enumerate()
+                .filter(|(_, v)| v.started != clock)
                 .filter(|(_, v)| !released || v.released)
                 .min_by(|(_, a), (_, b)| a.loudness().total_cmp(&b.loudness()).then(a.started.cmp(&b.started)))
                 .map(|(i, _)| i)
@@ -594,24 +673,30 @@ impl Synth {
         let mut one = [0f32; BLOCK];
         left.fill(0.0);
         right.fill(0.0);
+        let samples: &[i16] = self.bank.as_ref().map_or(&[], |b| &b.samples);
         for v in self.voices.iter_mut().filter(|v| v.active) {
             let c = &self.state.channels[usize::from(v.channel)];
             one[..n].fill(0.0);
-            v.render(&mut one[..n], &c.controls());
+            v.render(&mut one[..n], &c.controls(), samples);
             let mute = if self.muted[usize::from(v.channel)] { 0.0 } else { 1.0 };
-            let gain = c.volume * c.volume * c.expression * c.expression * 0.25 * mute;
-            let pan = (c.pan + v.drum_pan().unwrap_or(0.0)).clamp(-1.0, 1.0);
+            let level = if v.is_sampled() { SAMPLED_LEVEL } else { 1.0 };
+            let gain = c.volume * c.volume * c.expression * c.expression * 0.25 * mute * level;
+            let pan = (c.pan + v.own_pan()).clamp(-1.0, 1.0);
             let angle = (pan + 1.0) * 0.5 * FRAC_PI_2;
             let (gl, gr) = (angle.cos() * gain, angle.sin() * gain);
-            let chorus = (c.chorus + v.patch.chorus).min(1.0) * gain;
-            let reverb = (c.reverb + v.patch.reverb + v.drum_reverb()).min(1.0) * gain;
+            let chorus = (c.chorus + v.own_chorus()).min(1.0) * gain;
+            let reverb = (c.reverb + v.own_reverb()).min(1.0) * gain;
+            let mut peak = 0f32;
             for i in 0..n {
                 let s = one[i];
                 left[i] += s * gl;
                 right[i] += s * gr;
                 chorus_in[i] += s * chorus;
                 reverb_in[i] += s * reverb;
+                peak = peak.max(s.abs());
             }
+            let level = &mut self.levels[usize::from(v.channel) & 15];
+            *level = level.max(peak * gl.max(gr));
         }
         self.chorus.process(&chorus_in[..n], left, right);
         self.reverb.process(&reverb_in[..n], left, right);

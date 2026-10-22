@@ -4,7 +4,9 @@ Neumetik MIDI is ansiapps' MIDI synthesizer: General MIDI and Roland GS
 music played without a SoundFont or samples. Three small engines
 (subtractive with supersaw unison and sync, two-operator FM,
 Karplus-Strong plucked strings), an SVF filter, envelopes, an LFO,
-chorus and reverb, every drum a recipe. Standard library only.
+chorus and reverb, every drum a recipe. Since 0.2.0 it also plays
+through a SoundFont 2 or DLS bank (`SoundBank`), its own instruments
+filling in what the bank hasn't. Standard library only.
 
 ## License
 

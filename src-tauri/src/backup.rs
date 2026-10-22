@@ -71,7 +71,7 @@ const END: u8 = 0xFF;
 /// Already compressed: stored as it is.
 const PACKED: &[&str] = &["ogg", "opus", "mp3", "wv", "png", "jpg", "jpeg"];
 /// Raw samples: a block of their own.
-const SAMPLES: &[&str] = &["wav", "sf2"];
+const SAMPLES: &[&str] = &["wav", "sf2", "dls"];
 /// A file this big is a block of its own whatever it is.
 const OWN_BLOCK: u64 = 16 << 20;
 /// Up to this size a block of its own gets Brotli's strongest setting;
