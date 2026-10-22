@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **coffeemud.sf2 comes with Coupler** (2026-10-22): CoffeeMUD's
+  sounds as a SoundFont, 210 of them, each of the game's events on a
+  key of its own (combat, creatures, spells, doors, socials, crafting,
+  and 52 ambience and weather loops), made by ansiapps' Neumetik and
+  dedicated to the public domain (CC0). It ships in the app
+  (`scripts/coffeemud-sf2-fetch.py`, pinned by its SHA-256), with its
+  recordings' authors credited in About; `soundbank.rs` reads its map
+  (every MSP sound CoffeeMUD sends) and tests that every slot plays.
+  Nothing plays it yet. Neumetik MIDI 0.3.0 comes with it, the version
+  the bank was mixed on.
 - **Neumetik MIDI 0.2.0, and SoundFonts through it** (2026-10-22): MIDI
   through a SoundFont is now played by Neumetik MIDI itself, in place of
   rustysynth (one fewer dependency), its own instruments filling in what

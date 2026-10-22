@@ -10,7 +10,7 @@
 mod dls;
 #[doc(hidden)]
 pub mod make;
-mod riff;
+pub(crate) mod riff;
 mod sf2;
 #[cfg(test)]
 mod tests;
@@ -56,13 +56,13 @@ pub struct SoundBank {
 }
 
 #[derive(Debug)]
-struct Preset {
-    bank: u8,
-    program: u8,
-    drums: bool,
-    name: String,
+pub(crate) struct Preset {
+    pub bank: u8,
+    pub program: u8,
+    pub drums: bool,
+    pub name: String,
     /// Its regions in the bank's `regions`.
-    regions: std::ops::Range<usize>,
+    pub regions: std::ops::Range<usize>,
 }
 
 fn key(drums: bool, bank: u8, program: u8) -> u32 {
@@ -219,6 +219,11 @@ impl SoundBank {
             let p = &self.presets[*i];
             Instrument { bank: p.bank, program: p.program, drums: p.drums, name: &p.name }
         })
+    }
+
+    /// Its presets, as the file has them.
+    pub(crate) fn presets(&self) -> &[Preset] {
+        &self.presets
     }
 
     /// Roughly how much memory it holds, in bytes.

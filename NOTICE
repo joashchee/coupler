@@ -39,6 +39,10 @@ Coupler includes:
   MacKenna (both CC BY 4.0), and from LibriVox readers and Kyutai's
   voice donations (CC0). The full credits ship with them, in the app's
   Resources/pocket-tts/CREDITS.txt.
+- coffeemud.sf2, CoffeeMUD's sounds as a SoundFont, made by ansiapps
+  with Neumetik and dedicated to the public domain (CC0 1.0). Its
+  recordings are CC0 too, from Kenney, OpenGameArt and Freesound; each
+  is credited in the app's Resources/coffeemud/CREDITS.txt.
 - SQLite (public domain), and the Rust and npm libraries listed in
   Cargo.lock and package-lock.json under their own licenses.
 

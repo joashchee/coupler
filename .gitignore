@@ -32,6 +32,11 @@ reference/
 src-tauri/resources/pocket-tts/*
 !src-tauri/resources/pocket-tts/CREDITS.txt
 
+# coffeemud.sf2, CoffeeMUD's sounds (scripts/coffeemud-sf2-fetch.py): 77 MB,
+# the same. Its CREDITS.txt (scripts/coffeemud-sf2-sync.py) is committed.
+src-tauri/resources/coffeemud/*
+!src-tauri/resources/coffeemud/CREDITS.txt
+
 # The web build: its output, its WebAssembly core
 # (copied from src-web's target/ by scripts/web-build.sh), and the
 # maintainer's mirror of their hooks and assets (scripts/web-publish.sh),

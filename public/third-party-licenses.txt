@@ -4,7 +4,7 @@ Coupler includes the software below, each used under the license
 that follows its name. Coupler itself is licensed under the Apache
 License 2.0.
 
-390 packages, 232 license texts. Built for aarch64-apple-darwin.
+391 packages, 233 license texts. Built for aarch64-apple-darwin.
 
 ========================================================================
 @tauri-apps/api 2.12.0 (Apache-2.0 OR MIT)
@@ -1790,6 +1790,269 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ~~~~
+
+========================================================================
+coffeemud.sf2, CoffeeMUD's sounds, by ansiapps, and its recordings (CC0 1.0)
+------------------------------------------------------------------------
+
+coffeemud.sf2: CoffeeMUD's sounds
+==================================
+
+The SoundFont in this folder (coffeemud-sf2-v0.1.0) is by ansiapps, made with
+Neumetik, and dedicated to the public domain under CC0 1.0
+(creativecommons.org/publicdomain/zero/1.0/). Its ambience and
+weather loops and its synthesized sound effects are Neumetik's own.
+
+Its 123 recordings are CC0 1.0 too, each one's licence read at
+its source. CC0 asks for no credit; they are listed here anyway, by
+the slot they play in.
+
+Blade swing: "swing.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Blunt swing: "FX - Swoosh - Low Pitch" by bolkmar
+  https://freesound.org/people/bolkmar/sounds/475135/
+Natural attack, normal: "impactPunch_medium_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Natural attack, light: "impactSoft_medium_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Natural attack, severe: "impactPunch_heavy_001.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Arrow release: "Longbow Release 2.wav" by saturdaysoundguy
+  https://freesound.org/people/saturdaysoundguy/sounds/394179/
+Bow draw: "Loading a Ballista" by MadPanCake
+  https://freesound.org/people/MadPanCake/sounds/660765/
+Flesh hit, normal: "impactPunch_heavy_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Flesh hit, light: "impactPunch_medium_002.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Flesh hit, severe: "impactSoft_heavy_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Armor clang, normal: "impactPlate_medium_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Armor clang, light: "impactPlate_light_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Armor clang, severe: "impactPlate_heavy_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Shield block, normal: "impactWood_medium_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Shield block, light: "impactWood_light_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Shield block, severe: "impactWood_heavy_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Parry ring, normal: "Sword Clash" by loudernoises
+  https://freesound.org/people/loudernoises/sounds/334169/
+Parry ring, light: "impactMetal_light_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Parry ring, severe: "impactMetal_heavy_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Miss whoosh: "swing2.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Critical hit: "Sword Hit" by qubodup
+  https://freesound.org/people/qubodup/sounds/442769/
+Pain grunt, normal: "Male Grunting In Pain" by elynch0901
+  https://freesound.org/people/elynch0901/sounds/464486/
+Pain grunt, light: "grunt_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Pain grunt, severe: "scream_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Monster collapse: "monster_sound_big_death.wav" by Leadstarson
+  https://freesound.org/people/Leadstarson/sounds/568000/
+Body fall: "Body fall.wav" by DylanTheFish
+  https://freesound.org/people/DylanTheFish/sounds/417994/
+Item handling: "handleSmallLeather.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Door open: "doorOpen_1.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Door close: "doorClose_1.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Lock and unlock: "key_open_01.ogg" by rubberduck
+  https://opengameart.org/content/100-cc0-sfx
+Equip: "chainmail1.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Unequip: "clothBelt2.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Posture: "cloth1.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Sleep and wake: "cloth4.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Footsteps in: "footstep00.ogg + footstep01.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Footsteps out: "footstep02.ogg + footstep03.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Humanoid, aggressive: "Middle Ages War Cry.wav" by joelcarrsound
+  https://freesound.org/people/joelcarrsound/sounds/521830/
+Humanoid, idle: "breath.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Humanoid, pain: "Bullet Hit Grunts" by MilkyMilkshke
+  https://freesound.org/people/MilkyMilkshke/sounds/211536/
+Goblinoid, aggressive: "Goblin Growl" by qubodup
+  https://freesound.org/people/qubodup/sounds/442817/
+Goblinoid, idle: "Goblin Cackle.wav" by spookymodem
+  https://freesound.org/people/spookymodem/sounds/202096/
+Goblinoid, pain: "Goblin Death.wav" by spookymodem
+  https://freesound.org/people/spookymodem/sounds/249813/
+Giant-kin, aggressive: "giant1.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Giant-kin, idle: "giant3.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Giant-kin, pain: "hit_ferris" by HydraSound
+  https://freesound.org/people/HydraSound/sounds/736275/
+Canine, aggressive: "barking_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Canine, idle: "Dog Panting" by onehugeeye
+  https://freesound.org/people/onehugeeye/sounds/511319/
+Canine, pain: "Chihuahua Puppy Whine" by AustinXYZ
+  https://freesound.org/people/AustinXYZ/sounds/350593/
+Feline, aggressive: "roar_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Feline, idle: "cat purring and meow" by skymary
+  https://freesound.org/people/skymary/sounds/412016/
+Feline, pain: "Cat Meowing_Yowl_far_mono.wav" by _stubb
+  https://freesound.org/people/_stubb/sounds/406613/
+Avian, aggressive: "Eagle Cry.wav" by kaydinhamby
+  https://freesound.org/people/kaydinhamby/sounds/381200/
+Avian, idle: "Tweeting.wav" by deleted_user_2104797
+  https://freesound.org/people/deleted_user_2104797/sounds/164489/
+Avian, pain: "Caw.ogg" by egomassive
+  https://freesound.org/people/egomassive/sounds/536732/
+Reptile, pain: "hiss3.wav" by Reitanna
+  https://freesound.org/people/Reitanna/sounds/343928/
+Reptile, idle: "Snake Hiss" by xoiziox
+  https://freesound.org/people/xoiziox/sounds/553374/
+Reptile, aggressive: "Rattle_Snake.wav" by 7h3_lark
+  https://freesound.org/people/7h3_lark/sounds/268580/
+Insect, aggressive: "bug_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Insect, idle: "bug_02.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Insect, pain: "slime1.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Undead, aggressive: "Zombie moan 3" by Breviceps
+  https://freesound.org/people/Breviceps/sounds/445995/
+Undead, idle: "Scary ghost/spirit breathing" by 4_and_a_half_Star_Games
+  https://freesound.org/people/4_and_a_half_Star_Games/sounds/353874/
+Undead, pain: "zmb_pain5.wav" by rendensh
+  https://freesound.org/people/rendensh/sounds/115887/
+Dragon, aggressive: "Dragon Roar" by qubodup
+  https://freesound.org/people/qubodup/sounds/442964/
+Dragon, idle: "Stöhnen.wav" by Jeffreys2
+  https://freesound.org/people/Jeffreys2/sounds/333469/
+Dragon, pain: "Dragon Hurt" by qubodup
+  https://freesound.org/people/qubodup/sounds/442966/
+Construct, idle: "Stone Sliding" by qubodup
+  https://freesound.org/people/qubodup/sounds/743262/
+Construct, aggressive: "impactMining_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Construct, pain: "Gravel Impacts and Falls.wav" by lolamadeus
+  https://freesound.org/people/lolamadeus/sounds/179341/
+Laugh: "Man's laugh" by quavosh
+  https://freesound.org/people/quavosh/sounds/670839/
+Sniff and sneeze: "Sneeze Shot" by unfa
+  https://freesound.org/people/unfa/sounds/185415/
+Kiss: "kissPop3.wav" by MagnificentMood
+  https://freesound.org/people/MagnificentMood/sounds/74515/
+Hug: "cloth2.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Dance: "Footsteps tap.wav" by gpag1
+  https://freesound.org/people/gpag1/sounds/392482/
+Giggle: "giggle.wav" by Reitanna
+  https://freesound.org/people/Reitanna/sounds/235168/
+Chuckle: "deep laugh chuckle.mp3" by hsmith1986
+  https://freesound.org/people/hsmith1986/sounds/458101/
+Cackle: "Witch Cackle" by AntumDeluge
+  https://freesound.org/people/AntumDeluge/sounds/417826/
+Gasp: "GaspM.ogg" by egomassive
+  https://freesound.org/people/egomassive/sounds/536757/
+Groan: "groan by adam.wav" by seachangeau
+  https://freesound.org/people/seachangeau/sounds/387153/
+Sob: "cry.wav" by galora
+  https://freesound.org/people/galora/sounds/319019/
+Yawn: "Male Yawn" by aldenroth2
+  https://freesound.org/people/aldenroth2/sounds/272030/
+Snore: "snore.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Burp: "burp_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Hiccup: "Hiccup" by ceoux
+  https://freesound.org/people/ceoux/sounds/338196/
+Fart: "Fart 04" by Ezcah
+  https://freesound.org/people/Ezcah/sounds/243715/
+Puke: "Gagging / Vomit / Throwing up" by Breviceps
+  https://freesound.org/people/Breviceps/sounds/446001/
+Raspberry: "tongue raspberry.wav" by Reitanna
+  https://freesound.org/people/Reitanna/sounds/252262/
+Whew: "heavy sigh.wav" by Reitanna
+  https://freesound.org/people/Reitanna/sounds/252222/
+Pant: "SFXHeavyBreathingDuringRun.wav" by WakuWakuWakuWaku
+  https://freesound.org/people/WakuWakuWakuWaku/sounds/422970/
+Slap: "Slap hit on the face or shoulder" by khenshom
+  https://freesound.org/people/khenshom/sounds/539163/
+Whip: "whip and crack sound" by JayRom01
+  https://freesound.org/people/JayRom01/sounds/615761/
+Meow: "cat meow short" by skymary
+  https://freesound.org/people/skymary/sounds/412017/
+Moo: "Cow Moo 2" by invertedturtle
+  https://freesound.org/people/invertedturtle/sounds/546479/
+Bow: "cloth-heavy.wav" by artisticdude
+  https://opengameart.org/content/rpg-sound-pack
+Growl: "growl1.wav" by Vegemyte
+  https://freesound.org/people/Vegemyte/sounds/84554/
+Whisper: "whispering male" by germanio
+  https://freesound.org/people/germanio/sounds/369913/
+Hammering: "Hammer on Wood" by L.i.Z.e.L.l.E_+
+  https://freesound.org/people/L.i.Z.e.L.l.E_+/sounds/707864/
+Sawing: "Sawing wood" by JappeHallunken
+  https://freesound.org/people/JappeHallunken/sounds/501316/
+Scissors: "Scissor cut.wav" by Techienanna
+  https://freesound.org/people/Techienanna/sounds/584130/
+Sanding: "sand paper stroke" by getwecked
+  https://freesound.org/people/getwecked/sounds/764684/
+Ripping: "Cloth Rip Fast" by Rudmer_Rotteveel
+  https://freesound.org/people/Rudmer_Rotteveel/sounds/591195/
+Fine metalwork: "Repair_metal.wav" by zbig77
+  https://freesound.org/people/zbig77/sounds/244985/
+Smithing: "Anvil Hit 1" by michorvath
+  https://freesound.org/people/michorvath/sounds/270589/
+Digging: "Shovel - Sand/Gravel/Snow" by Bricklover
+  https://freesound.org/people/Bricklover/sounds/560957/
+Stonework: "impactMining_000.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Drilling: "Drill_Noises_09" by SignatureSoundsOrg
+  https://freesound.org/people/SignatureSoundsOrg/sounds/873416/
+Chopping wood: "axe chop into wood little debris.wav" by kyles
+  https://freesound.org/people/kyles/sounds/452554/
+Chopping food: "Quick_vegetable_chop_9" by BenParamoreAudio
+  https://freesound.org/people/BenParamoreAudio/sounds/839155/
+Frying: "Sizzle.wav" by CHEATSman115
+  https://freesound.org/people/CHEATSman115/sounds/234124/
+Smelting: "Steam/hiss" by wubitog
+  https://freesound.org/people/wubitog/sounds/234782/
+Pouring: "Pouring Water Short Free" by AardsReal
+  https://freesound.org/people/AardsReal/sounds/842163/
+Welding: "Welding.aiff" by loberg77
+  https://freesound.org/people/loberg77/sounds/472638/
+Ratchet: "ratchet.wav" by Nomadyag
+  https://freesound.org/people/Nomadyag/sounds/193058/
+Chisel: "Cuting into Stone" by qubodup
+  https://freesound.org/people/qubodup/sounds/743233/
+Paper: "paper_01.ogg" by rubberduck
+  https://opengameart.org/content/100-cc0-sfx
+Fishing reel: "Fishing reel winding" by 1bob
+  https://freesound.org/people/1bob/sounds/831928/
+Knock: "Knocking on Wood Door (1)" by Flem0527
+  https://freesound.org/people/Flem0527/sounds/629987/
+Drink: "Drink gulp.wav" by ZacMakesLOUDNoises
+  https://freesound.org/people/ZacMakesLOUDNoises/sounds/187951/
+Eat: "eat_01.ogg" by rubberduck
+  https://opengameart.org/content/80-cc0-creature-sfx
+Fall: "impactSoft_heavy_002.ogg" by Kenney
+  https://kenney.nl/assets/impact-sounds
+Choke: "Short cough / choke" by Breviceps
+  https://freesound.org/people/Breviceps/sounds/444723/
+Coins: "handleCoins.ogg" by Kenney
+  https://kenney.nl/assets/rpg-audio
+Trap: "Bear Trap" by ThePriest909
+  https://freesound.org/people/ThePriest909/sounds/278203/
 
 ========================================================================
 compact_str 0.9.1 (MIT)

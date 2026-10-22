@@ -7,9 +7,11 @@
 //! Each preset zone and each instrument zone inside it becomes a region:
 //! the instrument's generators (its global zone's, then the zone's own)
 //! over the defaults, the preset's (likewise) added, key and velocity
-//! ranges crossed. Modulators aren't read: the standard's default ones
-//! are built in (velocity to level, the mod wheel to vibrato), as most
-//! players do. Like E-mu's own hardware, and Polyphone, FluidSynth and
+//! ranges crossed. The standard's default modulators are built in
+//! (velocity to level, the mod wheel to vibrato), as most players do; of
+//! a bank's own, the simple ones Neumetik writes itself are read
+//! (velocity and key moving the cutoff, velocity the attack, the mod
+//! wheel either LFO's vibrato), and the rest aren't. Like E-mu's own hardware, and Polyphone, FluidSynth and
 //! the rest after it, the initial attenuation counts at 40%.
 
 use super::riff::{chunks, find, i16_at, name, u16_at, u32_at};
@@ -77,22 +79,28 @@ fn defaults() -> [i32; GENERATORS] {
     g
 }
 
-/// A zone: the generators it sets, and its key and velocity ranges.
+/// The modulators read, as (source, destination): linear, unipolar and
+/// rising, with no amount source.
+const MODULATORS: [(u16, usize); 5] = [(2, CUTOFF), (3, CUTOFF), (2, VOL_ENV + 1), (0x81, VIB_LFO_PITCH), (0x81, MOD_LFO_PITCH)];
+
+/// A zone: the generators and modulators it sets, and its key and
+/// velocity ranges.
 #[derive(Clone, Copy)]
 struct Zone {
     set: [Option<i32>; GENERATORS],
+    mods: [Option<i32>; MODULATORS.len()],
     keys: (u8, u8),
     vels: (u8, u8),
 }
 
 impl Zone {
     fn empty() -> Zone {
-        Zone { set: [None; GENERATORS], keys: (0, 127), vels: (0, 127) }
+        Zone { set: [None; GENERATORS], mods: [None; MODULATORS.len()], keys: (0, 127), vels: (0, 127) }
     }
 
     /// Another zone's settings over this one's (a zone over its global zone).
     fn over(mut self, z: &Zone) -> Zone {
-        for (mine, theirs) in self.set.iter_mut().zip(&z.set) {
+        for (mine, theirs) in self.set.iter_mut().zip(&z.set).chain(self.mods.iter_mut().zip(&z.mods)) {
             if theirs.is_some() {
                 *mine = *theirs;
             }
@@ -109,11 +117,12 @@ impl Zone {
 
 /// The zones of each preset or instrument: records of `size` bytes in
 /// `headers`, each pointing at its first bag at `bag_at`; bags pointing at
-/// their first generator.
-fn zones(headers: &[u8], size: usize, bag_at: usize, bags: &[u8], gens: &[u8]) -> Vec<Vec<Zone>> {
+/// their first generator and modulator.
+fn zones(headers: &[u8], size: usize, bag_at: usize, bags: &[u8], gens: &[u8], mods: &[u8]) -> Vec<Vec<Zone>> {
     let count = headers.len() / size;
     let bag_count = bags.len() / 4;
     let gen_count = gens.len() / 4;
+    let mod_count = mods.len() / 10;
     let mut out = Vec::with_capacity(count.saturating_sub(1));
     // The last header only marks the end.
     for h in 0..count.saturating_sub(1) {
@@ -136,6 +145,17 @@ fn zones(headers: &[u8], size: usize, bag_at: usize, bags: &[u8], gens: &[u8]) -
                     // The sample and instrument numbers are unsigned.
                     let v = if op == SAMPLE || op == INSTRUMENT { i32::from(u16_at(gens, at)) } else { i32::from(i16_at(gens, at)) };
                     z.set[op] = Some(v);
+                }
+            }
+            let (m0, m1) = (usize::from(u16_at(bags, b * 4 + 2)), usize::from(u16_at(bags, (b + 1) * 4 + 2)).min(mod_count));
+            for m in m0..m1.max(m0) {
+                let d = &mods[m * 10..m * 10 + 10];
+                let (src, dst, amount_src, transform) = (u16_at(d, 0), usize::from(u16_at(d, 2)), u16_at(d, 6), u16_at(d, 8));
+                if amount_src != 0 || transform != 0 {
+                    continue;
+                }
+                if let Some(i) = MODULATORS.iter().position(|&x| x == (src, dst)) {
+                    z.mods[i] = Some(i32::from(i16_at(d, 4)));
                 }
             }
             list.push(z);
@@ -200,8 +220,10 @@ pub fn read(body: &[u8]) -> Result<SoundBank, Error> {
         return Err(Error::CompressedSoundFont);
     }
 
-    let instruments = zones(inst, 22, 20, ibag, igen);
-    let presets = zones(phdr, 38, 24, pbag, pgen);
+    let pmod = part(b"pmod").unwrap_or(&[]);
+    let imod = part(b"imod").unwrap_or(&[]);
+    let instruments = zones(inst, 22, 20, ibag, igen, imod);
+    let presets = zones(phdr, 38, 24, pbag, pgen, pmod);
     let mut found = Vec::with_capacity(presets.len());
     for (p, list) in presets.iter().enumerate() {
         let h = &phdr[p * 38..];
@@ -222,6 +244,15 @@ pub fn read(body: &[u8]) -> Result<SoundBank, Error> {
                 let iz = iglobal.over(iz);
                 let (Some(keys), Some(vels)) = (cross(pz.keys, iz.keys), cross(pz.vels, iz.vels)) else { continue };
                 let mut g = defaults();
+                let mut m = [0, 0, 0, 50, 0];
+                for (i, v) in iz.mods.iter().enumerate() {
+                    if let Some(v) = v {
+                        m[i] = *v;
+                    }
+                }
+                for (i, v) in pz.mods.iter().enumerate() {
+                    m[i] += v.unwrap_or(0);
+                }
                 for (i, v) in iz.set.iter().enumerate() {
                     if let Some(v) = v {
                         g[i] = *v;
@@ -239,7 +270,7 @@ pub fn read(body: &[u8]) -> Result<SoundBank, Error> {
                     // In a sound card's ROM, not the file.
                     continue;
                 }
-                if let Some(r) = region(&g, s, keys, vels, samples.len()) {
+                if let Some(r) = region(&g, &m, s, keys, vels, samples.len()) {
                     regions.push(r);
                 }
             }
@@ -266,7 +297,7 @@ fn envelope(g: &[i32; GENERATORS], at: usize, volume: bool) -> Envelope {
     }
 }
 
-fn region(g: &[i32; GENERATORS], s: &SampleHeader, keys: (u8, u8), vels: (u8, u8), len: usize) -> Option<Region> {
+fn region(g: &[i32; GENERATORS], m: &[i32; MODULATORS.len()], s: &SampleHeader, keys: (u8, u8), vels: (u8, u8), len: usize) -> Option<Region> {
     let len = len as i64;
     let at = |base: u32, fine: usize, coarse: usize| (i64::from(base) + i64::from(g[fine]) + 32_768 * i64::from(g[coarse])).clamp(0, len) as u32;
     let start = at(s.start, START, START_COARSE);
@@ -289,7 +320,9 @@ fn region(g: &[i32; GENERATORS], s: &SampleHeader, keys: (u8, u8), vels: (u8, u8
     };
     let fixed = |v: i32| (0..=127).contains(&v).then_some(v as u8);
     let q = (g[Q] as f32 / 10.0).clamp(0.0, 96.0);
-    let filtered = g[CUTOFF] < 13_500 || g[MOD_LFO_CUTOFF] != 0 || g[MOD_ENV_CUTOFF] != 0;
+    let filtered = g[CUTOFF] < 13_500 || g[MOD_LFO_CUTOFF] != 0 || g[MOD_ENV_CUTOFF] != 0 || m[0] != 0 || m[1] != 0;
+    let mut vol_env = envelope(g, VOL_ENV, true);
+    vol_env.vel_attack = m[2] as f32;
     Some(Region {
         keys,
         vels,
@@ -313,7 +346,7 @@ fn region(g: &[i32; GENERATORS], s: &SampleHeader, keys: (u8, u8), vels: (u8, u8
         reverb: (g[REVERB] as f32 / 1000.0).clamp(0.0, 1.0),
         chorus: (g[CHORUS] as f32 / 1000.0).clamp(0.0, 1.0),
         exclusive: g[EXCLUSIVE].clamp(0, 127) as u16,
-        vol_env: envelope(g, VOL_ENV, true),
+        vol_env,
         mod_env: envelope(g, MOD_ENV, false),
         mod_env_pitch: g[MOD_ENV_PITCH] as f32,
         mod_env_cutoff: g[MOD_ENV_CUTOFF] as f32,
@@ -323,12 +356,12 @@ fn region(g: &[i32; GENERATORS], s: &SampleHeader, keys: (u8, u8), vels: (u8, u8
         mod_lfo_volume: g[MOD_LFO_VOLUME] as f32,
         vib_lfo: (g[VIB_LFO_DELAY] as f32, super::hz(g[VIB_LFO_FREQ] as f32)),
         vib_lfo_pitch: g[VIB_LFO_PITCH] as f32,
-        wheel_mod_lfo: 0.0,
-        wheel_vib_lfo: 50.0,
+        wheel_mod_lfo: m[4] as f32,
+        wheel_vib_lfo: m[3] as f32,
         cutoff: g[CUTOFF] as f32,
         q,
         filtered,
-        vel_cutoff: 0.0,
-        key_cutoff: 0.0,
+        vel_cutoff: m[0] as f32,
+        key_cutoff: m[1] as f32 / 128.0,
     })
 }

@@ -11,6 +11,7 @@ What's included, for one target (the host's, or the one given):
 - the C libraries some crates build in (libopus, WavPack, SQLite), whose
   own license files sit deeper in those crates, and Flite's and Pocket
   TTS's speech data;
+- coffeemud.sf2's credits (CC0, src-tauri/resources/coffeemud/);
 - every npm production package, from node_modules;
 - the VGA font's license (CC BY-SA 4.0), shipped beside the font too.
 
@@ -179,6 +180,9 @@ def main():
     target = sys.argv[1] if len(sys.argv) > 1 else host_target()
     entries = list(rust(target)) + list(npm())
     entries.append(("IBM VGA 8x16 font by VileR, The Ultimate Oldschool PC Font Pack (CC BY-SA 4.0)", [read(ROOT / "public/fonts/ansiapps/LICENSE.TXT")]))
+    # Not software, but shipped beside it: CC0 asks for nothing, and its
+    # recordings' authors are credited anyway.
+    entries.append(("coffeemud.sf2, CoffeeMUD's sounds, by ansiapps, and its recordings (CC0 1.0)", [read(ROOT / "src-tauri/resources/coffeemud/CREDITS.txt")]))
     # Each distinct text once (texts differing only in spacing and line
     # breaks are the same), with everything under it.
     users: dict[str, list[str]] = {}

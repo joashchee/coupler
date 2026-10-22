@@ -1,11 +1,11 @@
 [package]
 name = "neumetik-midi"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.75"
 authors = ["ansiapps"]
 license = "MIT"
-description = "General MIDI and GS music for games with no SoundFont needed: a tiny, dependency-free synthesizer that turns MIDI into samples, and plays SoundFont and DLS banks too"
+description = "General MIDI and GS music for games with no SoundFont needed: a tiny, dependency-free synthesizer that turns MIDI into samples, plays SoundFont and DLS banks too, and makes SoundFonts"
 readme = "README.md"
 repository = "https://github.com/joashchee/neumetik-midi"
 keywords = ["midi", "synthesizer", "gamedev", "soundfont", "general-midi"]

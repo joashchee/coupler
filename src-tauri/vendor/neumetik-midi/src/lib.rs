@@ -58,6 +58,11 @@
 //! # Ok::<(), neumetik_midi::Error>(())
 //! ```
 //!
+//! **And it makes SoundFonts**: [`soundfont`] packs Neumetik's own
+//! instruments as an `.sf2` for any SoundFont player
+//! ([`SoundFont::neumetik`]), turns a DLS bank into one, trims a bank to
+//! what a song plays, or builds one from your own samples.
+//!
 //! Rendering never allocates, locks or panics, and the same MIDI always
 //! makes the same samples.
 
@@ -74,6 +79,7 @@ mod player;
 mod sampled;
 mod sequencer;
 mod smf;
+pub mod soundfont;
 mod synth;
 mod voice;
 
@@ -83,6 +89,7 @@ pub use output::wav;
 pub use patch::Patch;
 pub use player::{PlayState, Player, Song};
 pub use sequencer::Sequencer;
+pub use soundfont::SoundFont;
 pub use synth::{Synth, MAX_RATE, MIN_RATE};
 
 /// Voices at once; past it, the quietest is stolen.

@@ -65,11 +65,18 @@ jobs:
           path: src-tauri/target/pocket-tts-download
           key: pocket-tts-${{ hashFiles('scripts/pocket-tts-fetch.py') }}
 
+      # coffeemud.sf2, CoffeeMUD's sounds (77 MB, not in git), the same.
+      - uses: actions/cache@v4
+        with:
+          path: src-tauri/target/coffeemud-sf2-download
+          key: coffeemud-sf2-${{ hashFiles('scripts/coffeemud-sf2-fetch.py') }}
+
       - run: npm ci
 
-      # What build-release.sh does before building: the voices' files,
+      # What build-release.sh does before building: the voices' and sounds' files,
       # and the licenses of what this (Linux) build links, for About.
       - run: python scripts/pocket-tts-fetch.py
+      - run: python scripts/coffeemud-sf2-fetch.py
       - run: python scripts/third-party-licenses.py
 
       # Keep the runner's paths out of the binary, as build-release.sh

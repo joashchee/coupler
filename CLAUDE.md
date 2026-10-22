@@ -342,6 +342,22 @@ and its order is in the roadmap's phase 2.
   type) and the BGW (under the sky); `session.rs` emits `ambient` when
   that changes and `lib/assets.ts` `setLoop` fades between them on the
   BGN and BGW buses.
+- `src-tauri/src/soundbank.rs`: **coffeemud.sf2**, CoffeeMUD's
+  sounds as a SoundFont (CC0, made by ansiapps' Neumetik, its original
+  in that repository's `coffeemud/`): 210 slots, each an event on a
+  key of its own, program 0 effects, 1 ambience and weather loops, 2
+  interface and socials, 3 crafting and foley; on combat's and the
+  creatures' keys velocity picks one of three sounds (`Tier`).
+  `soundbank.tsv` is Neumetik's `map.tsv` at the bank's release (what
+  triggers each, its MSP names: `by_msp`). Not in git:
+  `scripts/coffeemud-sf2-fetch.py` (pinned tag and SHA-256; run once
+  after cloning, and `build-release.sh` and CI run it) writes
+  `src-tauri/resources/coffeemud/coffeemud.sf2`, shipped as the app's
+  `Resources/coffeemud/` beside the committed `CREDITS.txt`.
+  `scripts/coffeemud-sf2-sync.py` copies the map and writes the credits
+  from Neumetik at that tag; a new bank changes the fetch script's
+  `TAG` and `SHA256`, then runs it. Its tests skip without the file.
+  Nothing plays it yet (phase A of its wiring is done).
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the

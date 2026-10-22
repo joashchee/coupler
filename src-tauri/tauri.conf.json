@@ -39,7 +39,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/pocket-tts/": "pocket-tts/"
+      "resources/pocket-tts/": "pocket-tts/",
+      "resources/coffeemud/": "coffeemud/"
     },
     "macOS": {
       "hardenedRuntime": true

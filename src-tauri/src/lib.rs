@@ -48,6 +48,7 @@ mod portrait;
 mod screen_reader;
 mod senses;
 mod session;
+mod soundbank;
 mod speech;
 mod stretch;
 mod synth;

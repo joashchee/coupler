@@ -139,6 +139,13 @@ impl State {
         let _ = self.apply(message);
     }
 
+    /// What a channel plays: whether it's a drum part, its bank and its
+    /// program.
+    pub(crate) fn instrument(&self, ch: usize) -> (bool, u8, u8) {
+        let c = &self.channels[ch & 15];
+        (c.drums, c.bank, c.program)
+    }
+
     fn channel(&mut self, status: u8, a: u8, b: u8) -> Effect {
         let ch = usize::from(status & 0x0f);
         let (a, b) = (a & 0x7f, b & 0x7f);

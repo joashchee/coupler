@@ -48,6 +48,7 @@ line tools.
 ```sh
 npm install
 scripts/pocket-tts-fetch.py      # once: the bundled voices' model, ~250 MB
+scripts/coffeemud-sf2-fetch.py   # once: CoffeeMUD's sounds, 77 MB
 npm run tauri dev                # a dev build (Vite on port 1460)
 scripts/build-release.sh --bundles app   # a release Coupler.app
 ```

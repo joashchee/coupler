@@ -65,6 +65,8 @@ fi
 # Pocket TTS's weights and voices (~250 MB, not in git): fetched once,
 # checked against their pinned SHA-256s, and shipped in Resources.
 python3 scripts/pocket-tts-fetch.py
+# coffeemud.sf2, CoffeeMUD's sounds (77 MB, not in git): the same.
+python3 scripts/coffeemud-sf2-fetch.py
 python3 scripts/third-party-licenses.py
 
 export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=~ --remap-path-prefix=$ROOT=."

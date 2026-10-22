@@ -1,0 +1,211 @@
+prog	key	note	name	trigger	msp	play	plan	source
+0	12	C0	Heavy impact	Generic heavy impact: door slam, giant step		once	synth	sfx:sub-impact
+0	13	C#0	Critical thump	Critical hit, under A#1		once	synth	sfx:sub-critical
+0	14	D0	Heavy damage thud	Heavy damage, under B1		once	synth	sfx:sub-damage
+0	15	D#0	Creature death drop	Creature death, under C2		once	synth	sfx:sub-creature-death
+0	16	E0	Humanoid fall sub	Humanoid death, under C#2		once	synth	sfx:sub-body-fall
+0	17	F0	Explosion sub	Explosion or fireball, under C#4	explode.wav	once	synth	sfx:sub-explosion
+0	18	F#0	Electric sub crack	Electric impact, under F#4		once	synth	sfx:sub-electric
+0	19	G0	Earthquake rumble	Earthquake, tremor, cave collapse	earthquake.wav	once	synth	sfx:earthquake
+0	20	G#0	Roar foundation	Dragon or giant roar, under A3 and D3		once	synth	sfx:roar-foundation
+0	21	A0	Doom riser	Boss appears		once	synth	sfx:doom-riser
+0	22	A#0	Implosion	Spell catastrophe		once	synth	sfx:implosion
+0	23	B0	Dread drone	Dungeon or crypt dread, under D#5 ambience		loop	bgn	bgn:horror-and-suspense-low-frequency-dread-drone
+0	24	C1	Blade swing	Melee attack: sword, axe, spear		once	rec	file:samples/0-24-blade-swing.wav tune=300 cut=5000 | file:samples/0-24-blade-swing.wav | file:samples/0-24-blade-swing.wav tune=-300
+0	25	C#1	Blunt swing	Blunt attack: club, hammer, staff		once	rec	file:samples/0-25-blunt-swing.wav tune=300 cut=4000 | file:samples/0-25-blunt-swing.wav | file:samples/0-25-blunt-swing.wav tune=-300
+0	26	D1	Natural attack	Claw, bite, punch	punch.wav	once	rec	file:samples/0-26-natural-attack-light.wav | file:samples/0-26-natural-attack.wav | file:samples/0-26-natural-attack-severe.wav
+0	27	D#1	Arrow release	Ranged attack fires	arrow.wav	once	rec	file:samples/0-27-arrow-release.wav
+0	28	E1	Bow draw	Ranged preparation		once	rec	file:samples/0-28-bow-draw.wav
+0	29	F1	Flesh hit	Attack lands	bashed1.wav	once	rec	file:samples/0-29-flesh-hit-light.wav | file:samples/0-29-flesh-hit.wav | file:samples/0-29-flesh-hit-severe.wav
+0	30	F#1	Armor clang	Hit on metal armor		once	rec	file:samples/0-30-armor-clang-light.wav | file:samples/0-30-armor-clang.wav | file:samples/0-30-armor-clang-severe.wav
+0	31	G1	Shield block	Block succeeds		once	rec	file:samples/0-31-shield-block-light.wav | file:samples/0-31-shield-block.wav | file:samples/0-31-shield-block-severe.wav
+0	32	G#1	Parry ring	Parry or deflect		once	rec	file:samples/0-32-parry-ring-light.wav | file:samples/0-32-parry-ring.wav | file:samples/0-32-parry-ring-severe.wav
+0	33	A1	Miss whoosh	Attack misses	missed.wav	once	rec	file:samples/0-33-miss-whoosh.wav
+0	34	A#1	Critical hit	Critical damage, behead	bashed2.wav decap.wav	once	rec	file:samples/0-34-critical-hit.wav
+0	35	B1	Pain grunt	Damage taken	ouch.wav	once	rec	file:samples/0-35-pain-grunt-light.wav | file:samples/0-35-pain-grunt.wav | file:samples/0-35-pain-grunt-severe.wav
+0	36	C2	Monster collapse	Creature dies		once	rec	file:samples/0-36-monster-collapse.wav
+0	37	C#2	Body fall	Humanoid dies	collapse.wav	once	rec	file:samples/0-37-body-fall.wav
+0	38	D2	Item handling	GET, PUT, DROP		once	rec	file:samples/0-38-item-handling.wav
+0	39	D#2	Door open	OPEN	dooropen.wav	once	rec	file:samples/0-39-door-open.wav
+0	40	E2	Door close	CLOSE (CoffeeMud sends dooropen.wav for it too)	dooropen.wav	once	rec	file:samples/0-40-door-close.wav
+0	41	F2	Lock and unlock	LOCK, UNLOCK	doorlock.wav doorunlock.wav	once	rec	file:samples/0-41-lock.wav
+0	42	F#2	Equip	WEAR, WIELD		once	rec	file:samples/0-42-equip.wav
+0	43	G2	Unequip	REMOVE		once	rec	file:samples/0-43-unequip.wav
+0	44	G#2	Posture	SIT, STAND		once	rec	file:samples/0-44-posture.wav
+0	45	A2	Sleep and wake	SLEEP, WAKE		once	rec	file:samples/0-45-sleep-wake.wav
+0	46	A#2	Footsteps in	Enter a room (room.enter)		once	rec	file:samples/0-46-footsteps-in.wav
+0	47	B2	Footsteps out	Leave a room (room.leave)		once	rec	file:samples/0-47-footsteps-out.wav
+0	48	C3	Humanoid	Humanoid: breath, shout, pain cry	scream.wav	once	rec	file:samples/0-48-humanoid-idle.wav | file:samples/0-48-humanoid.wav | file:samples/0-48-humanoid-pain.wav
+0	49	C#3	Goblinoid	Goblinoid: chatter, snarl, squeal		once	rec	file:samples/0-49-goblinoid-idle.wav | file:samples/0-49-goblinoid.wav | file:samples/0-49-goblinoid-pain.wav
+0	50	D3	Giant-kin	Giant-kin: breath, roar, bellow		once	rec	file:samples/0-50-giant-idle.wav | file:samples/0-50-giant.wav | file:samples/0-50-giant-pain.wav
+0	51	D#3	Canine	Canine: pant, growl or bark, yelp		once	rec	file:samples/0-51-canine-idle.wav | file:samples/0-51-canine.wav | file:samples/0-51-canine-pain.wav
+0	52	E3	Feline	Feline or large beast: purr, roar, yowl		once	rec	file:samples/0-52-feline-idle.wav | file:samples/0-52-feline.wav | file:samples/0-52-feline-pain.wav
+0	53	F3	Avian	Avian: chirp, screech, cry		once	rec	file:samples/0-53-avian-idle.wav | file:samples/0-53-avian.wav | file:samples/0-53-avian-pain.wav
+0	54	F#3	Reptile	Reptile or ophidian: hiss, rattle		once	rec	file:samples/0-54-reptile-idle.wav | file:samples/0-54-reptile-aggressive.wav | file:samples/0-54-reptile.wav
+0	55	G3	Insect	Insect or arachnid: skitter, chitter, squelch		once	rec	file:samples/0-55-insect-idle.wav | file:samples/0-55-insect.wav | file:samples/0-55-insect-pain.wav
+0	56	G#3	Undead	Undead: moan, wail, bones		once	rec	file:samples/0-56-undead-idle.wav | file:samples/0-56-undead.wav | file:samples/0-56-undead-pain.wav
+0	57	A3	Dragon	Dragon or wyrm: rumble, roar		once	rec	file:samples/0-57-dragon-idle.wav | file:samples/0-57-dragon.wav | file:samples/0-57-dragon-pain.wav
+0	58	A#3	Elemental	Elemental or mephit: hum, burst		once	synth	sfx:elemental cut=1500 | sfx:elemental | sfx:elemental tune=500
+0	59	B3	Construct	Construct or golem: grind, slam		once	rec	file:samples/0-59-construct.wav | file:samples/0-59-construct-aggressive.wav tune=-500 | file:samples/0-59-construct-pain.wav
+0	60	C4	Arcane impact	A spell lands: generic or unknown	spelldam2.wav spelldam1.wav	once	synth	sfx:impact-arcane
+0	61	C#4	Fire impact	Fire spell lands	fireball.wav meteor.wav explode.wav	once	synth	sfx:impact-fire
+0	62	D4	Cold impact	Cold spell lands		once	synth	sfx:impact-cold
+0	63	D#4	Water impact	Water spell lands	water.wav	once	synth	sfx:impact-water
+0	64	E4	Acid impact	Acid spell lands		once	synth	sfx:impact-acid
+0	65	F4	Gas impact	Gas spell lands		once	synth	sfx:impact-gas
+0	66	F#4	Electric impact	Electric spell lands	lightning.wav shock.wav	once	synth	sfx:impact-electric
+0	67	G4	Mind impact	Mind spell lands		once	synth	sfx:impact-mind
+0	68	G#4	Poison impact	Poison takes hold	poisoned.wav	once	synth	sfx:impact-poison
+0	69	A4	Paralysis impact	Paralysis or web holds	web.wav	once	synth	sfx:impact-paralysis
+0	70	A#4	Holy impact	Holy spell or heal lands	bless.wav	once	synth	sfx:impact-holy
+0	71	B4	Necromantic impact	Necromantic spell lands		once	synth	sfx:impact-necro
+0	96	C7	Arcane shimmer	High detail over C4 or C8		once	synth	sfx:accent-arcane
+0	97	C#7	Flame crackle	High detail over C#4 or C#8		once	synth	sfx:accent-fire
+0	98	D7	Frost sparkle	High detail over D4 or D8		once	synth	sfx:accent-cold
+0	99	D#7	Droplets	High detail over D#4 or D#8		once	synth	sfx:accent-water
+0	100	E7	Acid fizz	High detail over E4 or E8		once	synth	sfx:accent-acid
+0	101	F7	Gas hiss	High detail over F4 or F8		once	synth	sfx:accent-gas
+0	102	F#7	Voltage crackle	High detail over F#4 or F#8		once	synth	sfx:accent-electric
+0	103	G7	Eerie ring	High detail over G4 or G8		once	synth	sfx:accent-mind
+0	104	G#7	Venom buzz	High detail over G#4 or G#8		once	synth	sfx:accent-poison
+0	105	A7	Bell air	High detail over A#4 or A#8		once	synth	sfx:accent-holy
+0	106	A#7	Whispering air	High detail over B4 or B8		once	synth	sfx:accent-necro
+0	107	B7	Portal whoosh	Teleport, gate, summon	appear.wav	once	synth	sfx:portal
+0	108	C8	Arcane cast	A spell is cast: generic or unknown	stdwand.wav	once	synth	sfx:cast-arcane
+0	109	C#8	Fire cast	Fire spell cast		once	synth	sfx:cast-fire
+0	110	D8	Cold cast	Cold spell cast		once	synth	sfx:cast-cold
+0	111	D#8	Water cast	Water spell cast		once	synth	sfx:cast-water
+0	112	E8	Acid cast	Acid spell cast		once	synth	sfx:cast-acid
+0	113	F8	Gas cast	Gas spell cast		once	synth	sfx:cast-gas
+0	114	F#8	Electric cast	Electric spell cast		once	synth	sfx:cast-electric
+0	115	G8	Mind cast	Mind spell cast		once	synth	sfx:cast-mind
+0	116	G#8	Poison cast	Poison spell cast		once	synth	sfx:cast-poison
+0	117	A8	Paralysis cast	Paralysis spell cast		once	synth	sfx:cast-paralysis
+0	118	A#8	Holy cast	Holy spell or prayer cast		once	synth	sfx:cast-holy
+0	119	B8	Necromantic cast	Necromantic spell cast		once	synth	sfx:cast-necro
+1	60	C4	Battle tension	In combat (char.status)		loop	bgn	bgn:fantasy-orc-war-camp
+1	61	C#4	Ominous dread	Evil or haunted area		loop	bgn	same:0/23
+1	62	D4	Sacred	Holy site		loop	bgn	bgn:fantasy-heaven-celestial-realm
+1	63	D#4	Spirits	Haunted, ghosts		loop	bgn	bgn:fantasy-spirit-realm
+1	64	E4	Ritual chant	Cult, necromancer's lair		loop	bgn	bgn:horror-and-suspense-ritual-chanting
+1	65	F4	Infernal	Hellish plane		loop	bgn	bgn:fantasy-underworld-hell
+1	66	F#4	Enchanted	Fey or magical woods		loop	bgn	bgn:fantasy-enchanted-forest
+1	67	G4	Crystal resonance	Crystal cave		loop	bgn	bgn:fantasy-crystal-caverns
+1	68	G#4	Dragon's lair	Lair		loop	bgn	bgn:fantasy-dragon-s-lair
+1	69	A4	Goblin warren	Goblin or orc caves		loop	bgn	bgn:fantasy-goblin-cave
+1	70	A#4	Forge halls	Smithy, dwarven halls		loop	bgn	bgn:fantasy-dwarven-halls
+1	71	B4	Campfire	Camp, fire in the room		loop	bgn	bgn:nature-campfire-crackle
+1	72	C5	Tavern	Terrain wooden: tavern, inn		loop	bgn	bgn:fantasy-fantasy-tavern
+1	73	C#5	Temple	Temple, shrine		loop	bgn	bgn:fantasy-mystic-temple
+1	74	D5	Cave	Terrain cave		loop	bgn	bgn:nature-cave
+1	75	D#5	Dungeon	Dungeon, crypt		loop	bgn	bgn:historical-and-period-castle-dungeon
+1	76	E5	Library	Library, study		loop	bgn	bgn:fantasy-magic-library
+1	77	F5	Forest by day	Terrain woods, day		loop	bgn	bgn:nature-temperate-forest
+1	78	F#5	Forest by night	Terrain woods, night		loop	bgn	bgn:nature-temperate-forest-2
+1	79	G5	Town	Terrain city		loop	bgn	bgn:historical-and-period-medieval-village
+1	80	G#5	Frozen heights	Mountains or plains in a cold climate		loop	bgn	bgn:nature-arctic-wind
+1	81	A5	Swamp	Terrain swamp		loop	bgn	bgn:nature-wetlands-bayou
+1	82	A#5	Desert	Terrain desert		loop	bgn	bgn:nature-desert
+1	83	B5	Underwater	Terrain underwater, in_underwater		loop	bgn	bgn:nature-underwater
+1	84	C6	Hail	WEATHER_HAIL (the template's calm, clear slot)	hail.wav	loop	bgn	bgn:nature-hail
+1	85	C#6	Light rain	WEATHER_RAIN, WEATHER_SLEET	rain.wav	loop	bgn	bgn:nature-light-rain
+1	86	D6	Heavy rain	WEATHER_RAIN, heavy	rainlong.wav	loop	bgn	bgn:nature-heavy-downpour
+1	87	D#6	Thunderstorm	WEATHER_THUNDERSTORM	thunderandrain.wav	loop	bgn	bgn:nature-thunderstorm
+1	88	E6	Light wind	WEATHER_CLOUDY, a breeze	wind.wav	loop	bgn	bgn:nature-gentle-breeze
+1	89	F6	Strong wind	WEATHER_WINDY	windy.wav	loop	bgn	bgn:nature-howling-wind
+1	90	F#6	Snow	WEATHER_SNOW, WEATHER_BLIZZARD	blizzard.wav	loop	bgn	bgn:nature-blizzard-whiteout
+1	91	G6	Heat	WEATHER_HEAT_WAVE, WEATHER_DROUGHT		loop	bgn	bgn:nature-heat-haze
+1	92	G#6	Bitter cold	WEATHER_WINTER_COLD		loop	bgn	bgn:nature-tundra
+1	93	A6	Fog	WEATHER_FOG		loop	bgn	bgn:nature-fog -horns
+1	94	A#6	Dust storm	WEATHER_DUSTSTORM	windy.wav	loop	bgn	bgn:nature-dust-storm-sandstorm
+1	95	B6	Unnatural weather	Magical or planar weather		loop	bgn	bgn:fantasy-portal-rift-hum
+1	96	C7	Plains	Terrain plains		loop	bgn	bgn:nature-wind-over-open-plains
+1	97	C#7	Hills	Terrain hills		loop	bgn	bgn:nature-mountain-meadow
+1	98	D7	Rocky ground	Terrain rocky		loop	bgn	bgn:nature-canyon
+1	99	D#7	Mountains	Terrain mountains		loop	bgn	bgn:nature-wind-on-mountain-peaks
+1	100	E7	Jungle	Terrain jungle		loop	bgn	bgn:nature-rainforest-jungle
+1	101	F7	River or lake	Terrain watersurface, inland		loop	bgn	bgn:nature-river
+1	102	F#7	Open sea	Terrain watersurface at sea		loop	bgn	bgn:nature-open-ocean
+1	103	G7	Sky	Terrain air, gap		loop	bgn	bgn:fantasy-floating-islands
+1	104	G#7	Castle halls	Terrain stone		loop	bgn	bgn:historical-and-period-torch-lit-corridor
+1	105	A7	Metal hull	Terrain metal, spaceport		loop	bgn	bgn:science-fiction-spaceship-corridor
+1	106	A#7	Wizard's tower	Terrain magic		loop	bgn	bgn:fantasy-wizard-s-tower
+1	107	B7	Cave lake	Terrain cavelakesurface, caveseaport		loop	bgn	bgn:nature-sea-caves
+1	108	C8	Harbor	Terrain seaport, innerseaport		loop	bgn	bgn:nature-harbor-water-slapping-against-hulls-and-docks -horns
+1	109	C#8	Market	A busy town square		loop	bgn	bgn:historical-and-period-medieval-market
+1	110	D8	Great hall	Castle hall, feast		loop	bgn	bgn:historical-and-period-castle-great-hall
+1	111	D#8	Elven city	Elven settlement		loop	bgn	bgn:fantasy-elven-city
+2	60	C4	Command accepted	A command went through		once	synth	sfx:ui-accept
+2	61	C#4	Command rejected	Huh?, invalid input		once	synth	sfx:ui-reject
+2	62	D4	Level up	Level gained, skill gained	levelgain.wav	once	synth	sfx:ui-level-up
+2	63	D#4	Quest update	Quest accepted, objective updated		once	synth	sfx:ui-quest-update
+2	64	E4	Quest complete	Quest complete, reward		once	synth	sfx:ui-quest-complete
+2	65	F4	Channel message	comm.channel		once	synth	sfx:ui-channel
+2	66	F#4	Tell	A tell, a private message		once	synth	sfx:ui-tell
+2	67	G4	Login and logout	Login (rising), logout (falling)		once	synth	sfx:ui-login
+2	68	G#4	Say	SAY, SPEAK		once	synth	sfx:ui-say
+2	69	A4	Laugh	LAUGH, CHEER	laugh.wav cheer.wav	once	rec	file:samples/2-69-laugh.wav
+2	70	A#4	Sniff and sneeze	SNIFF, SNEEZE, COUGH	sniffle.wav sneeze.wav	once	rec	file:samples/2-70-sneeze.wav
+2	71	B4	Defeat	Death screen, level lost	doh.wav	once	synth	sfx:ui-defeat
+2	72	C5	Kiss	KISS	kiss.wav bkiss.wav	once	rec	file:samples/2-72-kiss.wav
+2	73	C#5	Hug	HUG, COMFORT	bighug.wav	once	rec	file:samples/2-73-hug.wav
+2	74	D5	Threat	POINT, GLARE		once	synth	sfx:sting-threat
+2	75	D#5	Dance	DANCE, BOUNCE	bounce.wav	once	rec	file:samples/2-75-dance.wav
+2	76	E5	Applause	APPLAUD, CLAP	clap.wav	once	bgn	bgn:crowds-and-events-applause len=5 out=2
+2	77	F5	Giggle	GIGGLE	giggle.wav	once	rec	file:samples/2-77-giggle.wav
+2	78	F#5	Chuckle	CHUCKLE, SNICKER	chuckle.wav snicker.wav	once	rec	file:samples/2-78-chuckle.wav
+2	79	G5	Cackle	CACKLE	cackle.wav	once	rec	file:samples/2-79-cackle.wav
+2	80	G#5	Gasp	GASP	gasp.wav	once	rec	file:samples/2-80-gasp.wav
+2	81	A5	Groan	GROAN	groan.wav	once	rec	file:samples/2-81-groan.wav
+2	82	A#5	Sob	SOB	sob.wav	once	rec	file:samples/2-82-sob.wav
+2	83	B5	Yawn	YAWN, yawning disease	yawn.wav	once	rec	file:samples/2-83-yawn.wav
+2	84	C6	Snore	SNORE	snore.wav	once	rec	file:samples/2-84-snore.wav
+2	85	C#6	Burp	BURP	burp.wav	once	rec	file:samples/2-85-burp.wav
+2	86	D6	Hiccup	HICCUP	hiccup.wav	once	rec	file:samples/2-86-hiccup.wav
+2	87	D#6	Fart	FART	fart.wav	once	rec	file:samples/2-87-fart.wav
+2	88	E6	Puke	PUKE	puke.wav	once	rec	file:samples/2-88-puke.wav
+2	89	F6	Raspberry	RASPBERRY	raspberry.wav	once	rec	file:samples/2-89-raspberry.wav
+2	90	F#6	Whistle	WHISTLE	whistle.wav	once	synth	sfx:whistle
+2	91	G6	Whew	WHEW	whew.wav	once	rec	file:samples/2-91-whew.wav
+2	92	G#6	Pant	PANT	pant.wav	once	rec	file:samples/2-92-pant.wav
+2	93	A6	Slap	SLAP	slap.wav	once	rec	file:samples/2-93-slap.wav
+2	94	A#6	Whip	WHIP	whip.wav	once	rec	file:samples/2-94-whip.wav
+2	95	B6	Bleep	A curse bleeped out	cursebeepout.wav cursebleepout.wav	once	synth	sfx:bleep
+2	96	C7	Bark	BARK, HOWL	bark.wav howl.wav	once	rec	same:0/51
+2	97	C#7	Meow	MEOW	meow.wav	once	rec	file:samples/2-97-meow.wav
+2	98	D7	Moo	MOO	moo.wav	once	rec	file:samples/2-98-moo.wav
+2	99	D#7	Scry	SCRY	scry.wav	once	synth	sfx:scry
+2	100	E7	Bow	BOW, CURTSY, WAVE		once	rec	file:samples/2-100-bow.wav
+2	101	F7	Growl	GROWL	growl.wav	once	rec	file:samples/2-101-growl.wav
+2	102	F#7	Whisper	WHISPER	whisper.wav	once	rec	file:samples/2-102-whisper.wav
+3	60	C4	Hammering	Building, construction, wainwrighting	hammer.wav	once	rec	file:samples/3-60-hammering.wav
+3	61	C#4	Sawing	Carpentry, shipwright, staff and wand making	sawing.wav saw.wav	once	rec	file:samples/3-61-sawing.wav
+3	62	D4	Scissors	Tailoring, leatherworking, costuming, shearing	scissor.wav	once	rec	file:samples/3-62-scissors.wav
+3	63	D#4	Sanding	Fletching, cobbling, instrument making	sanding.wav	once	rec	file:samples/3-63-sanding.wav
+3	64	E4	Ripping	Butchering, tanning, salvaging	ripping.wav	once	rec	file:samples/3-64-ripping.wav
+3	65	F4	Fine metalwork	Jewelmaking, shardmaking	tinktinktink.wav	once	rec	file:samples/3-65-fine-metalwork.wav
+3	66	F#4	Smithing	Blacksmithing, weaponsmithing	tinktinktink2.wav	once	rec	file:samples/3-66-smithing.wav
+3	67	G4	Digging	Digging, mining	dig.wav	once	rec	file:samples/3-67-digging.wav
+3	68	G#4	Stonework	Masonry, excavation, landscaping	stone.wav	once	rec	file:samples/3-68-stonework.wav
+3	69	A4	Drilling	Drilling, locksmith	drill.wav	once	rec	file:samples/3-69-drilling.wav
+3	70	A#4	Chopping wood	Chopping	chopping.wav	once	rec	file:samples/3-70-chopping-wood.wav
+3	71	B4	Chopping food	Food prep	chopchop.wav	once	rec	file:samples/3-71-chopping-food.wav
+3	72	C5	Frying	Cooking	sizzle.wav	once	rec	file:samples/3-72-frying.wav
+3	73	C#5	Smelting	Smelting	sizzling.wav	once	rec	file:samples/3-73-smelting.wav
+3	74	D5	Pouring	Cooking liquids	liquid.wav	once	rec	file:samples/3-74-pouring.wav
+3	75	D#5	Bubbling brew	Alchemy, herbalism, distilling	hotspring.wav	once	bgn	bgn:nature-hot-springs-geysers -wind -stream -steam len=4
+3	76	E5	Welding	Welding	welding.wav	once	rec	file:samples/3-76-welding.wav
+3	77	F5	Ratchet	Armorsmithing	ratchet.wav	once	rec	file:samples/3-77-ratchet.wav
+3	78	F#5	Chisel	Sculpting	metalbat.wav	once	rec	file:samples/3-78-chisel.wav
+3	79	G5	Paper	Papermaking	crumple.wav	once	rec	file:samples/3-79-paper.wav
+3	80	G#5	Fishing reel	Fishing, trawling	fishreel.wav	once	rec	file:samples/3-80-fishing-reel.wav
+3	81	A5	Furnace	Glassblowing, combustion	fire.wav	once	bgn	bgn:industrial-and-technical-blacksmith-forge -knocks -steam in=0.3 len=4 out=1.5
+3	84	C6	Knock	KNOCK, the knock spell	knock.wav	once	rec	file:samples/3-84-knock.wav
+3	85	C#6	Drink	DRINK	drink.wav	once	rec	file:samples/3-85-drink.wav
+3	86	D6	Eat	EAT	gulp.wav	once	rec	file:samples/3-86-eat.wav
+3	87	D#6	Fall	Falling and landing	splat.wav	once	rec	file:samples/3-87-fall.wav
+3	88	E6	Choke	Choking	choke.wav	once	rec	file:samples/3-88-choke.wav
+3	89	F6	Thunderclap	Lightning strikes nearby	thunder.wav thunder2.wav thunder3.wav	once	bgn	bgn:nature-thunderstorm-2 -wind -rain thunder.0=0 len=8 out=2
+3	90	F#6	Tornado	A tornado touches down	tornado.wav	once	bgn	bgn:nature-tornado in=1.5 len=8 out=3
+3	91	G6	Coins	Money changes hands		once	rec	file:samples/3-91-coins.wav
+3	92	G#6	Trap	A trap springs		once	rec	file:samples/3-92-trap.wav

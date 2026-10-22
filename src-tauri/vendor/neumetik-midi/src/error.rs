@@ -21,6 +21,12 @@ pub enum Error {
     /// It's a compressed SoundFont (SF3, its samples Ogg Vorbis), which
     /// isn't read: use the SF2 it was made from.
     CompressedSoundFont,
+    /// A SoundFont that can't be written: a zone plays a sample or
+    /// instrument it hasn't, a stereo pair doesn't point at each other, a
+    /// loop is outside its sample, or it's past what the format holds.
+    Unwritable,
+    /// It isn't a WAV file of PCM or float samples.
+    NotWav,
 }
 
 impl Error {
@@ -34,6 +40,8 @@ impl Error {
             Error::NotSoundBank => -6,
             Error::BadSoundBank => -7,
             Error::CompressedSoundFont => -8,
+            Error::Unwritable => -9,
+            Error::NotWav => -10,
         }
     }
 }
@@ -48,6 +56,8 @@ impl fmt::Display for Error {
             Error::NotSoundBank => "it isn't a SoundFont or a DLS file",
             Error::BadSoundBank => "it's damaged, or has no instruments that can be played",
             Error::CompressedSoundFont => "it's a compressed SoundFont (SF3), which can't be played: use an SF2",
+            Error::Unwritable => "it can't be written as a SoundFont: something in it is missing or too big",
+            Error::NotWav => "it isn't a WAV file of PCM or float samples",
         })
     }
 }
