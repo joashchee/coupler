@@ -26,6 +26,7 @@ use crate::combat::{Combat, Opponent};
 use crate::daytime::{self, Daytime};
 use crate::creation::{self, Creation};
 use crate::echo::{Echoed, Echoes};
+use crate::foley::{self, Comings};
 use crate::hidden::{Hidden, LongLook};
 use crate::hooks::{Fired, Hooks};
 use crate::mapper::{self, Map, Step};
@@ -103,6 +104,8 @@ pub struct Coupler {
     shown_partial: Option<Line>,
     /// The tip about SOUNDS was given this connection.
     told_sounds_off: bool,
+    /// The lines that say how someone came or went (`foley.rs`).
+    comings: Comings,
     outgoing: Vec<u8>,
     events: Vec<Value>,
 }
@@ -142,6 +145,7 @@ impl Coupler {
             creation: Creation::default(),
             shown_partial: None,
             told_sounds_off: false,
+            comings: Comings::default(),
             outgoing: Vec::new(),
             events: Vec::new(),
         })
@@ -309,6 +313,11 @@ impl Coupler {
                             answer.push(i);
                         }
                         fired.extend(self.daytime(Said::Line(&text)));
+                        // Coupler's own events (foley.rs), for the mirror's triggers.
+                        if let Some(h) = foley::line(&text) {
+                            fired.extend(self.hooks.record(foley::EVENT_KEY, &ambient::json_text(h.name())));
+                        }
+                        self.comings.line(&text, Instant::now());
                     }
                     // Coupler's own WEATHER's answer doesn't show.
                     let mut i = 0;
@@ -341,6 +350,10 @@ impl Coupler {
                         self.character_left(left);
                     }
                     self.combat.gmcp(&package, &data);
+                    // Heard from where they came or went.
+                    if let Some(m) = self.comings.gmcp(&package, &data, Instant::now()) {
+                        fired.extend(self.hooks.record(foley::EVENT_KEY, &ambient::json_text(m.happening.name())).into_iter().map(|f| Fired { place: m.place.clone(), ..f }));
+                    }
                     let talk = self.senses.gmcp(&package, &data).filter(|t| !self.who.heard(&t.text, Instant::now()));
                     // Told once its lines are read, as printed (speech.rs `heard`).
                     if let Some(talk) = talk {

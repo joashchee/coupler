@@ -41,6 +41,7 @@ use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
 use crate::daytime::{self, Daytime, Phase};
+use crate::foley::{self, Comings, Happening, Movement, Place};
 use crate::hooks::{self, Hooks, Trigger};
 use crate::soundbank;
 use crate::journal::{self, Book, Journal};
@@ -267,6 +268,9 @@ pub struct Session {
     long_look: Mutex<LongLook>,
     /// A character being made, a question at a time (`creation.rs`).
     creation: Mutex<Creation>,
+    /// The lines that say how someone came or went, until GMCP says who
+    /// (`foley.rs`).
+    comings: Mutex<Comings>,
 }
 
 /// What `who` sends: who logged on or off.
@@ -1153,9 +1157,14 @@ impl Session {
                 if let Err(e) = hooks.add_own(daytime::TIME_KEY, &times) {
                     log::warn!("{e}");
                 }
-                // So are the game's sounds, every one CoffeeMUD sends.
-                let names: Vec<&str> = soundbank::slots().iter().flat_map(|s| s.msp.iter().copied()).collect();
+                // So are the game's sounds, every one CoffeeMUD sends, and
+                // Coupler's own events (foley.rs).
+                let names = soundbank::msp_names();
+                let names: Vec<&str> = names.iter().map(String::as_str).collect();
                 if let Err(e) = hooks.add_own(msp::SOUND_KEY, &names) {
+                    log::warn!("{e}");
+                }
+                if let Err(e) = hooks.add_own(foley::EVENT_KEY, &Happening::ALL.map(Happening::name)) {
                     log::warn!("{e}");
                 }
             }
@@ -1289,9 +1298,11 @@ impl Session {
 
     /// Works out what should loop now and tells the frontend if that
     /// changed. What the player's triggers leave silent plays the bank's
-    /// loop for the terrain and the weather (`soundbank::fill_ambience`).
+    /// loop for the terrain (the battle's in a fight) and the weather
+    /// (`soundbank::fill_ambience`).
     fn update_ambience(&self, app: &AppHandle) {
         let night = self.daytime.lock().unwrap().now() == Some(Phase::Night);
+        let fighting = self.combat.lock().unwrap().combat.opponent().is_some();
         let mut ambient = self.ambient.lock().unwrap();
         let mut now = {
             let store = self.hook_store(app);
@@ -1299,7 +1310,7 @@ impl Session {
         };
         if app.state::<soundbank::Sounds>().available() {
             let a = &ambient.ambient;
-            soundbank::fill_ambience(&mut now, a.room.as_ref().map(|r| r.terrain.as_str()), a.weather_overhead(), night);
+            soundbank::fill_ambience(&mut now, a.room.as_ref().map(|r| r.terrain.as_str()), a.weather_overhead(), night, fighting);
         }
         if now != ambient.sent {
             ambient.sent = now.clone();
@@ -1416,12 +1427,41 @@ impl Session {
     /// Returns whether a pair was new to the list, and what to play.
     fn msp_sounds(&self, app: &AppHandle, sounds: &[msp::Sound]) -> (bool, Vec<hooks::Fired>) {
         let bank = app.state::<soundbank::Sounds>().available();
+        let heard: Vec<_> = sounds
+            .iter()
+            .map(|sound| Heard { key: sound.key(), value: &sound.name, default: soundbank::msp_default(&sound.name).filter(|_| bank && !sound.music).map(|p| (p, 100)), under: None, place: None })
+            .collect();
+        self.own_sounds(app, &heard)
+    }
+
+    /// Coupler's own events (`foley.rs`), the same way: each recorded as
+    /// its `coupler.event` pair, and one the player gave no sound plays
+    /// the bank's (`soundbank::event_default`), heard from where someone
+    /// came or went.
+    fn event_sounds(&self, app: &AppHandle, happenings: &[Movement]) -> (bool, Vec<hooks::Fired>) {
+        let bank = app.state::<soundbank::Sounds>().available();
+        let heard: Vec<_> = happenings
+            .iter()
+            .map(|m| Heard {
+                key: foley::EVENT_KEY,
+                value: m.happening.name(),
+                default: soundbank::event_default(m.happening).filter(|_| bank),
+                under: soundbank::event_under(m.happening).filter(|_| bank),
+                place: m.place.clone(),
+            })
+            .collect();
+        self.own_sounds(app, &heard)
+    }
+
+    /// Pairs of Coupler's own, recorded, each setting off the player's
+    /// trigger on it, or where that gives no sound effect, the bank's.
+    fn own_sounds(&self, app: &AppHandle, heard: &[Heard]) -> (bool, Vec<hooks::Fired>) {
         let mut store = self.hook_store(app);
         let mut added = false;
         let mut fired = Vec::new();
-        for sound in sounds {
-            let value = ambient::json_text(&sound.name);
-            let mut set_off = match store.hooks.as_mut().map(|h| h.record(sound.key(), &value)) {
+        for Heard { key, value: name, default, under, place } in heard {
+            let value = ambient::json_text(name);
+            let mut set_off = match store.hooks.as_mut().map(|h| h.record(key, &value)) {
                 Some(Ok(r)) => {
                     added |= r.added > 0;
                     r.fired
@@ -1433,11 +1473,21 @@ impl Session {
                 None => Vec::new(),
             };
             let silent = set_off.iter().all(|f| f.trigger.sfx.is_none());
-            if let Some(path) = soundbank::msp_default(&sound.name).filter(|_| bank && silent && !sound.music) {
+            if let Some((path, volume)) = default.clone().filter(|_| silent) {
+                let bank = |path| Trigger { sfx: Some(path), sfx_volume: volume, ..Trigger::default() };
                 match set_off.first_mut() {
-                    Some(f) => f.trigger.sfx = Some(path),
-                    None => set_off.push(hooks::Fired { key: msp::SOUND_KEY.into(), value, trigger: Trigger { sfx: Some(path), ..Trigger::default() } }),
+                    Some(f) => {
+                        f.trigger.sfx = Some(path);
+                        f.trigger.sfx_volume = volume;
+                    }
+                    None => set_off.push(hooks::Fired { key: (*key).into(), value: value.clone(), trigger: bank(path), place: None }),
                 }
+                if let Some(under) = under.clone() {
+                    set_off.push(hooks::Fired { key: (*key).into(), value, trigger: bank(under), place: None });
+                }
+            }
+            for f in &mut set_off {
+                f.place = place.clone();
             }
             fired.extend(set_off);
         }
@@ -1461,6 +1511,17 @@ impl Session {
         let count = self.hooks_count(app);
         let _ = app.emit("hooks-changed", count);
     }
+}
+
+/// One of Coupler's own pairs heard (`Session::own_sounds`): its key and
+/// value, the bank's sound for it and how loud (a share of SFX), what the
+/// bank plays under it, and where it's heard from.
+struct Heard<'a> {
+    key: &'a str,
+    value: &'a str,
+    default: Option<(String, u8)>,
+    under: Option<String>,
+    place: Option<Place>,
 }
 
 /// What the game said that can tell the time of day (`daytime.rs`).
@@ -1514,6 +1575,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         let mut fired = Vec::new();
         // The game's sounds, cut out of its text.
         let mut sounds = Vec::new();
+        // Coupler's own events, from the text and GMCP (foley.rs).
+        let mut happenings = Vec::new();
         let session = app.state::<Session>();
         for event in out.events {
             match event {
@@ -1544,6 +1607,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         let (added, set_off) = session.daytime(app, Said::Line(&text));
                         hooks_changed |= added;
                         fired.extend(set_off);
+                        happenings.extend(foley::line(&text).map(|happening| Movement { happening, place: None }));
+                        session.comings.lock().unwrap().line(&text, Instant::now());
                     }
                     // Coupler's own WEATHER's answer doesn't show either.
                     let mut i = 0;
@@ -1591,6 +1656,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         session.character_left(app, left);
                     }
                     session.combat.lock().unwrap().combat.gmcp(&package, &data);
+                    happenings.extend(session.comings.lock().unwrap().gmcp(&package, &data, Instant::now()));
                     let talk: Option<Talk> = session.senses.lock().unwrap().senses.gmcp(&package, &data);
                     // A login or logout on a channel is a sound, not talk.
                     let talk = talk.filter(|t| !session.who.lock().unwrap().heard(&t.text, Instant::now()));
@@ -1640,6 +1706,11 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         }
         if !sounds.is_empty() {
             let (added, set_off) = session.msp_sounds(app, &sounds);
+            hooks_changed |= added;
+            fired.extend(set_off);
+        }
+        if !happenings.is_empty() {
+            let (added, set_off) = session.event_sounds(app, &happenings);
             hooks_changed |= added;
             fired.extend(set_off);
         }

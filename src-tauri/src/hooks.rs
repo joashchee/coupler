@@ -251,7 +251,7 @@ impl Hooks {
             .into_iter()
             .filter_map(|(key, value)| {
                 let trigger = self.triggers.get(&(key.clone(), value.clone()))?.clone();
-                Some(Fired { key, value, trigger })
+                Some(Fired { key, value, trigger, place: None })
             })
             .collect();
         Ok(Recorded { added, fired })
@@ -622,7 +622,7 @@ mod tests {
         let mut hooks = Hooks::in_memory().unwrap();
         hooks.record("room.info", r#"{"zone":"Midgaard","name":"Gate"}"#).unwrap();
         hooks.set_trigger("room.info.zone", r#""Midgaard""#, door()).unwrap();
-        let fired = Fired { key: "room.info.zone".into(), value: r#""Midgaard""#.into(), trigger: door() };
+        let fired = Fired { key: "room.info.zone".into(), value: r#""Midgaard""#.into(), trigger: door(), place: None };
         // Not new to the list, and it still goes off, each time.
         for _ in 0..2 {
             let recorded = hooks.record("Room.Info", r#"{"zone":"Midgaard","name":"Square"}"#).unwrap();

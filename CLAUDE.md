@@ -376,7 +376,9 @@ and its order is in the roadmap's phase 2.
   line `tidy`'d) and recorded as the pair `msp.sound` = `"name"`, every
   name the bank's map lists put in the hooks list from the start. A
   pair with no SFX of the player's plays `soundbank::msp_default` (a
-  one-shot; never a weather loop) in `Session::msp_sounds`; when MSP
+  one-shot; never a weather loop; the names CoffeeMUD rolls dice for,
+  `punch1–7.wav` and `death1–7.wav`, from `ROLLED`) in
+  `Session::msp_sounds`; when MSP
   comes on, `Sounds::warm` renders those once a run on a thread. A
   login that turns MSP off (the character's `SOUNDS` off) emits
   `sounds-off` once a connection: the tip to type SOUNDS. The web build
@@ -385,8 +387,31 @@ and its order is in the roadmap's phase 2.
   silent, `update_ambience` in `session.rs` fills it
   (`soundbank::fill_ambience`, at `LOOP_VOLUME`) with the terrain's loop
   (`TERRAIN_LOOPS`, the woods' by night at night) and the weather
-  overhead's (`WEATHER_LOOPS`); `soundbank_list` says which each plays
-  for, and the hook editor says it. Desktop only.
+  overhead's (`WEATHER_LOOPS`), and in a fight `Battle tension` in the
+  place's; `soundbank_list` says which each plays for, and the hook
+  editor says it. A sound the map lays a sub-bass or an accent under
+  (`LAYERS`: "under A#1", "over C#4") is rendered with them in it, so
+  it plays as one sound, one caption; a new way of making them bumps
+  `MADE` (the cache folder is `<VERSION>-<MADE>`). Desktop only.
+- `src-tauri/src/foley.rs`: **Coupler's own events**, pure and
+  unit-tested, shared with the web build: what CoffeeMUD names no MSP
+  sound for, as the pair `coupler.event` (`"you sit"`, 25 values, all
+  listed from the start): someone arriving or leaving (GMCP
+  `room.enter`, `room.leave`, each paired by the name with the line
+  just before it, `Comings`: its word, a race's, a GAIT's or a
+  disposition's, is the `Manner`, walks, creeps, stomps, flies, swims or
+  falls, or a flight; its direction the `Place` sent with what it sets
+  off, `Fired.place`, which `lib/assets.ts` `playEffect` pans and
+  pitches as Immersive's exits, `COMPASS`, and captions in words) and
+  the player's own doings, read from
+  the game's lines as its commands word them for the one acting ("You
+  sit down and take a rest.", "You get ", "You put on ", "You buy ").
+  `Session::event_sounds` plays `soundbank::event_default`
+  (`EVENT_SOUNDS`: footsteps, softer going than coming and creeping,
+  a stomp's thud under them, `event_under`; posture, item handling,
+  equip, coins)
+  where the player's triggers give none; the web plays only the
+  mirror's triggers on them.
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the

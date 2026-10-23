@@ -55,8 +55,8 @@ targets:
         UIRequiresFullScreen: true
         # Only the system's TLS (none on the iPhone yet): exempt.
         ITSAppUsesNonExemptEncryption: false
-        CFBundleShortVersionString: 0.30.0
-        CFBundleVersion: "0.30.0"
+        CFBundleShortVersionString: 0.31.0
+        CFBundleVersion: "0.31.0"
     entitlements:
       path: coupler_iOS/coupler_iOS.entitlements
     scheme:

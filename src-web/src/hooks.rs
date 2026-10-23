@@ -43,7 +43,7 @@ impl Hooks {
             .into_iter()
             .filter_map(|(key, value)| {
                 let trigger = self.triggers.get(&(key.clone(), value.clone()))?.clone();
-                Some(Fired { key, value, trigger })
+                Some(Fired { key, value, trigger, place: None })
             })
             .collect()
     }

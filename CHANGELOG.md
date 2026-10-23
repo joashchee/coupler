@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## 0.31.0 (2026-10-23)
+
+- **CoffeeMUD's sounds for everything else** (2026-10-23): the blows
+  and deaths of a fight now play. CoffeeMUD names each by a roll of the
+  dice (`punch1.wav` to `punch7.wav`, `death1.wav` to `death7.wav`), and
+  until now nothing played for them; now Flesh hit and Monster collapse
+  do, and all fourteen are in the hooks list from the start. What the
+  game names no sound for at all has one now too, as Coupler's own
+  pair `coupler.event`: someone walking into the room or out of it
+  (footsteps), sitting, standing, sleeping and waking, getting,
+  dropping, giving and putting things, wearing, wielding, holding and
+  removing them, and buying and selling (coins), the player's own only.
+  All of them are listed from the start for sounds of the player's
+  own, and the hook editor says which of CoffeeMUD's plays while one's
+  None. In a fight, where the player has set no background noise of
+  their own, Battle tension loops in place of the place's. And the
+  sounds the bank lays a sub-bass or an accent under now play with
+  them: a fire spell's boom and crackle, a lightning bolt's crack and
+  buzz, a critical hit's thump, a dragon's roar, the casts' sparkle.
+  The comings, goings and doings play the web mirror's hooks on them
+  too.
+- **Hear where they came from and went** (2026-10-23): someone coming
+  into the room or leaving it is heard from that way, as Immersive's
+  exits are: from the east in the right ear, the west in the left, the
+  north a little higher, the south a little lower, above and below
+  further still, and the caption says it ("♪ Footsteps in, from the
+  north"). How they move is heard too, from the word the game uses for
+  their race, their gait (the GAIT command: amble, tiptoe, thunder…)
+  or what they're doing: walking plays footsteps, creeping, sneaking
+  or slithering soft ones, thundering or stomping footsteps with a
+  heavy thud, flying a whoosh, swimming a splash, falling a fall, and
+  fleeing every step. Someone leaving is heard softer than someone
+  arriving, going away. Each is its own `coupler.event` value
+  ("someone creeps in", "someone flies away", "someone flees"), 13 in
+  all, for sounds of the player's own, which are heard from there too.
+
 ## 0.30.0 (2026-10-23)
 
 - **CoffeeMUD's places and weather heard** (2026-10-23): wherever the

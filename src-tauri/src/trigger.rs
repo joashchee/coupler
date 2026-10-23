@@ -78,6 +78,10 @@ pub struct Fired {
     pub key: String,
     pub value: String,
     pub trigger: Trigger,
+    /// Where its sound is heard from: someone's coming or going
+    /// (`foley.rs`). None is straight ahead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub place: Option<crate::foley::Place>,
 }
 
 fn flatten(key: &str, value: &Value, out: &mut Vec<(String, String)>) {

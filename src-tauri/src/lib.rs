@@ -32,6 +32,7 @@ mod echo;
 // finished release; App Review turns down one calling itself unfinished.
 #[cfg(desktop)]
 mod first_run;
+pub mod foley;
 mod hidden;
 #[cfg(target_os = "macos")]
 mod moved;

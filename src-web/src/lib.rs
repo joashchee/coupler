@@ -34,6 +34,8 @@ mod daytime;
 #[path = "../../src-tauri/src/echo.rs"]
 mod echo;
 mod ffi;
+#[path = "../../src-tauri/src/foley.rs"]
+mod foley;
 #[path = "../../src-tauri/src/hidden.rs"]
 mod hidden;
 mod hooks;

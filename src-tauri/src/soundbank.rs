@@ -21,7 +21,12 @@
 //!
 //! Its loops are also the ambience's defaults: where the player's
 //! triggers leave BGN or BGW silent, the terrain's loop and the weather
-//! overhead's play (`fill_ambience`).
+//! overhead's play, and in a fight its battle loop (`fill_ambience`).
+//! Its one-shots are the defaults for the game's MSP sounds
+//! (`msp_default`, with the names CoffeeMUD rolls dice for, `ROLLED`)
+//! and for Coupler's own events (`event_default`, `foley.rs`). A sound
+//! the bank lays a sub-bass or an accent under is made with them in it
+//! (`LAYERS`), so it plays as one wherever it's chosen.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,6 +35,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use neumetik_midi::soundfont::{Link, Sample, SoundFont};
 use neumetik_midi::SoundBank;
 use serde::Serialize;
+
+use crate::foley::{Happening, Manner};
 
 /// Where the bank is, in the app's Resources.
 pub const FILE: &str = "coffeemud/coffeemud.sf2";
@@ -45,6 +52,11 @@ const RATE: u32 = 44_100;
 const LONGEST_SECONDS: usize = 30;
 /// Quieter than this (-80 dB) is silence, trimmed from a one-shot's end.
 const SILENCE: f32 = 1e-4;
+/// The loudest a one-shot is made (-1 dBFS), as the bank mixes its own.
+const PEAK: f32 = 0.891;
+/// How the one-shots are made, beside the bank's version in the cache's
+/// folder name: a new way (2: with their layers) makes them again.
+const MADE: u32 = 2;
 
 /// A sound in the bank.
 #[derive(Debug, Clone, PartialEq)]
@@ -67,7 +79,7 @@ pub struct Slot {
 
 /// On a tiered key, which of its three sounds: combat's light, normal
 /// and severe, a creature's idle, aggressive and pain.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tier {
     Light,
     Normal,
@@ -157,9 +169,81 @@ pub fn slot(program: u8, key: u8) -> Option<&'static Slot> {
 
 /// The slot for an MSP sound, by name, any case. A few names are on two
 /// slots (CoffeeMUD sends `dooropen.wav` for closing too): the first, as
-/// the map orders them, is the one meant.
+/// the map orders them, is the one meant, but for one laid under the
+/// other (`explode.wav`'s sub-bass is in the fire impact's making).
 pub fn by_msp(name: &str) -> Option<&'static Slot> {
-    slots().iter().find(|s| s.msp.iter().any(|m| m.eq_ignore_ascii_case(name)))
+    let named: Vec<&'static Slot> = slots().iter().filter(|s| s.msp.iter().any(|m| m.eq_ignore_ascii_case(name))).collect();
+    let under = |s: &Slot| named.iter().any(|o| layers(o, Tier::Severe).contains(&s));
+    named.iter().find(|s| !under(s)).or(named.first()).copied().or_else(|| rolled(name))
+}
+
+/// The sounds CoffeeMUD names by a roll of the dice, which the map's list
+/// (every name in the code as written) can't hold: each blow that lands
+/// is `punch1.wav` to `punch7.wav` (`MUDFight.standardHitString`, every
+/// weapon but a bow or a thrown one), each death `death1.wav` to
+/// `death7.wav` (`MUDFight.postDeath`; a feigned one rolls 1 to 4). By the
+/// name's start, the slot, and the numbers rolled.
+const ROLLED: [(&str, &str, u8); 2] = [("punch", "Flesh hit", 7), ("death", "Monster collapse", 7)];
+
+fn rolled(name: &str) -> Option<&'static Slot> {
+    let name = name.to_ascii_lowercase();
+    let stem = name.strip_suffix(".wav")?;
+    let (start, slot, most) = ROLLED.iter().find(|(start, _, _)| stem.starts_with(start))?;
+    let roll: u8 = stem[start.len()..].parse().ok()?;
+    (1..=*most).contains(&roll).then(|| slots().iter().find(|s| s.name == *slot)).flatten()
+}
+
+/// Every MSP sound CoffeeMUD sends, as the hooks list holds them from
+/// the start: the map's, then the rolled ones.
+pub fn msp_names() -> Vec<String> {
+    let mut names: Vec<String> = slots().iter().flat_map(|s| s.msp.iter().map(|m| m.to_string())).collect();
+    names.extend(ROLLED.iter().flat_map(|(start, _, most)| (1..=*most).map(move |n| format!("{start}{n}.wav"))));
+    names
+}
+
+/// What sounds under or over another in the bank, as its map says
+/// ("Critical hit, under A#1", "High detail over C#4 or C#8"): the
+/// sound, the ones laid with it, and from which of its tiers (a pain
+/// grunt's heavy thud only when it's severe; a roar's foundation not
+/// under an idle breath).
+const LAYERS: [(&str, &[&str], Tier); 28] = [
+    ("Critical hit", &["Critical thump"], Tier::Light),
+    ("Pain grunt", &["Heavy damage thud"], Tier::Severe),
+    ("Monster collapse", &["Creature death drop"], Tier::Light),
+    ("Body fall", &["Humanoid fall sub"], Tier::Light),
+    ("Dragon", &["Roar foundation"], Tier::Normal),
+    ("Giant-kin", &["Roar foundation"], Tier::Normal),
+    ("Arcane impact", &["Arcane shimmer"], Tier::Light),
+    ("Fire impact", &["Explosion sub", "Flame crackle"], Tier::Light),
+    ("Cold impact", &["Frost sparkle"], Tier::Light),
+    ("Water impact", &["Droplets"], Tier::Light),
+    ("Acid impact", &["Acid fizz"], Tier::Light),
+    ("Gas impact", &["Gas hiss"], Tier::Light),
+    ("Electric impact", &["Electric sub crack", "Voltage crackle"], Tier::Light),
+    ("Mind impact", &["Eerie ring"], Tier::Light),
+    ("Poison impact", &["Venom buzz"], Tier::Light),
+    ("Holy impact", &["Bell air"], Tier::Light),
+    ("Necromantic impact", &["Whispering air"], Tier::Light),
+    ("Arcane cast", &["Arcane shimmer"], Tier::Light),
+    ("Fire cast", &["Flame crackle"], Tier::Light),
+    ("Cold cast", &["Frost sparkle"], Tier::Light),
+    ("Water cast", &["Droplets"], Tier::Light),
+    ("Acid cast", &["Acid fizz"], Tier::Light),
+    ("Gas cast", &["Gas hiss"], Tier::Light),
+    ("Electric cast", &["Voltage crackle"], Tier::Light),
+    ("Mind cast", &["Eerie ring"], Tier::Light),
+    ("Poison cast", &["Venom buzz"], Tier::Light),
+    ("Holy cast", &["Bell air"], Tier::Light),
+    ("Necromantic cast", &["Whispering air"], Tier::Light),
+];
+
+/// The sounds laid with a slot's tier, as it's made.
+pub fn layers(slot: &Slot, tier: Tier) -> Vec<&'static Slot> {
+    LAYERS
+        .iter()
+        .filter(|(name, _, from)| *name == slot.name && tier >= *from)
+        .flat_map(|(_, with, _)| with.iter().filter_map(|w| slots().iter().find(|s| s.name == *w && !s.looped)))
+        .collect()
 }
 
 /// What an MSP sound plays when the player has set no sound on it: the
@@ -247,17 +331,70 @@ pub fn bgw_default(weather: &str) -> Option<String> {
     loop_path(WEATHER_LOOPS.iter().find(|(w, _)| *w == weather)?.1)
 }
 
+/// The loop that takes the place's in a fight.
+const FIGHT_LOOP: &str = "Battle tension";
+
 /// Fills what the player's triggers left silent with the bank's loops:
-/// the terrain's for BGN, the weather overhead's for BGW.
-pub fn fill_ambience(ambience: &mut crate::ambient::Ambience, terrain: Option<&str>, weather: Option<&str>, night: bool) {
+/// the terrain's for BGN (the battle's while `fighting`), the weather
+/// overhead's for BGW.
+pub fn fill_ambience(ambience: &mut crate::ambient::Ambience, terrain: Option<&str>, weather: Option<&str>, night: bool, fighting: bool) {
     use crate::ambient::Loop;
     let as_loop = |path| Loop { path, volume: LOOP_VOLUME };
     if ambience.bgn.is_none() {
-        ambience.bgn = terrain.and_then(|t| bgn_default(t, night)).map(as_loop);
+        let place = if fighting && terrain.is_some() { loop_path(FIGHT_LOOP) } else { terrain.and_then(|t| bgn_default(t, night)) };
+        ambience.bgn = place.map(as_loop);
     }
     if ambience.bgw.is_none() {
         ambience.bgw = weather.and_then(bgw_default).map(as_loop);
     }
+}
+
+/// The bank's sound for each of Coupler's own events (`foley.rs`), by its
+/// name in the bank, and how loud, as a share of the SFX volume. Someone
+/// leaving is heard softer than someone coming (going away), and someone
+/// creeping softer still. Stomping is the footsteps with a heavy thud
+/// under them (`event_under`).
+const EVENT_SOUNDS: [(Happening, &str, u8); 25] = [
+    (Happening::Arrives(Manner::Walks), "Footsteps in", 100),
+    (Happening::Arrives(Manner::Creeps), "Footsteps in", 40),
+    (Happening::Arrives(Manner::Stomps), "Footsteps in", 100),
+    (Happening::Arrives(Manner::Flies), "Miss whoosh", 100),
+    (Happening::Arrives(Manner::Swims), "Water impact", 100),
+    (Happening::Arrives(Manner::Falls), "Fall", 100),
+    (Happening::Leaves(Manner::Walks), "Footsteps out", 70),
+    (Happening::Leaves(Manner::Creeps), "Footsteps out", 28),
+    (Happening::Leaves(Manner::Stomps), "Footsteps out", 70),
+    (Happening::Leaves(Manner::Flies), "Miss whoosh", 70),
+    (Happening::Leaves(Manner::Swims), "Water impact", 70),
+    (Happening::Leaves(Manner::Falls), "Fall", 70),
+    // Running off: every step heard.
+    (Happening::Flees, "Footsteps out", 100),
+    (Happening::Sit, "Posture", 100),
+    (Happening::Stand, "Posture", 100),
+    (Happening::Sleep, "Sleep and wake", 100),
+    (Happening::Wake, "Sleep and wake", 100),
+    (Happening::Get, "Item handling", 100),
+    (Happening::Drop, "Item handling", 100),
+    (Happening::Give, "Item handling", 100),
+    (Happening::Put, "Item handling", 100),
+    (Happening::Wear, "Equip", 100),
+    (Happening::Remove, "Unequip", 100),
+    (Happening::Buy, "Coins", 100),
+    (Happening::Sell, "Coins", 100),
+];
+
+/// What one of Coupler's own events plays when the player has set no
+/// sound on it, and at what share of the SFX volume.
+pub fn event_default(happening: Happening) -> Option<(String, u8)> {
+    let (_, name, volume) = EVENT_SOUNDS.iter().find(|(h, _, _)| *h == happening)?;
+    slots().iter().find(|s| !s.looped && s.name == *name).map(|s| (s.asset_path(Tier::Severe), *volume))
+}
+
+/// What plays with an event's own sound when the player has set none: a
+/// stomp's heavy thud.
+pub fn event_under(happening: Happening) -> Option<String> {
+    let stomps = matches!(happening, Happening::Arrives(Manner::Stomps) | Happening::Leaves(Manner::Stomps));
+    stomps.then(|| slots().iter().find(|s| s.name == "Heavy impact").map(|s| s.asset_path(Tier::Severe))).flatten()
 }
 
 /// Whether an asset path is in the bank's folder (named one of its sounds
@@ -281,7 +418,10 @@ pub struct Sound {
     pub looped: bool,
     /// The MSP sounds that play it when the player has set none
     /// (`msp_default`).
-    pub msp: Vec<&'static str>,
+    pub msp: Vec<String>,
+    /// Coupler's own events that play it when the player has set none
+    /// (`event_default`).
+    pub events: Vec<&'static str>,
     /// The terrains it loops in when the player has set no BGN, by day
     /// or by night (`bgn_default`).
     pub terrains: Vec<&'static str>,
@@ -292,15 +432,18 @@ pub struct Sound {
 
 /// Every sound in the bank, each tier its own, in the map's order.
 pub fn list() -> Vec<Sound> {
+    let names = msp_names();
     slots()
         .iter()
         .flat_map(|s| {
-            s.tiers().iter().map(|t| {
+            let names = &names;
+            s.tiers().iter().map(move |t| {
                 let path = s.asset_path(*t);
-                let msp = s.msp.iter().copied().filter(|name| msp_default(name).as_deref() == Some(path.as_str())).collect();
+                let msp = names.iter().filter(|name| by_msp(name) == Some(s) && msp_default(name).as_deref() == Some(path.as_str())).cloned().collect();
+                let events = Happening::ALL.iter().filter(|h| event_default(**h).is_some_and(|(p, _)| p == path)).map(|h| h.name()).collect();
                 let terrains = TERRAIN_LOOPS.iter().map(|(t, _)| *t).filter(|t| [false, true].iter().any(|night| bgn_default(t, *night).as_deref() == Some(path.as_str()))).collect();
                 let weathers = WEATHER_LOOPS.iter().map(|(w, _)| *w).filter(|w| bgw_default(w).as_deref() == Some(path.as_str())).collect();
-                Sound { path, looped: s.looped, msp, terrains, weathers }
+                Sound { path, looped: s.looped, msp, events, terrains, weathers }
             })
         })
         .collect()
@@ -322,8 +465,11 @@ fn read(resources: &Path) -> Result<Vec<u8>, String> {
 }
 
 /// A one-shot played through Neumetik MIDI, dry, from its note-on to the
-/// end of its sample, as a WAV (mono if both sides are the same). Its level is the
-/// bank's own: nothing's made louder, so the bank's mix holds.
+/// end of its sample, with what the bank lays under or over it
+/// (`layers`) at the same velocity, as a WAV (mono if both sides are the
+/// same). Its level is the bank's own: nothing's made louder, so the
+/// bank's mix holds, and where the layers together would peak over
+/// -1 dBFS, all of it is brought down to that.
 pub fn render_once(bank: &Arc<SoundBank>, slot: &Slot, tier: Tier) -> Vec<u8> {
     let mut synth = neumetik_midi::Synth::new(RATE);
     synth.set_sound_bank(Some(bank.clone()));
@@ -334,6 +480,15 @@ pub fn render_once(bank: &Arc<SoundBank>, slot: &Slot, tier: Tier) -> Vec<u8> {
     // Never let go: a one-shot's voice ends with its sample, and a note-off
     // before the first render silences it at once, long release or not.
     synth.note_on(0, slot.key, tier.velocity());
+    for layer in layers(slot, tier) {
+        let channel = if layer.program == slot.program { 0 } else { 1 };
+        if channel == 1 {
+            synth.control_change(1, 91, 0);
+            synth.control_change(1, 93, 0);
+            synth.program_change(1, layer.program);
+        }
+        synth.note_on(channel, layer.key, tier.velocity());
+    }
     const BLOCK: usize = 1024;
     let (mut left, mut right) = (vec![0.0; BLOCK], vec![0.0; BLOCK]);
     let mut out: Vec<f32> = Vec::new();
@@ -345,6 +500,10 @@ pub fn render_once(bank: &Arc<SoundBank>, slot: &Slot, tier: Tier) -> Vec<u8> {
         }
     }
     out.truncate(out.iter().rposition(|x| x.abs() > SILENCE).map_or(0, |i| i / 2 * 2 + 2));
+    let peak = out.iter().fold(0.0f32, |p, x| p.max(x.abs()));
+    if peak > PEAK {
+        out.iter_mut().for_each(|x| *x *= PEAK / peak);
+    }
     let samples: Vec<i16> = out.iter().map(|x| (x.clamp(-1.0, 1.0) * 32767.0) as i16).collect();
     if samples.as_chunks::<2>().0.iter().all(|[l, r]| l == r) {
         crate::assets::wav(1, RATE, &samples.iter().step_by(2).copied().collect::<Vec<_>>())
@@ -407,10 +566,10 @@ struct Inner {
 
 impl Sounds {
     /// Where the bank ships (the app's Resources), and the folder its
-    /// sounds are kept in (`soundbank-cache`, a folder per version: an
-    /// older bank's are deleted).
+    /// sounds are kept in (`soundbank-cache`, a folder per version and
+    /// way of making them: an older one's are deleted).
     pub fn set_dirs(&self, resources: PathBuf, cache_root: &Path) {
-        let cache = cache_root.join(VERSION);
+        let cache = cache_root.join(format!("{VERSION}-{MADE}"));
         for old in std::fs::read_dir(cache_root).into_iter().flatten().flatten() {
             if old.path() != cache {
                 let _ = std::fs::remove_dir_all(old.path());
@@ -458,15 +617,17 @@ impl Sounds {
         asked.map_or_else(|| loop_take(&font, slot), Ok)
     }
 
-    /// Makes every sound the game's MSP names play ready, once a run, so
-    /// the first fireball isn't late: each made now that isn't kept from
-    /// before. Slow (the bank's one-shots are rendered), so on a thread of
-    /// its own.
+    /// Makes every sound the game's MSP names and Coupler's own events
+    /// play ready, once a run, so the first fireball isn't late: each made
+    /// now that isn't kept from before. Slow (the bank's one-shots are
+    /// rendered), so on a thread of its own.
     pub fn warm(&self) {
         if !self.available() || self.warmed.swap(true, Ordering::Relaxed) {
             return;
         }
-        let mut paths: Vec<String> = slots().iter().flat_map(|s| s.msp.iter()).filter_map(|name| msp_default(name)).collect();
+        let mut paths: Vec<String> = msp_names().iter().filter_map(|name| msp_default(name)).collect();
+        paths.extend(Happening::ALL.into_iter().filter_map(event_default).map(|(path, _)| path));
+        paths.extend(Happening::ALL.into_iter().filter_map(event_under));
         paths.sort();
         paths.dedup();
         for path in paths {
@@ -549,6 +710,80 @@ mod tests {
         }
         assert_eq!(slot(0, 29).map(|s| (s.name, s.tiered)), Some(("Flesh hit", true)));
         assert_eq!(slot(4, 12), None);
+        // The explosion's sub-bass is in the fire impact's making.
+        assert_eq!(msp_default("explode.wav").as_deref(), Some("bank/Fire impact"));
+        assert_eq!(msp_default("earthquake.wav").as_deref(), Some("bank/Earthquake rumble"));
+    }
+
+    #[test]
+    fn rolled_names_play_too() {
+        for n in 1..=7 {
+            assert_eq!(msp_default(&format!("punch{n}.wav")).as_deref(), Some("bank/Flesh hit"));
+            assert_eq!(msp_default(&format!("DEATH{n}.WAV")).as_deref(), Some("bank/Monster collapse"));
+        }
+        for name in ["punch0.wav", "punch8.wav", "punch.wav", "death.wav", "punchy.wav", "death12.wav", "punch1.mid"] {
+            assert_eq!(rolled(name), None, "{name}");
+        }
+        // punch.wav itself is in the map (never sent; the stock sounds have it).
+        assert_eq!(msp_default("punch.wav").as_deref(), Some("bank/Natural attack"));
+        let names = msp_names();
+        assert_eq!(names.len(), slots().iter().map(|s| s.msp.len()).sum::<usize>() + 14);
+        assert!(names.iter().all(|n| msp_default(n).is_some() || by_msp(n).is_some_and(|s| s.looped)), "every name plays something");
+        // The hook editor's list says which each plays.
+        let all = list();
+        let hit = all.iter().find(|s| s.path == "bank/Flesh hit").unwrap();
+        assert!(hit.msp.iter().any(|n| n == "punch4.wav") && hit.msp.iter().any(|n| n == "bashed1.wav"));
+    }
+
+    #[test]
+    fn layers_are_the_maps() {
+        for (name, with, _) in LAYERS {
+            let s = slots().iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name} isn't in the bank"));
+            assert!(!s.looped, "{name}");
+            assert_eq!(layers(s, Tier::Severe).len(), with.len(), "{name} lays a sound that isn't in the bank");
+            // Each laid sound's own trigger names the sound it goes with
+            // ("under A#1", "over C#4 or C#8"), by the key's note.
+            for layer in layers(s, Tier::Severe) {
+                let note = {
+                    const NOTES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                    format!("{}{}", NOTES[usize::from(s.key % 12)], s.key / 12 - 1)
+                };
+                assert!(layer.trigger.contains(&note), "{} doesn't say it goes with {name} ({note})", layer.name);
+            }
+        }
+        let tier_of = |name: &str| find(name).unwrap();
+        let (grunt, _) = tier_of("bank/Pain grunt");
+        assert!(layers(grunt, Tier::Normal).is_empty());
+        assert_eq!(layers(grunt, Tier::Severe).iter().map(|s| s.name).collect::<Vec<_>>(), ["Heavy damage thud"]);
+        let (dragon, _) = tier_of("bank/Dragon");
+        assert!(layers(dragon, Tier::Light).is_empty() && layers(dragon, Tier::Normal).len() == 1);
+        let (fire, _) = tier_of("bank/Fire impact");
+        assert_eq!(layers(fire, Tier::Severe).iter().map(|s| s.name).collect::<Vec<_>>(), ["Explosion sub", "Flame crackle"]);
+        assert!(layers(tier_of("bank/Door open").0, Tier::Severe).is_empty());
+    }
+
+    #[test]
+    fn events_have_their_sounds() {
+        for h in Happening::ALL {
+            let (path, _) = event_default(h).unwrap_or_else(|| panic!("{} plays nothing", h.name()));
+            assert!(find(&path).is_some_and(|(s, _)| !s.looped), "{path}");
+        }
+        assert_eq!(event_default(Happening::Arrives(Manner::Walks)), Some(("bank/Footsteps in".into(), 100)));
+        assert_eq!(event_default(Happening::Buy).map(|(p, _)| p).as_deref(), Some("bank/Coins"));
+        // Coming is louder than going, and creeping quieter than walking.
+        for m in Manner::ALL {
+            let (_, coming) = event_default(Happening::Arrives(m)).unwrap();
+            let (_, going) = event_default(Happening::Leaves(m)).unwrap();
+            assert!(going < coming, "{m:?}");
+        }
+        let walk = event_default(Happening::Arrives(Manner::Walks)).unwrap().1;
+        assert!(event_default(Happening::Arrives(Manner::Creeps)).unwrap().1 < walk);
+        assert_eq!(EVENT_SOUNDS.len(), Happening::ALL.len());
+        assert_eq!(event_under(Happening::Leaves(Manner::Stomps)).as_deref(), Some("bank/Heavy impact"));
+        assert_eq!(event_under(Happening::Leaves(Manner::Walks)), None);
+        let all = list();
+        let posture = all.iter().find(|s| s.path == "bank/Posture").unwrap();
+        assert_eq!(posture.events, ["you sit", "you stand"]);
     }
 
     #[test]
@@ -574,12 +809,20 @@ mod tests {
         // The player's own loops stay; only what's silent is filled.
         let own = Loop { path: "BGN/brook.ogg".into(), volume: 40 };
         let mut a = Ambience { bgn: Some(own.clone()), bgw: None };
-        fill_ambience(&mut a, Some("woods"), Some("fog"), false);
-        assert_eq!(a.bgn, Some(own));
+        fill_ambience(&mut a, Some("woods"), Some("fog"), false, true);
+        assert_eq!(a.bgn, Some(own), "the player's own, even in a fight");
         assert_eq!(a.bgw, Some(Loop { path: "bank/Fog".into(), volume: LOOP_VOLUME }));
         let mut a = Ambience::default();
-        fill_ambience(&mut a, None, None, false);
+        fill_ambience(&mut a, None, None, false, true);
         assert_eq!(a, Ambience::default(), "nowhere, nothing");
+        // A fight takes the place's loop over, and gives it back.
+        let mut a = Ambience::default();
+        fill_ambience(&mut a, Some("city"), Some("rain"), false, true);
+        assert_eq!(a.bgn.map(|l| l.path).as_deref(), Some("bank/Battle tension"));
+        assert_eq!(a.bgw.map(|l| l.path).as_deref(), Some("bank/Light rain"));
+        let mut a = Ambience::default();
+        fill_ambience(&mut a, Some("city"), None, false, false);
+        assert_eq!(a.bgn.map(|l| l.path).as_deref(), Some("bank/Town"));
 
         // The hook editor's list says where each plays.
         let all = list();
@@ -694,7 +937,7 @@ mod tests {
     fn a_one_shot_plays_to_its_end_at_the_banks_level() {
         let Some(bytes) = bank_bytes() else { return };
         let bank = Arc::new(SoundBank::from_bytes(&bytes).unwrap());
-        for name in ["bank/Flesh hit (light)", "bank/Flesh hit (severe)", "bank/Door open", "bank/Implosion", "bank/Level up"] {
+        for name in ["bank/Flesh hit (light)", "bank/Flesh hit (severe)", "bank/Door open", "bank/Implosion", "bank/Level up", "bank/Fire impact", "bank/Electric impact", "bank/Critical hit", "bank/Dragon (pain)"] {
             let (slot, tier) = find(name).unwrap();
             let (channels, rate, samples) = read_wav(&render_once(&bank, slot, tier));
             assert_eq!(rate, RATE);
@@ -738,7 +981,7 @@ mod tests {
         assert!(sounds.available());
         // An older bank's sounds are gone.
         assert!(!root.join("0.0.1").exists());
-        let cache = root.join(VERSION);
+        let cache = root.join(format!("{VERSION}-{MADE}"));
         let tavern = sounds.audio("bank/Tavern").unwrap();
         // The first loop takes out every loop.
         let kept = std::fs::read_dir(&cache).unwrap().count();

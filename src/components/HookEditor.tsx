@@ -10,8 +10,9 @@
  * Background noise is offered only on a room's pairs and weather sound
  * only on coupler.weather (src-tauri/src/ambient.rs), with a line
  * saying so elsewhere, so nothing offered does nothing. A sound the game
- * names (msp.sound) says which of CoffeeMUD's sounds plays while its
- * SFX is None, and a terrain or weather which of its loops plays while
+ * names (msp.sound) or one of Coupler's own events (coupler.event,
+ * src-tauri/src/foley.rs) says which of CoffeeMUD's sounds plays while
+ * its SFX is None, and a terrain or weather which of its loops plays while
  * its BGN or BGW is None (soundbank.rs `fill_ambience`). Every control
  * has a visible label. A change is saved at once and said in the status
  * bar; Set Off Nothing clears them all.
@@ -24,8 +25,9 @@ import { Dialog } from "./Dialog";
 export interface Choice {
   path: string;
   shown: string;
-  /** One of CoffeeMUD's sounds: the game's sounds that play it when nothing's chosen. */
+  /** One of CoffeeMUD's sounds: the game's sounds, and Coupler's own events, that play it when nothing's chosen. */
   msp?: string[];
+  events?: string[];
   /** A loop of CoffeeMUD's: the terrains and weathers it plays for when nothing's chosen. */
   terrains?: string[];
   weathers?: string[];
@@ -64,6 +66,9 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
   /** On a sound the game names: the bank's sound that plays while SFX is None. */
   const mspName = pair?.key === mud.MSP_SOUND_KEY ? pair.value.replace(/^"|"$/g, "") : null;
   const mspDefault = mspName === null ? null : (bank.once.find((c) => c.msp?.includes(mspName)) ?? null);
+  /** On one of Coupler's own events: the same. */
+  const eventName = pair?.key === mud.EVENT_KEY ? pair.value.replace(/^"|"$/g, "") : null;
+  const eventDefault = eventName === null ? null : (bank.once.find((c) => c.events?.includes(eventName)) ?? null);
   /** On a terrain or the weather: the bank's loops that play while BGN or BGW is None. */
   const value = pair?.value.replace(/^"|"$/g, "").toLowerCase() ?? "";
   const loopsFor = (field: "terrains" | "weathers") => bank.loops.filter((c) => c[field]?.includes(value)).map((c) => c.shown);
@@ -210,6 +215,13 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
           {mspDefault
             ? `The game names this sound when it happens. While Sound effect is None, CoffeeMUD's ${mspDefault.shown} plays.`
             : "The game names this sound when it happens. Nothing plays for it until a sound effect is chosen."}
+        </p>
+      )}
+      {eventName !== null && (
+        <p>
+          {eventDefault
+            ? `Coupler hears this happen in the game. While Sound effect is None, CoffeeMUD's ${eventDefault.shown} plays.`
+            : "Coupler hears this happen in the game. Nothing plays for it until a sound effect is chosen."}
         </p>
       )}
     </Dialog>

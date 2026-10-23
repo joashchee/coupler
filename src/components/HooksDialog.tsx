@@ -120,7 +120,7 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
     mud
       .soundbankList()
       .then((all) => {
-        const choice = (s: mud.BankSound) => ({ path: s.path, shown: mud.assetTitle(s.path), msp: s.msp, terrains: s.terrains, weathers: s.weathers });
+        const choice = (s: mud.BankSound) => ({ path: s.path, shown: mud.assetTitle(s.path), msp: s.msp, events: s.events, terrains: s.terrains, weathers: s.weathers });
         setBank({ once: all.filter((s) => !s.looped).map(choice), loops: all.filter((s) => s.looped).map(choice) });
       })
       .catch((e) => onError(String(e)));
@@ -326,8 +326,8 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
       <Dialog open={open} onClose={onClose} title="Hooks" className="dialog-wide dialog-hooks" covered={editing !== null || showing !== null || creating}>
         <p>
           Every name and value CoffeeMUD has sent by GMCP, each pair once, on this computer only, plus Coupler's own: coupler.room.type (indoors or
-          outdoors), coupler.weather (from the game's weather lines; AUTOWEATHER tells it sooner) and coupler.time (dawn, day, dusk or night, from the
-          game's clock). Edit chooses what a pair sets off each time it comes: a sound, music, a
+          outdoors), coupler.weather (from the game's weather lines; AUTOWEATHER tells it sooner), coupler.time (dawn, day, dusk or night, from the
+          game's clock) and coupler.event (comings, goings and your own doings). Edit chooses what a pair sets off each time it comes: a sound, music, a
           picture, background noise or weather. Assets come from the Assets folder: drop files on the window, or use Add Assets.
         </p>
         <div className="hooks-tabs" role="tablist" aria-label="Which list">

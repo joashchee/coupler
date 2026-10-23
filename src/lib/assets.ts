@@ -21,6 +21,11 @@
  * character for another, or for the account menu, fades it out (`fadeAll`).
  * One more bus, CUE, carries Immersive mode's own sounds, made here
  * rather than played from the Assets folder (lib/earcons.ts).
+ * A sound effect with a place (someone coming or going,
+ * src-tauri/src/foley.rs) is heard from there, as Immersive's exits are
+ * (`COMPASS`): east in the right ear, west in the left, north a little
+ * higher, south a little lower, up and down further; its caption says
+ * where in words.
  * Pictures are images, or ANSI art that Rust has drawn into styled rows
  * of characters.
  * The Hooks dialog's Assets tab tries one asset at a time (`playPreview`,
@@ -108,26 +113,57 @@ function load(path: string, looping: boolean): Promise<AudioBuffer> {
   return buffer;
 }
 
-/** A buffer played through its own volume, into a bus. */
-function start(buffer: AudioBuffer, bus: Bus, percent: number, looping: boolean) {
+/** Across (east +) and up the compass (north +) for each of the game's direction letters. */
+export const COMPASS: Record<string, [number, number]> = {
+  N: [0, 1], NE: [1, 1], E: [1, 0], SE: [1, -1], S: [0, -1], SW: [-1, -1], W: [-1, 0], NW: [-1, 1],
+};
+
+/** Where a sound is heard from: left to right, and how much higher or lower it plays. */
+export function placing(dir: string): { pan: number; rate: number } {
+  const [dx, dy] = COMPASS[dir] ?? [0, 0];
+  // About a semitone and a half for north and south, three for up and down.
+  const rate = dir === "U" ? 1.19 : dir === "D" ? 0.84 : dy > 0 ? 1.09 : dy < 0 ? 0.92 : 1;
+  return { pan: dx * 0.85, rate };
+}
+
+const FROM_WORDS: Record<string, string> = {
+  N: "from the north", NE: "from the northeast", E: "from the east", SE: "from the southeast", S: "from the south",
+  SW: "from the southwest", W: "from the west", NW: "from the northwest", U: "from above", D: "from below",
+};
+const TOWARD_WORDS: Record<string, string> = {
+  N: "going north", NE: "going northeast", E: "going east", SE: "going southeast", S: "going south",
+  SW: "going southwest", W: "going west", NW: "going northwest", U: "going up", D: "going down",
+};
+
+/** A buffer played through its own volume, into a bus; panned and pitched if it has a place. */
+function start(buffer: AudioBuffer, bus: Bus, percent: number, looping: boolean, place?: mud.Place) {
   const { context, buses } = audio();
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.loop = looping;
   const gain = context.createGain();
   gain.gain.value = percent / 100;
-  source.connect(gain).connect(buses[bus]);
+  if (place) {
+    const { pan, rate } = placing(place.dir);
+    source.playbackRate.value = rate;
+    const panner = context.createStereoPanner();
+    panner.pan.value = pan;
+    source.connect(gain).connect(panner).connect(buses[bus]);
+  } else {
+    source.connect(gain).connect(buses[bus]);
+  }
   source.start();
   return { source, gain };
 }
 
 const effects = new Set<{ source: AudioBufferSourceNode; gain: GainNode }>();
 
-/** Plays a sound effect once, at `percent` of the SFX volume. */
-export async function playEffect(path: string, percent = 100) {
+/** Plays a sound effect once, at `percent` of the SFX volume, heard from `place` if it has one. */
+export async function playEffect(path: string, percent = 100, place?: mud.Place) {
   const buffer = await load(path, false);
-  const playing = start(buffer, "sfx", percent, false);
-  caption(`♪ ${mud.assetTitle(path)}`);
+  const playing = start(buffer, "sfx", percent, false, place);
+  const where = place && (place.toward ? TOWARD_WORDS : FROM_WORDS)[place.dir];
+  caption(`♪ ${mud.assetTitle(path)}${where ? `, ${where}` : ""}`);
   effects.add(playing);
   playing.source.onended = () => effects.delete(playing);
 }

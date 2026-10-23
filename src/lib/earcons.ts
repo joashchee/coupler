@@ -48,7 +48,7 @@
  * visual cue, lib/captions.ts) on or off and in their own words. Kept
  * as `coupler.cues`, only what differs from the default.
  */
-import { cueOutput } from "./assets";
+import { COMPASS, cueOutput } from "./assets";
 import { caption } from "./captions";
 import * as priority from "./priority";
 import * as voice from "./voice";
@@ -303,10 +303,7 @@ function sound(id: CueId, notes: Note[], delay = 0, detail?: string, quiet = fal
 
 // ---- Exits ----
 
-/** Across (east +) and up the compass (north +) for each of the game's direction letters. */
-const COMPASS: Record<string, [number, number]> = {
-  N: [0, 1], NE: [1, 1], E: [1, 0], SE: [1, -1], S: [0, -1], SW: [-1, -1], W: [-1, 0], NW: [-1, 1],
-};
+// COMPASS is lib/assets.ts's: a sound someone coming or going makes is placed the same way.
 /** Clockwise from north, then up and down. */
 const ORDER = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "U", "D"];
 /** Each exit's note, north to south: G5, C5, G4. */

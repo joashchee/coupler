@@ -1427,8 +1427,8 @@ function App() {
   const onFired = useCallback((fired: mud.Fired[]) => {
     const failed = triggerFailed;
     // BGN and BGW aren't set off here: they loop while they apply (the `ambient` event).
-    for (const { trigger } of fired) {
-      if (trigger.sfx) sound.playEffect(trigger.sfx, trigger.sfxVolume).catch(failed);
+    for (const { trigger, place } of fired) {
+      if (trigger.sfx) sound.playEffect(trigger.sfx, trigger.sfxVolume, place).catch(failed);
       if (trigger.bgm) sound.playMusic(trigger.bgm, trigger.bgmLoop, trigger.bgmVolume).catch(failed);
       const art = trigger.art;
       if (art) {

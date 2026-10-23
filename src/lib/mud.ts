@@ -219,6 +219,8 @@ export const onClosed = (f: (reason: string | null) => void): Promise<UnlistenFn
 export const onSoundsOff = (f: (message: string) => void): Promise<UnlistenFn> => listen<string>("sounds-off", (e) => f(e.payload));
 /** msp.sound: a sound the game names (src-tauri/src/msp.rs). */
 export const MSP_SOUND_KEY = "msp.sound";
+/** Coupler's own events (src-tauri/src/foley.rs): someone arriving, the player sitting, getting, wearing… */
+export const EVENT_KEY = "coupler.event";
 /** The player logged out or switched character, still connected (src-tauri/src/character.rs): words for the status line. */
 export const onCharacterLeft = (f: (message: string) => void): Promise<UnlistenFn> =>
   listen<{ message: string }>("character-left", (e) => f(e.payload.message));
@@ -641,10 +643,20 @@ export const onAmbient = (f: (a: Ambience) => void): Promise<UnlistenFn> => list
 export const assetTitle = (path: string) => path.slice(path.indexOf("/") + 1).replace(/\.[^.]*$/, "");
 
 /** A trigger that went off: the pair the game just sent, and what it sets off. */
+/** Where a sound is heard from: the way someone came from or went (src-tauri/src/foley.rs). */
+export interface Place {
+  /** The game's direction letter: N, NE, E, … U, D. */
+  dir: string;
+  /** Going that way, rather than coming from it. */
+  toward: boolean;
+}
+
 export interface Fired {
   key: string;
   value: string;
   trigger: Trigger;
+  /** Someone's coming or going: heard from there. */
+  place?: Place;
 }
 
 export interface HookListing {
@@ -867,6 +879,8 @@ export interface BankSound {
   looped: boolean;
   /** The game's sounds (msp.sound) that play it when the player has chosen none: `fireball.wav`. */
   msp: string[];
+  /** Coupler's own events (coupler.event) that play it when the player has chosen none: `you sit`. */
+  events: string[];
   /** The terrains it loops in while their BGN is None (`woods`; by night or by day). */
   terrains: string[];
   /** The weathers it loops for while their BGW is None (`rain`). */
