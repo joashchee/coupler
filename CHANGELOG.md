@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.30.0 (2026-10-23)
+
+- **CoffeeMUD's places and weather heard** (2026-10-23): wherever the
+  player has set no background noise of their own, the place loops
+  coffeemud.sf2's sound for its terrain (a town, a forest by day or by
+  night, a cave, a tavern, the open plains, underwater, 24 terrains in
+  all), and outdoors the weather overhead loops its own (rain, a
+  thunderstorm, wind, snow, fog, a dust storm…). They fade from one to
+  the next as the player walks, at 60% of the BGN and BGW volumes, and
+  the player's own loops on a room, terrain, indoors or outdoors, or a
+  weather always come first. The hook editor says which of CoffeeMUD's
+  loops plays on a terrain's or a weather's row while it's None. Not on
+  the web.
+
 ## 0.29.0 (2026-10-23)
 
 - **The game's sounds play** (2026-10-23): Coupler now accepts MSP, so

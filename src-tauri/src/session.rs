@@ -1287,13 +1287,20 @@ impl Session {
         }
     }
 
-    /// Works out what should loop now and tells the frontend if that changed.
+    /// Works out what should loop now and tells the frontend if that
+    /// changed. What the player's triggers leave silent plays the bank's
+    /// loop for the terrain and the weather (`soundbank::fill_ambience`).
     fn update_ambience(&self, app: &AppHandle) {
+        let night = self.daytime.lock().unwrap().now() == Some(Phase::Night);
         let mut ambient = self.ambient.lock().unwrap();
-        let now = {
+        let mut now = {
             let store = self.hook_store(app);
             store.hooks.as_ref().map(|h| ambient.ambient.ambience_from(h)).unwrap_or_default()
         };
+        if app.state::<soundbank::Sounds>().available() {
+            let a = &ambient.ambient;
+            soundbank::fill_ambience(&mut now, a.room.as_ref().map(|r| r.terrain.as_str()), a.weather_overhead(), night);
+        }
         if now != ambient.sent {
             ambient.sent = now.clone();
             let _ = app.emit("ambient", now);

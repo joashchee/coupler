@@ -380,8 +380,13 @@ and its order is in the roadmap's phase 2.
   comes on, `Sounds::warm` renders those once a run on a thread. A
   login that turns MSP off (the character's `SOUNDS` off) emits
   `sounds-off` once a connection: the tip to type SOUNDS. The web build
-  plays only the mirror's triggers on them. Not yet: the bank's loops as
-  the default BGN and BGW.
+  plays only the mirror's triggers on them. **The bank's loops are the
+  default BGN and BGW**: where the player's triggers leave either
+  silent, `update_ambience` in `session.rs` fills it
+  (`soundbank::fill_ambience`, at `LOOP_VOLUME`) with the terrain's loop
+  (`TERRAIN_LOOPS`, the woods' by night at night) and the weather
+  overhead's (`WEATHER_LOOPS`); `soundbank_list` says which each plays
+  for, and the hook editor says it. Desktop only.
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the

@@ -349,6 +349,11 @@ impl Ambient {
         self.weather.get(&self.room.as_ref()?.zone).copied()
     }
 
+    /// The weather over the player's head: none indoors or underwater.
+    pub fn weather_overhead(&self) -> Option<&'static str> {
+        self.weather().filter(|_| self.room.as_ref().is_some_and(|r| has_sky(&r.terrain)))
+    }
+
     /// What should loop now, from the triggers. BGN: the room's own, else
     /// its terrain's, else its room type's. BGW: the weather's, under the sky.
     pub fn ambience(&self, trigger: impl Fn(&str, &str) -> Option<Trigger>) -> Ambience {
@@ -361,7 +366,7 @@ impl Ambient {
             let t = trigger(key, value)?;
             Some(Loop { path: t.bgn?, volume: t.bgn_volume })
         });
-        let bgw = self.weather().filter(|_| has_sky(&room.terrain)).and_then(|kind| {
+        let bgw = self.weather_overhead().and_then(|kind| {
             let t = trigger(WEATHER_KEY, &json_text(kind))?;
             Some(Loop { path: t.bgw?, volume: t.bgw_volume })
         });

@@ -18,6 +18,10 @@
 //! one-shot played through Neumetik MIDI from its note-on to its end, a
 //! loop taken straight from the bank at its loop points. Pure but for
 //! `Sounds`, and unit-tested.
+//!
+//! Its loops are also the ambience's defaults: where the player's
+//! triggers leave BGN or BGW silent, the terrain's loop and the weather
+//! overhead's play (`fill_ambience`).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -171,6 +175,91 @@ pub fn msp_default(name: &str) -> Option<String> {
     Some(slot.asset_path(tier))
 }
 
+/// The bank's loop for each of CoffeeMUD's terrains
+/// (`ambient.rs`'s `OUTDOOR` and `INDOOR`), by its name. Woods have a
+/// second, by night (`bgn_default`). Open sea isn't told from a lake by
+/// the terrain, so `watersurface` is the river or lake.
+const TERRAIN_LOOPS: [(&str, &str); 24] = [
+    ("city", "Town"),
+    ("woods", "Forest by day"),
+    ("rocky", "Rocky ground"),
+    ("plains", "Plains"),
+    ("underwater", "Underwater"),
+    ("air", "Sky"),
+    ("watersurface", "River or lake"),
+    ("jungle", "Jungle"),
+    ("swamp", "Swamp"),
+    ("desert", "Desert"),
+    ("hills", "Hills"),
+    ("mountains", "Mountains"),
+    ("spaceport", "Metal hull"),
+    ("seaport", "Harbor"),
+    ("stone", "Castle halls"),
+    ("wooden", "Tavern"),
+    ("cave", "Cave"),
+    ("magic", "Wizard's tower"),
+    ("in_underwater", "Underwater"),
+    ("gap", "Sky"),
+    ("cavelakesurface", "Cave lake"),
+    ("metal", "Metal hull"),
+    ("innerseaport", "Harbor"),
+    ("caveseaport", "Cave lake"),
+];
+
+/// The bank's loop for each kind of weather `ambient.rs` reads, by its
+/// name, as the map's triggers say. Clear has none.
+const WEATHER_LOOPS: [(&str, &str); 13] = [
+    ("cloudy", "Light wind"),
+    ("windy", "Strong wind"),
+    ("rain", "Light rain"),
+    ("thunderstorm", "Thunderstorm"),
+    ("snow", "Snow"),
+    ("hail", "Hail"),
+    ("heat", "Heat"),
+    ("sleet", "Light rain"),
+    ("blizzard", "Snow"),
+    ("dust", "Dust storm"),
+    ("drought", "Heat"),
+    ("cold", "Bitter cold"),
+    ("fog", "Fog"),
+];
+
+/// A loop the bank plays by default, as a share of its bus: under the
+/// talk and the game's own sounds, since it never stops.
+pub const LOOP_VOLUME: u8 = 60;
+
+/// A loop's asset path, by its name in the bank.
+fn loop_path(name: &str) -> Option<String> {
+    slots().iter().find(|s| s.looped && s.name == name).map(|s| s.asset_path(Tier::Severe))
+}
+
+/// What BGN plays where the player has set no sound of their own: the
+/// bank's loop for the terrain, the woods' by night at night.
+pub fn bgn_default(terrain: &str, night: bool) -> Option<String> {
+    let terrain = terrain.to_ascii_lowercase();
+    let name = TERRAIN_LOOPS.iter().find(|(t, _)| *t == terrain)?.1;
+    loop_path(if night && name == "Forest by day" { "Forest by night" } else { name })
+}
+
+/// What BGW plays for the weather overhead where the player has set no
+/// sound of their own.
+pub fn bgw_default(weather: &str) -> Option<String> {
+    loop_path(WEATHER_LOOPS.iter().find(|(w, _)| *w == weather)?.1)
+}
+
+/// Fills what the player's triggers left silent with the bank's loops:
+/// the terrain's for BGN, the weather overhead's for BGW.
+pub fn fill_ambience(ambience: &mut crate::ambient::Ambience, terrain: Option<&str>, weather: Option<&str>, night: bool) {
+    use crate::ambient::Loop;
+    let as_loop = |path| Loop { path, volume: LOOP_VOLUME };
+    if ambience.bgn.is_none() {
+        ambience.bgn = terrain.and_then(|t| bgn_default(t, night)).map(as_loop);
+    }
+    if ambience.bgw.is_none() {
+        ambience.bgw = weather.and_then(bgw_default).map(as_loop);
+    }
+}
+
 /// Whether an asset path is in the bank's folder (named one of its sounds
 /// or not).
 pub fn is_bank_path(path: &str) -> bool {
@@ -193,6 +282,12 @@ pub struct Sound {
     /// The MSP sounds that play it when the player has set none
     /// (`msp_default`).
     pub msp: Vec<&'static str>,
+    /// The terrains it loops in when the player has set no BGN, by day
+    /// or by night (`bgn_default`).
+    pub terrains: Vec<&'static str>,
+    /// The weathers it loops for when the player has set no BGW
+    /// (`bgw_default`).
+    pub weathers: Vec<&'static str>,
 }
 
 /// Every sound in the bank, each tier its own, in the map's order.
@@ -203,7 +298,9 @@ pub fn list() -> Vec<Sound> {
             s.tiers().iter().map(|t| {
                 let path = s.asset_path(*t);
                 let msp = s.msp.iter().copied().filter(|name| msp_default(name).as_deref() == Some(path.as_str())).collect();
-                Sound { path, looped: s.looped, msp }
+                let terrains = TERRAIN_LOOPS.iter().map(|(t, _)| *t).filter(|t| [false, true].iter().any(|night| bgn_default(t, *night).as_deref() == Some(path.as_str()))).collect();
+                let weathers = WEATHER_LOOPS.iter().map(|(w, _)| *w).filter(|w| bgw_default(w).as_deref() == Some(path.as_str())).collect();
+                Sound { path, looped: s.looped, msp, terrains, weathers }
             })
         })
         .collect()
@@ -452,6 +549,45 @@ mod tests {
         }
         assert_eq!(slot(0, 29).map(|s| (s.name, s.tiered)), Some(("Flesh hit", true)));
         assert_eq!(slot(4, 12), None);
+    }
+
+    #[test]
+    fn ambience_defaults_are_loops() {
+        use crate::ambient::{room_type, Ambience, Loop};
+        // Every terrain CoffeeMUD lists has one, and every weather but clear.
+        for (terrain, _) in TERRAIN_LOOPS {
+            assert!(room_type(terrain).is_some(), "{terrain} isn't a terrain");
+            let path = bgn_default(terrain, false).unwrap_or_else(|| panic!("{terrain} has no loop"));
+            assert!(find(&path).is_some_and(|(s, _)| s.looped), "{path}");
+        }
+        for (weather, _) in WEATHER_LOOPS {
+            let path = bgw_default(weather).unwrap_or_else(|| panic!("{weather} has no loop"));
+            assert!(find(&path).is_some_and(|(s, _)| s.looped), "{path}");
+        }
+        assert_eq!(bgn_default("City", false).as_deref(), Some("bank/Town"));
+        assert_eq!(bgn_default("woods", true).as_deref(), Some("bank/Forest by night"));
+        assert_eq!(bgn_default("cave", true).as_deref(), Some("bank/Cave"));
+        assert_eq!(bgn_default("nowhere", false), None);
+        assert_eq!(bgw_default("clear"), None);
+        assert_eq!(bgw_default("rain").as_deref(), Some("bank/Light rain"));
+
+        // The player's own loops stay; only what's silent is filled.
+        let own = Loop { path: "BGN/brook.ogg".into(), volume: 40 };
+        let mut a = Ambience { bgn: Some(own.clone()), bgw: None };
+        fill_ambience(&mut a, Some("woods"), Some("fog"), false);
+        assert_eq!(a.bgn, Some(own));
+        assert_eq!(a.bgw, Some(Loop { path: "bank/Fog".into(), volume: LOOP_VOLUME }));
+        let mut a = Ambience::default();
+        fill_ambience(&mut a, None, None, false);
+        assert_eq!(a, Ambience::default(), "nowhere, nothing");
+
+        // The hook editor's list says where each plays.
+        let all = list();
+        let sound = |name: &str| all.iter().find(|s| s.path == format!("bank/{name}")).unwrap();
+        assert_eq!(sound("Forest by night").terrains, ["woods"]);
+        assert_eq!(sound("Underwater").terrains, ["underwater", "in_underwater"]);
+        assert_eq!(sound("Snow").weathers, ["snow", "blizzard"]);
+        assert!(sound("Battle tension").terrains.is_empty() && sound("Fire impact").weathers.is_empty());
     }
 
     #[test]

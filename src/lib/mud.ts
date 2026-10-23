@@ -867,6 +867,10 @@ export interface BankSound {
   looped: boolean;
   /** The game's sounds (msp.sound) that play it when the player has chosen none: `fireball.wav`. */
   msp: string[];
+  /** The terrains it loops in while their BGN is None (`woods`; by night or by day). */
+  terrains: string[];
+  /** The weathers it loops for while their BGW is None (`rain`). */
+  weathers: string[];
 }
 
 /** CoffeeMUD's sounds, every tier its own; none if this copy hasn't them. */

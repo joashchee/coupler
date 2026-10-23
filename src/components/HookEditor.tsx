@@ -11,7 +11,8 @@
  * only on coupler.weather (src-tauri/src/ambient.rs), with a line
  * saying so elsewhere, so nothing offered does nothing. A sound the game
  * names (msp.sound) says which of CoffeeMUD's sounds plays while its
- * SFX is None. Every control
+ * SFX is None, and a terrain or weather which of its loops plays while
+ * its BGN or BGW is None (soundbank.rs `fill_ambience`). Every control
  * has a visible label. A change is saved at once and said in the status
  * bar; Set Off Nothing clears them all.
  */
@@ -25,6 +26,9 @@ export interface Choice {
   shown: string;
   /** One of CoffeeMUD's sounds: the game's sounds that play it when nothing's chosen. */
   msp?: string[];
+  /** A loop of CoffeeMUD's: the terrains and weathers it plays for when nothing's chosen. */
+  terrains?: string[];
+  weathers?: string[];
 }
 
 interface HookEditorProps {
@@ -60,6 +64,11 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
   /** On a sound the game names: the bank's sound that plays while SFX is None. */
   const mspName = pair?.key === mud.MSP_SOUND_KEY ? pair.value.replace(/^"|"$/g, "") : null;
   const mspDefault = mspName === null ? null : (bank.once.find((c) => c.msp?.includes(mspName)) ?? null);
+  /** On a terrain or the weather: the bank's loops that play while BGN or BGW is None. */
+  const value = pair?.value.replace(/^"|"$/g, "").toLowerCase() ?? "";
+  const loopsFor = (field: "terrains" | "weathers") => bank.loops.filter((c) => c[field]?.includes(value)).map((c) => c.shown);
+  const terrainDefault = pair?.key === "room.info.terrain" ? loopsFor("terrains") : [];
+  const weatherDefault = weatherPair ? loopsFor("weathers") : [];
 
   function assetMenu(slot: Slot, label: string) {
     const current = t[slot] ?? "";
@@ -182,8 +191,20 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
       {!roomPair && !weatherPair && (
         <p>Background noise (BGN) is set on a room's room.info.id, room.info.terrain or coupler.room.type, and weather sound (BGW) on coupler.weather.</p>
       )}
-      {roomPair && <p>Background noise loops while you're here: a room's own first, then its terrain's, then indoors or outdoors.</p>}
-      {weatherPair && <p>Weather sound loops while this is the weather where you are, outdoors.</p>}
+      {roomPair && (
+        <p>
+          Background noise loops while you're here: a room's own first, then its terrain's, then indoors or outdoors.
+          {bank.loops.length > 0 && " Where none is set, CoffeeMUD's loop for the terrain plays."}
+          {terrainDefault.length === 1 && ` Here that's ${terrainDefault[0]}.`}
+          {terrainDefault.length > 1 && ` Here that's ${terrainDefault.join(" or ")}, by the time of day.`}
+        </p>
+      )}
+      {weatherPair && (
+        <p>
+          Weather sound loops while this is the weather where you are, outdoors.
+          {weatherDefault.length > 0 && ` While it's None, CoffeeMUD's ${weatherDefault[0]} plays.`}
+        </p>
+      )}
       {mspName !== null && (
         <p>
           {mspDefault
