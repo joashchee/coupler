@@ -2606,7 +2606,7 @@ function App() {
           </Movable>
         )}
 
-        {((ux === "workshop" && mapOpen) || (controlPanel && has("map"))) && (
+        {has("map") && ((ux === "workshop" && mapOpen) || controlPanel) && (
           <Movable id="map" label="map" usual={usual.map} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <MapPanel snapshot={snapshot} connected={connected} walking={walking} run={runMap} onAskClear={() => setClearMapOpen(true)} blink={display.blink} />
           </Movable>

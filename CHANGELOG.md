@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.33.1 (2026-10-23)
+
+- **No more blue screen on the iPhone** (2026-10-23): the map panel was
+  the one part of the screen not asked whether the layout has it, and
+  Workshop (the default) with the map open (also the default) put it on
+  the phone, whose layout has no place for it: the screen failed to
+  draw past the in-development notice, in the web build on an iPhone
+  and in the iPhone app. The map now shows only where the layout has it.
+
 ## 0.33.0 (2026-10-23)
 
 - **The web build does what the desktop does** (2026-10-23): on the web
