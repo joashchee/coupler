@@ -1185,6 +1185,15 @@ impl Session {
         hooks.list(query, HOOKS_SHOWN)
     }
 
+    /// The bank's defaults, each with the player's own sound that takes
+    /// its place (`soundbank::defaults`).
+    pub fn soundbank_defaults(&self, app: &AppHandle) -> Result<soundbank::Defaults, String> {
+        let store = self.hook_store(app);
+        let hooks = store.hooks.as_ref().ok_or("The hooks database couldn't be opened.")?;
+        let rooms = hooks.triggers().iter().filter(|(key, _, t)| *key == "room.info.id" && t.bgn.is_some()).count();
+        Ok(soundbank::defaults(|key, value| hooks.trigger(key, value).cloned(), rooms))
+    }
+
     /// The filtered keys matching `query`, the first `HOOKS_SHOWN` of them.
     pub fn hooks_filtered(&self, app: &AppHandle, query: &str) -> Result<hooks::FilteredListing, String> {
         let store = self.hook_store(app);

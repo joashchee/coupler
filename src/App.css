@@ -530,6 +530,13 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
    file's SoundFont menu), its uses in words, and Play or Show. */
 .hooks-head.assets-row,
 .hooks-list.assets-list li { grid-template-columns: 12px 200px 72px minmax(0, 1fr) 176px 136px 64px; gap: 0 12px; }
+/* CoffeeMUD's Sounds: a bullet beside each default the player's own
+   sound replaces, the pair's name and value, the bank's sound, the
+   player's, then Play and Edit. Each group is a heading row across. */
+.hooks-head.bank-row,
+.hooks-list.bank-list li { grid-template-columns: 12px 160px minmax(0, 1fr) 280px 280px 56px 64px; gap: 0 12px; }
+.hooks-list.bank-list li.bank-group { display: block; margin-top: 12px; color: var(--text); font-weight: 600; }
+.hooks-list.bank-list li.bank-group:first-child { margin-top: 0; }
 /* A picture tried (AssetPreview.tsx) or made (CreateAssetDialog.tsx):
    80 characters by 25 rows on black, scrolling inside when bigger. */
 .asset-preview { width: 640px; height: 400px; overflow: auto; background: #000000; }

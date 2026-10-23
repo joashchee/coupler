@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **CoffeeMUD's Sounds, a tab of the Hooks list** (2026-10-23): every
+  pair CoffeeMUD's sounds play for while you've set none, in groups
+  (places, weather, combat, magic, creatures, nature, doors and locks,
+  comings and goings, everyday doings, crafting, socials, your
+  character): each terrain's loop (the woods by day and by night), each
+  weather's, the battle loop, every sound the game names and every one
+  of Coupler's own events, with its volume and what's laid under it.
+  Where your own sound takes its place (on the pair, or a room type's
+  background noise for its terrains), a green bullet and its name;
+  how many rooms have their own background noise. Play tries the
+  default; Edit… opens the hook editor on its pair.
+
 ## 0.31.0 (2026-10-23)
 
 - **CoffeeMUD's sounds for everything else** (2026-10-23): the blows

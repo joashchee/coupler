@@ -389,7 +389,9 @@ and its order is in the roadmap's phase 2.
   (`TERRAIN_LOOPS`, the woods' by night at night) and the weather
   overhead's (`WEATHER_LOOPS`), and in a fight `Battle tension` in the
   place's; `soundbank_list` says which each plays for, and the hook
-  editor says it. A sound the map lays a sub-bass or an accent under
+  editor says it. The Hooks list's CoffeeMUD's Sounds tab lists every
+  default in its group (`defaults`, `GROUPS`; `soundbank_defaults`),
+  each with the player's own sound that takes its place. A sound the map lays a sub-bass or an accent under
   (`LAYERS`: "under A#1", "over C#4") is rendered with them in it, so
   it plays as one sound, one caption; a new way of making them bumps
   `MADE` (the cache folder is `<VERSION>-<MADE>`). Desktop only.
@@ -746,7 +748,7 @@ and its order is in the roadmap's phase 2.
   `journal_unheard_entries`, `journal_set_heard`, `journal_heard_all`,
   `voice_engines`, `voice_synth`, `voice_prerender`, `hooks_count`, `hooks_list`, `hooks_set_trigger`, `ambience_now`, `picture_now`, `picture_again`, `picture_forget_looks`, `picture_paint`, `assets_list`,
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,
-  `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `asset_picture`, `asset_ansi`,
+  `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `soundbank_defaults`, `asset_picture`, `asset_ansi`,
   `music_open`, `music_new`, `music_save`, `music_save_as`, `music_render`,
   `music_instruments`, `backup_export`, `backup_inspect`, `backup_restore`,
   `app_restart`, `window_set_fullscreen`,

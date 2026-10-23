@@ -593,6 +593,14 @@
 :root[data-theme="ansiapps"] .priority-add { margin-top: 16px; }
 :root[data-theme="ansiapps"] .hooks-head.assets-row,
 :root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 8px 192px 72px minmax(0, 1fr) 176px 144px 56px; gap: 0 16px; }
+/* CoffeeMUD's Sounds: the bullet's cell, the name (20 cells), the value
+   (the rest), the bank's sound (33), the player's (33), Play (7) and
+   Edit... (7), two cells between. A group's heading is white on blue
+   (rank 5) across the row, a blank row above it. */
+:root[data-theme="ansiapps"] .hooks-head.bank-row,
+:root[data-theme="ansiapps"] .hooks-list.bank-list li { grid-template-columns: 8px 160px minmax(0, 1fr) 264px 264px 56px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.bank-list li.bank-group { display: block; margin-top: 16px; padding: 0 8px; background: var(--dos-blue); color: var(--dos-white); font-weight: inherit; }
+:root[data-theme="ansiapps"] .hooks-list.bank-list li.bank-group:first-child { margin-top: 0; }
 /* A picture tried or made: 80 cells by 25 rows on black (18 in Create
    Asset, under its words), scrolling inside when bigger. */
 :root[data-theme="ansiapps"] .asset-preview.create-asset-picture { height: 288px; margin-top: 16px; }

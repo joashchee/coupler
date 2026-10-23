@@ -31,6 +31,14 @@
  * that's gone falls back to Neumetik). A SoundFont's Play plays a
  * sample tune through it.
  *
+ * A fourth tab, CoffeeMUD's Sounds, lists every pair the bank
+ * (coffeemud.sf2, src-tauri/src/soundbank.rs `defaults`) plays a sound
+ * for while the player has set none, in groups (Places, Weather,
+ * Combat, ...), each a heading row in the list. Beside each default, the
+ * player's own sound where one takes its place (a green bullet, and the
+ * same in words: on the pair, or for a terrain on its room type's), Play
+ * to hear the default, and Edit... to open the hook editor on its pair.
+ *
  * Create Asset, beside Add Assets, makes a picture or a loop of music
  * from the player's words (CreateAssetDialog.tsx).
  *
@@ -72,12 +80,32 @@ interface HooksDialogProps {
   onError: (message: string) => void;
 }
 
-type Tab = "hooks" | "filtered" | "assets";
+type Tab = "hooks" | "filtered" | "assets" | "bank";
 const TABS: [Tab, string][] = [
   ["hooks", "Hooks list"],
   ["filtered", "Filtered list"],
   ["assets", "Assets"],
+  ["bank", "CoffeeMUD's Sounds"],
 ];
+
+const BUS_NAMES: Record<mud.BankDefault["bus"], string> = { SFX: "sound effect", BGN: "background noise", BGW: "weather sound" };
+
+/** A default's pair in words: `msp.sound fireball.wav`, `room.info.terrain woods by night`, or `in a fight`. */
+const pairOf = (d: mud.BankDefault) => [d.key, d.value, d.when].filter(Boolean).join(" ");
+
+/** What the bank plays for a default, in short: "Fire impact", "Footsteps in 40%, Heavy impact under", "Town, loop, 60%". */
+function bankPlays(d: mud.BankDefault): string {
+  const loud = d.volume === 100 ? "" : ` ${d.volume}%`;
+  return `${mud.assetTitle(d.sound)}${d.bus === "SFX" ? "" : ", loop,"}${loud}${d.under ? `, ${mud.assetTitle(d.under)} under` : ""}`;
+}
+
+/** The player's own sound in its place, in short: "SFX boom 100%", "BGN inside 50%, for every indoors room". */
+function yoursInWords(d: mud.BankDefault): string {
+  const y = d.yours;
+  if (!y) return "None: the bank's plays";
+  const over = y.key === d.key ? "" : `, for every ${y.value} room`;
+  return `${d.bus} ${mud.assetTitle(y.sound)} ${y.volume}%${over}`;
+}
 
 const KIND_NAMES: Record<mud.AssetKind, string> = { sfx: "SFX", bgm: "BGM", art: "ART", soundfont: "SoundFont" };
 
@@ -125,6 +153,20 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
       })
       .catch((e) => onError(String(e)));
   }, [open, bank.once.length, onError]);
+  /** CoffeeMUD's Sounds tab: every default of the bank's, with the player's own. */
+  const [defaults, setDefaults] = useState<mud.BankDefaults | null>(null);
+  useEffect(() => {
+    if (!open || tab !== "bank") return;
+    let stale = false;
+    mud
+      .soundbankDefaults()
+      .then((d) => !stale && setDefaults(d))
+      .catch((e) => onError(String(e)));
+    return () => {
+      stale = true;
+    };
+    // `version`: a trigger changed, so which defaults are the player's changed.
+  }, [open, tab, version, onError]);
   /** The pair open in the hook editor, with what it sets off as last saved. */
   const [editing, setEditing] = useState<mud.HookPair | null>(null);
   /** The picture open in Show…, and whether Create Asset is open. */
@@ -203,7 +245,7 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
   }
 
   useEffect(() => {
-    if (!open || tab === "assets") return;
+    if (!open || tab === "assets" || tab === "bank") return;
     let stale = false;
     const read = tab === "hooks" ? mud.hooksList(query).then((l) => !stale && setListing(l)) : mud.hooksFiltered(query).then((l) => !stale && setFiltered(l));
     read.catch((e) => onError(String(e)));
@@ -228,6 +270,21 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
       focusRow.current = row;
       onStatus(toFiltered ? `${key} moved to the Filtered list.` : `${key} is back in the hooks list.`);
       setVersion((v) => v + 1);
+    } catch (e) {
+      onError(String(e));
+    }
+  }
+
+  /** Plays one of the bank's defaults to try it (a loop until Stop), or stops it. */
+  async function playOrStopDefault(d: mud.BankDefault) {
+    const shown = mud.assetTitle(d.sound);
+    if (trying === d.sound) {
+      sound.stopPreview();
+      onStatus(`${shown} stopped.`);
+      return;
+    }
+    try {
+      await runActivity(`Getting ${shown} ready to play…`, () => sound.playPreview(d.sound, d.bus === "SFX" ? "sfx" : "bgm", d.bus !== "SFX"), `play:${d.sound}`);
     } catch (e) {
       onError(String(e));
     }
@@ -283,8 +340,25 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
     .flat()
     .filter((a) => !searching || a.path.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => a.path.toLowerCase().localeCompare(b.path.toLowerCase()));
+  /** CoffeeMUD's Sounds tab's rows, narrowed by Search: a group's name, a pair, the bank's sound or the player's. */
+  const shownDefaults = (defaults?.sounds ?? []).filter((d) => {
+    if (!searching) return true;
+    const q = query.trim().toLowerCase();
+    return [d.group, pairOf(d), d.sound, d.under ?? "", d.yours?.sound ?? ""].some((text) => text.toLowerCase().includes(q));
+  });
   let summary: string;
-  if (tab === "hooks") {
+  if (tab === "bank") {
+    const all = defaults?.sounds ?? [];
+    const mine = all.filter((d) => d.yours).length;
+    const rooms = defaults && defaults.rooms > 0 ? ` ${plural(defaults.rooms, "room has", "rooms have")} background noise of its own, which plays there instead of its terrain's.` : "";
+    summary = !defaults
+      ? "Reading CoffeeMUD's sounds…"
+      : all.length === 0
+        ? "CoffeeMUD's sounds aren't in this copy of Coupler, so nothing plays by default."
+        : searching
+          ? `${shownDefaults.length} of ${plural(all.length, "default", "defaults")} match.`
+          : `${plural(all.length, "default", "defaults")} play CoffeeMUD's sounds where you've set none; ${mine} ${mine === 1 ? "has" : "have"} your own in its place (green bullet).${rooms}`;
+  } else if (tab === "hooks") {
     const shown = listing?.pairs.length ?? 0;
     summary = !listing
       ? "Reading the hooks…"
@@ -385,7 +459,7 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
               type="text"
               data-testid="hooks-search"
               aria-describedby={`${id}-summary`}
-              placeholder={tab === "hooks" ? "Part of a name or a value" : tab === "assets" ? "Part of a file's name or type" : "Part of a name"}
+              placeholder={tab === "hooks" ? "Part of a name or a value" : tab === "assets" ? "Part of a file's name or type" : tab === "bank" ? "Part of a group, name, value or sound" : "Part of a name"}
               value={query}
               autoComplete="off"
               autoCorrect="off"
@@ -397,7 +471,66 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
           <p id={`${id}-summary`} className="hooks-summary" data-testid="hooks-summary">
             {summary}
           </p>
-          {tab === "assets" ? (
+          {tab === "bank" ? (
+            <>
+              <div className="hooks-head bank-row" aria-hidden="true">
+                <span />
+                <span>Name</span>
+                <span>Value</span>
+                <span>CoffeeMUD's sound</span>
+                <span>Yours instead</span>
+                <span />
+                <span />
+              </div>
+              <ul ref={listRef} className="hooks-list bank-list" data-testid="bank-list" tabIndex={0} aria-label="CoffeeMUD's sounds by group: name, value, the sound it plays, your own in its place, then Play and Edit">
+                {open &&
+                  shownDefaults.map((d, row) => {
+                    const heading = row === 0 || shownDefaults[row - 1].group !== d.group;
+                    const isPlaying = trying === d.sound;
+                    const pair = pairOf(d);
+                    return [
+                      heading && (
+                        <li key={`group ${d.group}`} className="bank-group">
+                          {d.group}
+                        </li>
+                      ),
+                      <li key={`${pair}\n${d.sound}`} className={d.yours ? "in-use" : undefined}>
+                        <span className="asset-dot" aria-hidden="true">
+                          {d.yours ? "•" : ""}
+                        </span>
+                        <span className="hook-key">{d.key || "In a fight"}</span>
+                        <span className="hook-value">{d.key ? [d.value, d.when].filter(Boolean).join(", ") : "anywhere your own BGN is None"}</span>
+                        <span className={d.yours ? "hook-value" : "hook-sets-off"}>{`${d.bus} ${bankPlays(d)}`}</span>
+                        <span className={d.yours ? "hook-sets-off" : "hook-value"}>{yoursInWords(d)}</span>
+                        <button
+                          type="button"
+                          className="hook-edit"
+                          data-testid="bank-play"
+                          aria-label={`${isPlaying ? "Stop" : "Play"} ${mud.assetTitle(d.sound)}, the ${BUS_NAMES[d.bus]} for ${pair}${d.yours ? `, which your ${mud.assetTitle(d.yours.sound)} replaces` : ""}`}
+                          aria-pressed={isPlaying}
+                          onClick={() => void playOrStopDefault(d)}
+                        >
+                          {isPlaying ? "Stop" : "Play"}
+                        </button>
+                        {d.key ? (
+                          <button
+                            type="button"
+                            className="hook-edit"
+                            data-testid="bank-edit"
+                            aria-label={`Edit what ${pair} sets off: ${d.yours ? yoursInWords(d) : `nothing of yours, so ${mud.assetTitle(d.sound)} plays`}`}
+                            onClick={() => setEditing({ key: d.key, value: JSON.stringify(d.value), trigger: d.trigger ?? undefined })}
+                          >
+                            Edit…
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                      </li>,
+                    ];
+                  })}
+              </ul>
+            </>
+          ) : tab === "assets" ? (
             <>
               <div className="hooks-head assets-row" aria-hidden="true">
                 <span />

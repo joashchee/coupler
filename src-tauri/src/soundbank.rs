@@ -449,6 +449,126 @@ pub fn list() -> Vec<Sound> {
         .collect()
 }
 
+/// The groups the defaults are listed in (`defaults`), in this order.
+pub const GROUPS: [&str; 12] =
+    ["Places", "Weather", "Combat", "Magic", "Creatures", "Nature", "Doors and locks", "Comings and goings", "Everyday", "Crafting", "Socials", "Your character"];
+
+/// A one-shot's group, by where the map puts it.
+fn group_of(slot: &Slot) -> &'static str {
+    match (slot.program, slot.key) {
+        (0, 19) | (3, 89..=90) => "Nature",
+        (0, 26..=38) => "Combat",
+        (0, 39..=47) => "Doors and locks",
+        (0, 48..=59) => "Creatures",
+        (0, _) => "Magic",
+        (2, 62) | (2, 71) => "Your character",
+        (2, _) => "Socials",
+        (3, 60..=81) => "Crafting",
+        _ => "Everyday",
+    }
+}
+
+/// One of the bank's defaults: what plays for a pair the player has set
+/// no sound on, and whether they have (`yours`).
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BankDefault {
+    /// One of `GROUPS`.
+    pub group: &'static str,
+    /// The pair it plays for (its value as text, not JSON); no key for the
+    /// battle loop, which plays for a fight rather than a pair.
+    pub key: &'static str,
+    pub value: String,
+    /// When, beside the pair: "by night".
+    pub when: Option<&'static str>,
+    /// `SFX`, `BGN` or `BGW`.
+    pub bus: &'static str,
+    /// The bank's sound, and one played with it (a stomp's thud).
+    pub sound: String,
+    pub under: Option<String>,
+    pub volume: u8,
+    /// The player's own sound for it, which plays instead.
+    pub yours: Option<Yours>,
+    /// What the pair sets off now, all of it, for the hook editor.
+    pub trigger: Option<crate::hooks::Trigger>,
+}
+
+/// The player's trigger that takes a default's place: on its own pair,
+/// or for a terrain on its room type's.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Yours {
+    pub key: &'static str,
+    pub value: String,
+    pub sound: String,
+    pub volume: u8,
+}
+
+/// Every default, and how many rooms have background noise of their own
+/// (`room.info.id`), which plays there in place of the terrain's.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Defaults {
+    pub sounds: Vec<BankDefault>,
+    pub rooms: usize,
+}
+
+/// Every pair the bank plays a sound for by default, in `GROUPS`' order,
+/// each with the player's own sound on it if `trigger` (a pair, its
+/// value as JSON) gives one.
+pub fn defaults(trigger: impl Fn(&str, &str) -> Option<crate::hooks::Trigger>, rooms: usize) -> Defaults {
+    use crate::ambient::{json_text, room_type, ROOM_TYPE_KEY, WEATHER_KEY};
+    let mut sounds = Vec::new();
+    let sfx = |key: &'static str, value: &str| {
+        let t = trigger(key, &json_text(value))?;
+        Some(Yours { key, value: value.to_string(), sound: t.sfx?, volume: t.sfx_volume })
+    };
+    let bgn = |key: &'static str, value: &str| {
+        let t = trigger(key, &json_text(value))?;
+        Some(Yours { key, value: value.to_string(), sound: t.bgn?, volume: t.bgn_volume })
+    };
+    for (terrain, _) in TERRAIN_LOOPS {
+        let yours = bgn("room.info.terrain", terrain).or_else(|| room_type(terrain).and_then(|kind| bgn(ROOM_TYPE_KEY, kind)));
+        let nights: &[(bool, Option<&'static str>)] = if bgn_default(terrain, true) != bgn_default(terrain, false) { &[(false, Some("by day")), (true, Some("by night"))] } else { &[(false, None)] };
+        for (night, when) in nights {
+            let Some(sound) = bgn_default(terrain, *night) else { continue };
+            let own = trigger("room.info.terrain", &json_text(terrain));
+            sounds.push(BankDefault { group: "Places", key: "room.info.terrain", value: terrain.to_string(), when: *when, bus: "BGN", sound, under: None, volume: LOOP_VOLUME, yours: yours.clone(), trigger: own });
+        }
+    }
+    for (weather, _) in WEATHER_LOOPS {
+        let Some(sound) = bgw_default(weather) else { continue };
+        let own = trigger(WEATHER_KEY, &json_text(weather));
+        let yours = own.clone().and_then(|t| Some(Yours { key: WEATHER_KEY, value: weather.to_string(), sound: t.bgw?, volume: t.bgw_volume }));
+        sounds.push(BankDefault { group: "Weather", key: WEATHER_KEY, value: weather.to_string(), when: None, bus: "BGW", sound, under: None, volume: LOOP_VOLUME, yours, trigger: own });
+    }
+    if let Some(sound) = loop_path(FIGHT_LOOP) {
+        sounds.push(BankDefault { group: "Combat", key: "", value: "in a fight".into(), when: None, bus: "BGN", sound, under: None, volume: LOOP_VOLUME, yours: None, trigger: None });
+    }
+    let mut seen = std::collections::HashSet::new();
+    for name in msp_names() {
+        let Some(sound) = msp_default(&name) else { continue };
+        if !seen.insert(name.to_ascii_lowercase()) {
+            continue;
+        }
+        let Some(slot) = by_msp(&name) else { continue };
+        let yours = sfx(crate::msp::SOUND_KEY, &name);
+        let own = trigger(crate::msp::SOUND_KEY, &json_text(&name));
+        sounds.push(BankDefault { group: group_of(slot), key: crate::msp::SOUND_KEY, value: name, when: None, bus: "SFX", sound, under: None, volume: 100, yours, trigger: own });
+    }
+    for happening in Happening::ALL {
+        let Some((sound, volume)) = event_default(happening) else { continue };
+        let group = if matches!(happening, Happening::Arrives(_) | Happening::Leaves(_) | Happening::Flees) { "Comings and goings" } else { "Everyday" };
+        let value = happening.name();
+        let yours = sfx(crate::foley::EVENT_KEY, value);
+        let own = trigger(crate::foley::EVENT_KEY, &json_text(value));
+        sounds.push(BankDefault { group, key: crate::foley::EVENT_KEY, value: value.into(), when: None, bus: "SFX", sound, under: event_under(happening), volume, yours, trigger: own });
+    }
+    // Stable: each group keeps the order it was listed in.
+    sounds.sort_by_key(|d| GROUPS.iter().position(|g| *g == d.group));
+    Defaults { sounds, rooms }
+}
+
 /// The bank's path, in the app's Resources folder.
 pub fn path(resources: &Path) -> PathBuf {
     resources.join(FILE)
@@ -692,6 +812,56 @@ mod tests {
         assert_eq!(by_msp("dooropen.wav").map(|s| s.name), Some("Door open"));
         assert_eq!(by_msp("rain.wav").map(|s| (s.program, s.key, s.looped)), Some((1, 85, true)));
         assert_eq!(by_msp("nothing.wav"), None);
+    }
+
+    #[test]
+    fn defaults_are_grouped_and_show_the_players_own() {
+        use crate::hooks::Trigger;
+        let none = defaults(|_, _| None, 0);
+        let groups: Vec<&str> = none.sounds.iter().map(|d| d.group).collect();
+        let mut sorted = groups.clone();
+        sorted.sort_by_key(|g| GROUPS.iter().position(|o| o == g));
+        assert_eq!(groups, sorted);
+        assert!(GROUPS.iter().all(|g| groups.contains(g)), "an empty group");
+        assert!(none.sounds.iter().all(|d| d.yours.is_none()));
+        let find = |all: &Defaults, key: &str, value: &str, when: Option<&str>| all.sounds.iter().find(|d| d.key == key && d.value == value && d.when == when).cloned().unwrap();
+        // Every terrain, the woods twice; every weather; one row a name.
+        assert_eq!(none.sounds.iter().filter(|d| d.group == "Places").count(), 25);
+        assert_eq!(find(&none, "room.info.terrain", "woods", Some("by night")).sound, "bank/Forest by night");
+        assert_eq!(none.sounds.iter().filter(|d| d.group == "Weather").count(), 13);
+        assert_eq!(none.sounds.iter().filter(|d| d.value == "dooropen.wav").count(), 1);
+        assert_eq!(find(&none, "msp.sound", "fireball.wav", None).group, "Magic");
+        assert_eq!(find(&none, "msp.sound", "punch3.wav", None).group, "Combat");
+        assert_eq!(find(&none, "msp.sound", "laugh.wav", None).group, "Socials");
+        assert_eq!(find(&none, "msp.sound", "hammer.wav", None).group, "Crafting");
+        assert_eq!(find(&none, "coupler.event", "someone stomps in", None).under.as_deref(), Some("bank/Heavy impact"));
+        assert_eq!(find(&none, "coupler.event", "you sit", None).group, "Everyday");
+        assert!(none.sounds.iter().any(|d| d.key.is_empty() && d.sound == "bank/Battle tension"));
+
+        let mine = |sfx: Option<&str>, bgn: Option<&str>, bgw: Option<&str>| Trigger { sfx: sfx.map(Into::into), bgn: bgn.map(Into::into), bgw: bgw.map(Into::into), ..Trigger::default() };
+        let set = defaults(
+            |key, value| match (key, value) {
+                ("msp.sound", r#""fireball.wav""#) => Some(mine(Some("wav/boom.wav"), None, None)),
+                // Music only: the bank's sound still plays.
+                ("msp.sound", r#""laugh.wav""#) => Some(Trigger { bgm: Some("mid/ha.mid".into()), ..Trigger::default() }),
+                ("coupler.event", r#""you sit""#) => Some(mine(Some("wav/chair.wav"), None, None)),
+                ("coupler.room.type", r#""indoors""#) => Some(mine(None, Some("wav/inside.wav"), None)),
+                ("room.info.terrain", r#""cave""#) => Some(mine(None, Some("wav/drip.wav"), None)),
+                ("coupler.weather", r#""rain""#) => Some(mine(None, None, Some("wav/rain.wav"))),
+                _ => None,
+            },
+            2,
+        );
+        assert_eq!(set.rooms, 2);
+        let yours = |key, value| find(&set, key, value, None).yours.map(|y| (y.key, y.sound));
+        assert_eq!(yours("msp.sound", "fireball.wav"), Some(("msp.sound", "wav/boom.wav".into())));
+        assert_eq!(yours("msp.sound", "laugh.wav"), None);
+        assert_eq!(find(&set, "msp.sound", "laugh.wav", None).trigger.and_then(|t| t.bgm).as_deref(), Some("mid/ha.mid"));
+        assert_eq!(yours("coupler.event", "you sit"), Some(("coupler.event", "wav/chair.wav".into())));
+        assert_eq!(yours("room.info.terrain", "cave"), Some(("room.info.terrain", "wav/drip.wav".into())));
+        assert_eq!(yours("room.info.terrain", "stone"), Some(("coupler.room.type", "wav/inside.wav".into())));
+        assert_eq!(yours("room.info.terrain", "city"), None);
+        assert_eq!(yours("coupler.weather", "rain"), Some(("coupler.weather", "wav/rain.wav".into())));
     }
 
     #[test]

@@ -596,6 +596,17 @@ fn soundbank_list(sounds: State<'_, soundbank::Sounds>) -> Vec<soundbank::Sound>
     }
 }
 
+/// Every pair CoffeeMUD's sounds play for by default, each with the
+/// player's own sound on it; none if this copy hasn't the bank.
+#[tauri::command]
+fn soundbank_defaults(app: AppHandle, sounds: State<'_, soundbank::Sounds>, session: State<'_, Session>) -> Result<soundbank::Defaults, String> {
+    if sounds.available() {
+        session.soundbank_defaults(&app)
+    } else {
+        Ok(soundbank::Defaults { sounds: Vec::new(), rooms: 0 })
+    }
+}
+
 /// An ANSI art asset, drawn into rows of styled characters.
 #[tauri::command]
 fn asset_ansi(app: AppHandle, path: String) -> Result<ansi_art::Art, String> {
@@ -883,6 +894,7 @@ pub fn run() {
             asset_create_music,
             asset_audio,
             soundbank_list,
+            soundbank_defaults,
             asset_picture,
             asset_ansi,
             window_set_fullscreen,

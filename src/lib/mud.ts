@@ -889,6 +889,40 @@ export interface BankSound {
 
 /** CoffeeMUD's sounds, every tier its own; none if this copy hasn't them. */
 export const soundbankList = () => invoke<BankSound[]>("soundbank_list");
+/** The player's own sound that plays in place of one of the bank's defaults: on the same pair, or a room type's for a terrain. */
+export interface BankYours {
+  key: string;
+  /** As text, not JSON. */
+  value: string;
+  sound: string;
+  volume: number;
+}
+/** A pair CoffeeMUD's sounds play for when the player has set no sound on it. */
+export interface BankDefault {
+  /** Places, Weather, Combat, Magic, Creatures, Nature, Doors and locks, Comings and goings, Everyday, Crafting, Socials, Your character. */
+  group: string;
+  /** Empty for the battle loop, which plays for a fight rather than a pair. */
+  key: string;
+  /** As text, not JSON: `fireball.wav`, `woods`. */
+  value: string;
+  /** "by night", "by day". */
+  when: string | null;
+  bus: "SFX" | "BGN" | "BGW";
+  sound: string;
+  /** A sound played with it (a stomp's thud). */
+  under: string | null;
+  volume: number;
+  yours: BankYours | null;
+  /** What the pair sets off now, all of it, for the hook editor. */
+  trigger: Trigger | null;
+}
+export interface BankDefaults {
+  sounds: BankDefault[];
+  /** Rooms with background noise of their own, which plays there in place of the terrain's. */
+  rooms: number;
+}
+/** Every default of CoffeeMUD's sounds, in its group, with the player's own sound where they set one; none if this copy hasn't them. */
+export const soundbankDefaults = () => invoke<BankDefaults>("soundbank_defaults");
 /** An image's bytes (PNG or JPEG). */
 export const assetPicture = (path: string) => invoke<ArrayBuffer>("asset_picture", { path });
 /** ANSI art, drawn. */
