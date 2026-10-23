@@ -52,7 +52,7 @@ import * as mud from "../lib/mud";
 import { AssetPreviewDialog } from "./AssetPreview";
 import { CreateAssetDialog } from "./CreateAssetDialog";
 import { Dialog } from "./Dialog";
-import { HookEditor } from "./HookEditor";
+import { HookEditor, type Choice } from "./HookEditor";
 
 interface HooksDialogProps {
   open: boolean;
@@ -113,6 +113,18 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
   const [assets, setAssets] = useState<mud.Asset[]>([]);
   /** Each MIDI file played through a SoundFont the player chose, and the SoundFont. */
   const [fonts, setFonts] = useState<Record<string, string>>({});
+  /** CoffeeMUD's sounds, for the editor's menus beside the Assets folder's. */
+  const [bank, setBank] = useState<{ once: Choice[]; loops: Choice[] }>({ once: [], loops: [] });
+  useEffect(() => {
+    if (!open || bank.once.length > 0) return;
+    mud
+      .soundbankList()
+      .then((all) => {
+        const choice = (s: mud.BankSound) => ({ path: s.path, shown: mud.assetTitle(s.path) });
+        setBank({ once: all.filter((s) => !s.looped).map(choice), loops: all.filter((s) => s.looped).map(choice) });
+      })
+      .catch((e) => onError(String(e)));
+  }, [open, bank.once.length, onError]);
   /** The pair open in the hook editor, with what it sets off as last saved. */
   const [editing, setEditing] = useState<mud.HookPair | null>(null);
   /** The picture open in Show…, and whether Create Asset is open. */
@@ -495,6 +507,7 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
       <HookEditor
         pair={open ? editing : null}
         choices={(kind) => byKind.get(kind) ?? []}
+        bank={bank}
         onChange={(change) => (editing ? setTrigger(editing, change) : Promise.resolve())}
         onClose={() => setEditing(null)}
       />

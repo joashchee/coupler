@@ -265,6 +265,8 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
       return (await mirrored(String(args.path))).json();
     case "assets_list":
       return { assets: [], cleared: [] };
+    case "soundbank_list":
+      return [];
     case "journal_unheard":
       return { journal: 0, log: 0, speakers: [] };
     case "voice_engines":

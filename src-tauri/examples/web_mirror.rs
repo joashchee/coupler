@@ -24,6 +24,9 @@
 //!   they are; ANSI art drawn here (`ansi_art.rs`) into the JSON the
 //!   view shows, so the web build carries no ANSI art reader. MIDI is
 //!   rendered twice when a trigger loops it and another doesn't (`#loop`).
+//!   CoffeeMUD's sounds (`bank/…`, `soundbank.rs`), which the web build
+//!   hasn't, are rendered from this checkout's coffeemud.sf2
+//!   (scripts/coffeemud-sf2-fetch.py) and made Ogg Opus the same way.
 //!
 //! A trigger on a pair that may name a person or hold what someone said
 //! (`PRIVATE_KEYS`) is left out unless `--allow-private` is given: the
@@ -35,7 +38,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use coupler_lib::{assets, codecs, hooks::Hooks, trigger::Trigger};
+use coupler_lib::{assets, codecs, hooks::Hooks, soundbank, trigger::Trigger};
 use serde_json::json;
 
 /// Keys whose values can be a person's name or their words.
@@ -154,12 +157,21 @@ fn run() -> Result<(), String> {
         Ok(name)
     };
 
+    // CoffeeMUD's sounds, made in a folder of this run's own.
+    let bank = soundbank::Sounds::default();
+    let bank_cache = std::env::temp_dir().join(format!("coupler-web-mirror-bank-{}", std::process::id()));
+    bank.set_dirs(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources"), &bank_cache);
+
     let mut files: BTreeMap<String, String> = BTreeMap::new();
     let mut failed = Vec::new();
     let mut bytes_out = 0u64;
     for (path, looping) in &wanted {
         let folder = path.split('/').next().unwrap_or_default();
         let made: Result<Vec<(String, String)>, String> = (|| {
+            if soundbank::is_bank_path(path) {
+                let pcm = codecs::read_wav(&bank.audio(path)?)?;
+                return Ok(vec![(path.clone(), write(&codecs::encode_opus(&pcm, &mut |_| {})?, "opus")?)]);
+            }
             match assets::kind_of(folder) {
                 Some(assets::Kind::Art) if assets::is_ansi(path) => {
                     let art = assets::ansi(&root, path)?;
@@ -200,6 +212,8 @@ fn run() -> Result<(), String> {
             }
         }
     }
+
+    let _ = std::fs::remove_dir_all(&bank_cache);
 
     let triggers: Vec<_> = kept.iter().map(|(key, value, trigger)| json!({ "key": key, "value": value, "trigger": trigger })).collect();
     let manifest = json!({ "version": 1, "triggers": triggers, "files": files });

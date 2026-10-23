@@ -357,7 +357,19 @@ and its order is in the roadmap's phase 2.
   `scripts/coffeemud-sf2-sync.py` copies the map and writes the credits
   from Neumetik at that tag; a new bank changes the fetch script's
   `TAG` and `SHA256`, then runs it. Its tests skip without the file.
-  Nothing plays it yet (phase A of its wiring is done).
+  Each sound is an asset named in the `bank` folder (`bank/Flesh hit
+  (light)`, `Slot::asset_path`, `find`): `asset_audio` gives it to the
+  buses like a file in Assets (`Sounds::audio`), made once and kept in
+  `soundbank-cache/<VERSION>/` in app data (derived, so not in the
+  backup; an older version's deleted at launch). A one-shot is played
+  through Neumetik MIDI, dry, at its tier's top velocity (127 untiered:
+  the bank's own level) and never let go (a note-off before the first
+  render silences it); the first loop asked for takes every loop
+  straight from the bank at its loop points. The hook editor offers
+  them (`soundbank_list`; one-shots for SFX, loops for BGN and BGW,
+  under "CoffeeMUD's sounds"); `assets_list` never clears them as
+  missing. The web mirror renders them from this checkout's bank.
+  Not yet: MSP, and the bank as the default sounds.
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the
@@ -692,7 +704,7 @@ and its order is in the roadmap's phase 2.
   `journal_unheard_entries`, `journal_set_heard`, `journal_heard_all`,
   `voice_engines`, `voice_synth`, `voice_prerender`, `hooks_count`, `hooks_list`, `hooks_set_trigger`, `ambience_now`, `picture_now`, `picture_again`, `picture_forget_looks`, `picture_paint`, `assets_list`,
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,
-  `asset_create_art`, `asset_create_music`, `asset_audio`, `asset_picture`, `asset_ansi`,
+  `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `asset_picture`, `asset_ansi`,
   `music_open`, `music_new`, `music_save`, `music_save_as`, `music_render`,
   `music_instruments`, `backup_export`, `backup_inspect`, `backup_restore`,
   `app_restart`, `window_set_fullscreen`,

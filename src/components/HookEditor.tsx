@@ -28,6 +28,8 @@ interface HookEditorProps {
   pair: mud.HookPair | null;
   /** Each kind's assets; BGN and BGW take the SFX list. */
   choices: (kind: "sfx" | "bgm" | "art") => Choice[];
+  /** CoffeeMUD's sounds: one-shots for SFX, loops for BGN and BGW. */
+  bank: { once: Choice[]; loops: Choice[] };
   /** Saves a change to the pair's trigger. */
   onChange: (change: Partial<mud.Trigger>) => Promise<void>;
   onClose: () => void;
@@ -46,7 +48,7 @@ function within(text: string, least: number, most: number, was: number): number 
 type Slot = "sfx" | "bgm" | "art" | "bgn" | "bgw";
 type NumberField = "sfxVolume" | "bgmVolume" | "bgnVolume" | "bgwVolume" | "artX" | "artY" | "artFade";
 
-export function HookEditor({ pair, choices, onChange, onClose }: HookEditorProps) {
+export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEditorProps) {
   const id = useId();
   const t = pair?.trigger ?? mud.NO_TRIGGER;
   const roomPair = pair !== null && mud.BGN_KEYS.includes(pair.key);
@@ -55,16 +57,26 @@ export function HookEditor({ pair, choices, onChange, onClose }: HookEditorProps
   function assetMenu(slot: Slot, label: string) {
     const current = t[slot] ?? "";
     const list = choices(slot === "bgn" || slot === "bgw" ? "sfx" : slot);
+    const ours = slot === "sfx" ? bank.once : slot === "bgn" || slot === "bgw" ? bank.loops : [];
     return (
       <select id={`${id}-${slot}`} className="hook-asset" data-testid={`hook-edit-${slot}`} value={current} onChange={(e) => void onChange({ [slot]: e.currentTarget.value || null })} aria-label={label}>
         <option value="">None</option>
         {/* One chosen before its file left the folder still shows. */}
-        {current && !list.some((a) => a.path === current) && <option value={current}>{mud.assetTitle(current)} (missing)</option>}
+        {current && !list.some((a) => a.path === current) && !ours.some((a) => a.path === current) && <option value={current}>{mud.assetTitle(current)} (missing)</option>}
         {list.map((a) => (
           <option key={a.path} value={a.path}>
             {a.shown}
           </option>
         ))}
+        {ours.length > 0 && (
+          <optgroup label="CoffeeMUD's sounds">
+            {ours.map((a) => (
+              <option key={a.path} value={a.path}>
+                {a.shown}
+              </option>
+            ))}
+          </optgroup>
+        )}
       </select>
     );
   }

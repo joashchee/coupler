@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **CoffeeMUD's sounds in the hook editor** (2026-10-23): every sound
+  in coffeemud.sf2 can be chosen for a hook, under "CoffeeMUD's sounds"
+  in its menus: the one-shots for SFX (each blow and creature in its
+  three kinds, `Flesh hit (light)`, `Canine (pain)`), the ambience and
+  weather loops for BGN and BGW. Each plays at the bank's own level
+  through the SFX, BGN and BGW buses, captioned by its name. A one-shot
+  is rendered by Neumetik MIDI the first time it's played, the loops
+  taken from the bank at their exact loop points so they go round with
+  no seam; both are kept in app data, so the next time is instant. The
+  web mirror publishes those a hook uses.
 - **coffeemud.sf2 comes with Coupler** (2026-10-22): CoffeeMUD's
   sounds as a SoundFont, 210 of them, each of the game's events on a
   key of its own (combat, creatures, spells, doors, socials, crafting,

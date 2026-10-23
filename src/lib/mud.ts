@@ -856,6 +856,15 @@ export const assetCreateMusic = (prompt: string, options: MusicOptions = {}) => 
 export const isMidi = (path: string) => path.startsWith("mid/") || path.startsWith("midi/");
 /** A sound or piece of music as WAV or MP3 bytes, rendered first if the WebView can't play it (a SoundFont: its sample tune). */
 export const assetAudio = (path: string, looping: boolean) => invoke<ArrayBuffer>("asset_audio", { path, looping });
+/** One of CoffeeMUD's sounds (coffeemud.sf2, shipped with Coupler): an asset by its name in the `bank` folder, `bank/Flesh hit (light)`. */
+export interface BankSound {
+  path: string;
+  /** A loop, for BGN and BGW; otherwise a sound played once, for SFX. */
+  looped: boolean;
+}
+
+/** CoffeeMUD's sounds, every tier its own; none if this copy hasn't them. */
+export const soundbankList = () => invoke<BankSound[]>("soundbank_list");
 /** An image's bytes (PNG or JPEG). */
 export const assetPicture = (path: string) => invoke<ArrayBuffer>("asset_picture", { path });
 /** ANSI art, drawn. */

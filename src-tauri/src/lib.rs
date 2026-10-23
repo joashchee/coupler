@@ -48,7 +48,7 @@ mod portrait;
 mod screen_reader;
 mod senses;
 mod session;
-mod soundbank;
+pub mod soundbank;
 mod speech;
 mod stretch;
 mod synth;
@@ -469,7 +469,9 @@ struct AssetsListing {
 fn assets_list(app: AppHandle, session: State<'_, Session>) -> Result<AssetsListing, String> {
     let root = assets_dir(&app)?;
     // A folder that can't be read at all isn't a reason to forget every asset.
-    let cleared = if root.is_dir() { session.hooks_clear_missing(&app, |path| assets::resolve(&root, path).is_ok())? } else { Vec::new() };
+    // CoffeeMUD's sounds are kept while the bank still has them.
+    let here = |path: &str| if soundbank::is_bank_path(path) { soundbank::find(path).is_some() } else { assets::resolve(&root, path).is_ok() };
+    let cleared = if root.is_dir() { session.hooks_clear_missing(&app, here)? } else { Vec::new() };
     let uses = session.hooks_asset_uses(&app);
     let mut all = assets::list(&root);
     for asset in &mut all {
@@ -564,13 +566,32 @@ fn assets_keep(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
 }
 
 /// A sound or music asset as something the WebView plays (WAV or MP3),
-/// sent as raw bytes. Rendering music can take a moment, so it's off
-/// the main thread.
+/// sent as raw bytes: one in Assets, or one of CoffeeMUD's sounds
+/// (`bank/…`). Rendering can take a moment, so it's off the main thread.
 #[tauri::command]
 async fn asset_audio(app: AppHandle, path: String, looping: bool) -> Result<tauri::ipc::Response, String> {
     let root = assets_dir(&app)?;
-    let bytes = tauri::async_runtime::spawn_blocking(move || assets::audio(&root, &path, looping)).await.map_err(|e| e.to_string())??;
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        if soundbank::is_bank_path(&path) {
+            app.state::<soundbank::Sounds>().audio(&path)
+        } else {
+            assets::audio(&root, &path, looping)
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// CoffeeMUD's sounds, for the hook editor's menus; none if this copy
+/// hasn't the bank.
+#[tauri::command]
+fn soundbank_list(sounds: State<'_, soundbank::Sounds>) -> Vec<soundbank::Sound> {
+    if sounds.available() {
+        soundbank::list()
+    } else {
+        Vec::new()
+    }
 }
 
 /// An ANSI art asset, drawn into rows of styled characters.
@@ -760,6 +781,7 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().level(log::LevelFilter::Info).build())
         .manage(Session::default())
         .manage(synth::Engines::default())
+        .manage(soundbank::Sounds::default())
         .manage(Renders::default())
         .setup(|app| {
             // The Mac's data under the bundle ID it shipped with moves to the new one first.
@@ -782,10 +804,14 @@ pub fn run() {
             }
             // Smaller copies offered last time, never answered.
             assets::forget_waiting(&app_data_dir.join("Assets"));
-            // Pocket TTS's weights and voices ship in the app's Resources.
+            // Pocket TTS's weights and voices, and CoffeeMUD's sounds, ship in
+            // the app's Resources.
             match app.path().resource_dir() {
-                Ok(dir) => app.state::<synth::Engines>().set_pocket_dir(dir.join("pocket-tts")),
-                Err(e) => log::warn!("Coupler's Resources folder couldn't be found, so Pocket TTS's voices are off. ({e})"),
+                Ok(dir) => {
+                    app.state::<synth::Engines>().set_pocket_dir(dir.join("pocket-tts"));
+                    app.state::<soundbank::Sounds>().set_dirs(dir, &app_data_dir.join("soundbank-cache"));
+                }
+                Err(e) => log::warn!("Coupler's Resources folder couldn't be found, so Pocket TTS's voices and CoffeeMUD's sounds are off. ({e})"),
             }
             // Lines of talk rendered before they're wanted (voicecache.rs).
             start_renders(app.handle(), app_data_dir.join("voice-cache"));
@@ -854,6 +880,7 @@ pub fn run() {
             asset_create_art,
             asset_create_music,
             asset_audio,
+            soundbank_list,
             asset_picture,
             asset_ansi,
             window_set_fullscreen,
