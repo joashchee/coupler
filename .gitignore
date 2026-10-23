@@ -54,3 +54,5 @@ src-tauri/vendor/neumetik-midi/Cargo.lock
 
 # The maintainer's private notes, linked in from the notes repository.
 CLAUDE.local.md
+# Claude Code settings for this checkout only (the notes folder made writable).
+.claude/settings.local.json
