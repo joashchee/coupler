@@ -10,17 +10,8 @@
 //! (made again as lines come) nor the first-run warning's answer. A new
 //! kind of data in app data joins `KEPT`.
 //!
-//! The file (`.coupler`): `MAGIC`, the manifest's length (u32, little
-//! endian) and the manifest (JSON: what made it and what's in it), then
-//! blocks, each a method (`STORED` or `BROTLI`), its length (u64), its
-//! bytes and the CRC-32 of what they hold, and `END`. What a block holds
-//! is records: a path's length (u16), the path, the size (u64) and the
-//! bytes. The first block is the settings and every small file together,
-//! in Brotli's strongest setting with its largest window, files of a
-//! type side by side so each finds its likes; a sound or SoundFont (raw
-//! samples) is a block of its own, Brotli again; what's compressed
-//! already (Ogg, Opus, MP3, WavPack, PNG, JPEG) is stored as it is,
-//! since squeezing it again only takes time.
+//! The file (`.coupler`) is `backup_format.rs`, shared with the web
+//! build, which writes and reads it in memory.
 //!
 //! The databases are read through SQLite's `VACUUM INTO`, a consistent,
 //! compacted copy even while the game is being played.
@@ -34,21 +25,11 @@
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use brotli::enc::BrotliEncoderParams;
-use serde::{Deserialize, Serialize};
+pub use crate::backup_format::*;
 
-/// The start of every backup.
-pub const MAGIC: &[u8; 16] = b"COUPLER BACKUP\n\0";
-/// The format this writes and reads.
-pub const FORMAT: u32 = 1;
-/// The extension a backup's file name ends in.
-pub const EXTENSION: &str = "coupler";
-
-/// What's backed up and restored, by name in app data.
-pub const KEPT: &[&str] = &["Assets", "maps", "pictures", "cast", "hooks.sqlite", "journal.sqlite", "bestiary.sqlite", "played.json"];
 /// Inside the kept items, left out: the smaller copies waiting for an answer.
 const LEFT_OUT: &[&str] = &["Assets/.smaller"];
 
@@ -62,68 +43,6 @@ pub const SETTINGS: &str = "restored-settings.json";
 const COMPLETE: &str = ".complete";
 /// Where the databases' copies are made while backing up.
 const SNAPSHOTS: &str = ".backup-snapshots";
-/// The settings' record in a backup.
-const SETTINGS_RECORD: &str = "@settings";
-
-const STORED: u8 = 0;
-const BROTLI: u8 = 1;
-const END: u8 = 0xFF;
-
-/// Already compressed: stored as it is.
-const PACKED: &[&str] = &["ogg", "opus", "mp3", "wv", "png", "jpg", "jpeg"];
-/// Raw samples: a block of their own.
-const SAMPLES: &[&str] = &["wav", "sf2", "dls"];
-/// A file this big is a block of its own whatever it is.
-const OWN_BLOCK: u64 = 16 << 20;
-/// Up to this size a block of its own gets Brotli's strongest setting;
-/// past it, one a little faster (the strongest takes minutes a gigabyte).
-const STRONGEST_UP_TO: u64 = 8 << 20;
-
-/// What's in a backup, written at its start.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Manifest {
-    pub format: u32,
-    /// The Coupler version that made it.
-    pub app: String,
-    /// When, in seconds since 1970.
-    pub made: u64,
-    /// How many files.
-    pub files: usize,
-    /// The files' size, uncompressed.
-    pub bytes: u64,
-    /// How many settings.
-    pub settings: usize,
-}
-
-/// How far a backup or a restore has got, in bytes of the files.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Progress {
-    pub done: u64,
-    pub total: u64,
-}
-
-/// A backup made.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Made {
-    pub manifest: Manifest,
-    /// The backup's own size.
-    pub size: u64,
-}
-
-/// A file to back up: its path in the backup, and where to read it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Item {
-    pub path: String,
-    pub source: PathBuf,
-    pub size: u64,
-}
-
-fn extension(path: &str) -> String {
-    Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
-}
 
 /// Left out wherever it is: what SQLite keeps beside a database, a file
 /// put aside as unreadable, the Finder's.
@@ -188,153 +107,10 @@ pub fn clear_snapshots(root: &Path) {
     let _ = fs::remove_dir_all(root.join(SNAPSHOTS));
 }
 
-/// Whether a file is a block of its own.
-fn own_block(item: &Item) -> bool {
-    let ext = extension(&item.path);
-    item.size > OWN_BLOCK || PACKED.contains(&ext.as_str()) || SAMPLES.contains(&ext.as_str())
+/// Writes a backup of `items`, read from their files, and `settings`.
+pub fn write<W: Write + Seek>(out: &mut W, app: &str, made: u64, settings: &str, items: &[Item], progress: impl FnMut(Progress)) -> Result<Manifest, String> {
+    write_with(out, app, made, settings, items, |item| File::open(&item.source), progress)
 }
-
-fn params(quality: i32, size_hint: u64) -> BrotliEncoderParams {
-    BrotliEncoderParams { quality, lgwin: 24, size_hint: size_hint.min(usize::MAX as u64) as usize, ..Default::default() }
-}
-
-/// Counts what's written through it, and the CRC.
-struct Counting<W: Write> {
-    inner: W,
-    crc: flate2::Crc,
-}
-
-impl<W: Write> Write for Counting<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let n = self.inner.write(buf)?;
-        self.crc.update(&buf[..n]);
-        Ok(n)
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
-}
-
-/// Writes a backup of `items` and `settings` (a JSON object of strings).
-pub fn write<W: Write + Seek>(out: &mut W, app: &str, made: u64, settings: &str, items: &[Item], mut progress: impl FnMut(Progress)) -> Result<Manifest, String> {
-    let parsed: BTreeMap<String, String> = serde_json::from_str(settings).map_err(|e| format!("The settings couldn't be read. ({e})"))?;
-    let manifest = Manifest { format: FORMAT, app: app.to_string(), made, files: items.len(), bytes: items.iter().map(|i| i.size).sum(), settings: parsed.len() };
-    let io = |e: io::Error| format!("Couldn't write the backup. ({e})");
-    out.write_all(MAGIC).map_err(io)?;
-    let json = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
-    out.write_all(&(json.len() as u32).to_le_bytes()).map_err(io)?;
-    out.write_all(&json).map_err(io)?;
-    let total = manifest.bytes;
-    let mut done = 0u64;
-    progress(Progress { done, total });
-
-    // The settings and the small files, together.
-    let (own, together): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|i| own_block(i));
-    let hint = settings.len() as u64 + together.iter().map(|i| i.size).sum::<u64>();
-    block(out, BROTLI, Some(params(11, hint)), |w| {
-        record(w, SETTINGS_RECORD, settings.len() as u64, &mut settings.as_bytes())?;
-        for item in &together {
-            let mut file = File::open(&item.source)?;
-            record(w, &item.path, item.size, &mut file)?;
-            done += item.size;
-            progress(Progress { done, total });
-        }
-        Ok(())
-    })
-    .map_err(io)?;
-
-    for item in own {
-        let packed = PACKED.contains(&extension(&item.path).as_str());
-        let (method, how) = if packed { (STORED, None) } else { (BROTLI, Some(params(if item.size <= STRONGEST_UP_TO { 11 } else { 9 }, item.size))) };
-        block(out, method, how, |w| {
-            let mut file = File::open(&item.source)?;
-            record(w, &item.path, item.size, &mut file)
-        })
-        .map_err(io)?;
-        done += item.size;
-        progress(Progress { done, total });
-    }
-    out.write_all(&[END]).map_err(io)?;
-    out.flush().map_err(io)?;
-    Ok(manifest)
-}
-
-/// One block: its method, a length filled in once known, what `fill`
-/// writes (compressed or not), and the CRC of what it wrote.
-fn block<W: Write + Seek>(out: &mut W, method: u8, how: Option<BrotliEncoderParams>, fill: impl FnOnce(&mut dyn Write) -> io::Result<()>) -> io::Result<()> {
-    out.write_all(&[method])?;
-    let at = out.stream_position()?;
-    out.write_all(&0u64.to_le_bytes())?;
-    let crc = {
-        let sink = BufWriter::with_capacity(1 << 20, &mut *out);
-        match how {
-            Some(p) => {
-                let mut counting = Counting { inner: brotli::CompressorWriter::with_params(sink, 1 << 16, &p), crc: flate2::Crc::new() };
-                fill(&mut counting)?;
-                let crc = counting.crc.sum();
-                let mut sink = counting.inner.into_inner();
-                sink.flush()?;
-                crc
-            }
-            None => {
-                let mut counting = Counting { inner: sink, crc: flate2::Crc::new() };
-                fill(&mut counting)?;
-                counting.inner.flush()?;
-                counting.crc.sum()
-            }
-        }
-    };
-    let end = out.stream_position()?;
-    out.seek(SeekFrom::Start(at))?;
-    out.write_all(&(end - at - 8).to_le_bytes())?;
-    out.seek(SeekFrom::Start(end))?;
-    out.write_all(&crc.to_le_bytes())
-}
-
-fn record(w: &mut dyn Write, path: &str, size: u64, from: &mut dyn Read) -> io::Result<()> {
-    w.write_all(&(path.len() as u16).to_le_bytes())?;
-    w.write_all(path.as_bytes())?;
-    w.write_all(&size.to_le_bytes())?;
-    let copied = io::copy(&mut from.take(size), w)?;
-    if copied != size {
-        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, format!("{path} changed while it was being backed up")));
-    }
-    Ok(())
-}
-
-const NOT_A_BACKUP: &str = "That isn't a Coupler Backup.";
-
-/// A backup's manifest, read from its start.
-pub fn inspect<R: Read>(r: &mut R) -> Result<Manifest, String> {
-    let mut magic = [0u8; 16];
-    r.read_exact(&mut magic).map_err(|_| NOT_A_BACKUP.to_string())?;
-    if &magic != MAGIC {
-        return Err(NOT_A_BACKUP.to_string());
-    }
-    let mut len = [0u8; 4];
-    r.read_exact(&mut len).map_err(|_| NOT_A_BACKUP.to_string())?;
-    let len = u32::from_le_bytes(len) as usize;
-    if len > 1 << 16 {
-        return Err(NOT_A_BACKUP.to_string());
-    }
-    let mut json = vec![0u8; len];
-    r.read_exact(&mut json).map_err(|_| NOT_A_BACKUP.to_string())?;
-    let manifest: Manifest = serde_json::from_slice(&json).map_err(|_| NOT_A_BACKUP.to_string())?;
-    if manifest.format != FORMAT {
-        return Err(format!("This backup was made by a newer Coupler ({}). Update Coupler to restore it.", manifest.app));
-    }
-    Ok(manifest)
-}
-
-/// Whether a path from a backup is one Coupler would have written: inside
-/// a kept item, nothing but plain names.
-fn safe(path: &str) -> bool {
-    let mut parts = path.split('/');
-    let first = parts.next().unwrap_or("");
-    KEPT.contains(&first) && path.split('/').all(|p| !p.is_empty() && p != "." && p != ".." && !p.contains(['\\', ':', '\0']))
-}
-
-const DAMAGED: &str = "The backup is damaged, so nothing was restored.";
 
 /// Unpacks a backup into `RESTORING` in `root`, checking every block,
 /// for `apply` at the next launch. Anything wrong and nothing's left
@@ -348,100 +124,22 @@ pub fn unpack<R: Read>(r: &mut R, root: &Path, progress: impl FnMut(Progress)) -
     }
     result
 }
-
-fn unpack_into<R: Read>(r: &mut R, into: &Path, mut progress: impl FnMut(Progress)) -> Result<Manifest, String> {
-    let manifest = inspect(r)?;
+fn unpack_into<R: Read>(r: &mut R, into: &Path, progress: impl FnMut(Progress)) -> Result<Manifest, String> {
     fs::create_dir_all(into).map_err(|e| format!("Couldn't make room for the backup. ({e})"))?;
-    let total = manifest.bytes;
-    let mut done = 0u64;
-    let mut files = 0usize;
-    let mut settings = false;
-    progress(Progress { done, total });
-    loop {
-        let mut method = [0u8; 1];
-        r.read_exact(&mut method).map_err(|_| DAMAGED.to_string())?;
-        if method[0] == END {
-            break;
-        }
-        let mut len = [0u8; 8];
-        r.read_exact(&mut len).map_err(|_| DAMAGED.to_string())?;
-        let mut body = Read::take(&mut *r, u64::from_le_bytes(len));
-        let mut crc = flate2::Crc::new();
-        {
-            let mut reader: Box<dyn Read> = match method[0] {
-                STORED => Box::new(&mut body),
-                BROTLI => Box::new(brotli::Decompressor::new(&mut body, 1 << 16)),
-                _ => return Err(DAMAGED.to_string()),
-            };
-            let mut reader = CrcReader { inner: &mut reader, crc: &mut crc };
-            while let Some((path, size)) = next_record(&mut reader)? {
-                if path == SETTINGS_RECORD {
-                    let mut json = String::new();
-                    (&mut reader).take(size).read_to_string(&mut json).map_err(|_| DAMAGED.to_string())?;
-                    serde_json::from_str::<BTreeMap<String, String>>(&json).map_err(|_| DAMAGED.to_string())?;
-                    fs::write(into.join("settings.json"), json).map_err(|e| e.to_string())?;
-                    settings = true;
-                    continue;
-                }
-                if !safe(&path) {
-                    return Err(DAMAGED.to_string());
-                }
-                let to = into.join(&path);
-                fs::create_dir_all(to.parent().expect("a kept path has a parent")).map_err(|e| e.to_string())?;
-                let mut file = BufWriter::new(File::create(&to).map_err(|e| format!("Couldn't write {path}. ({e})"))?);
-                let copied = io::copy(&mut (&mut reader).take(size), &mut file).map_err(|_| DAMAGED.to_string())?;
-                file.flush().map_err(|e| e.to_string())?;
-                if copied != size {
-                    return Err(DAMAGED.to_string());
-                }
-                files += 1;
-                done += size;
-                progress(Progress { done, total });
-            }
-        }
-        // Whatever the decompressor left unread, then the CRC.
-        io::copy(&mut body, &mut io::sink()).map_err(|_| DAMAGED.to_string())?;
-        let mut sum = [0u8; 4];
-        r.read_exact(&mut sum).map_err(|_| DAMAGED.to_string())?;
-        if u32::from_le_bytes(sum) != crc.sum() {
-            return Err(DAMAGED.to_string());
-        }
-    }
-    if !settings || files != manifest.files {
-        return Err(DAMAGED.to_string());
-    }
+    let manifest = read(
+        r,
+        |json| fs::write(into.join("settings.json"), json).map_err(|e| e.to_string()),
+        |path, _, from| {
+            let to = into.join(path);
+            fs::create_dir_all(to.parent().expect("a kept path has a parent")).map_err(|e| e.to_string())?;
+            let mut file = BufWriter::new(File::create(&to).map_err(|e| format!("Couldn't write {path}. ({e})"))?);
+            io::copy(from, &mut file).map_err(|_| DAMAGED.to_string())?;
+            file.flush().map_err(|e| e.to_string())
+        },
+        progress,
+    )?;
     fs::write(into.join(COMPLETE), b"").map_err(|e| e.to_string())?;
     Ok(manifest)
-}
-
-struct CrcReader<'a, R: Read + ?Sized> {
-    inner: &'a mut R,
-    crc: &'a mut flate2::Crc,
-}
-
-impl<R: Read + ?Sized> Read for CrcReader<'_, R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        self.crc.update(&buf[..n]);
-        Ok(n)
-    }
-}
-
-/// The next record's path and size, or None at the block's end.
-fn next_record(r: &mut impl Read) -> Result<Option<(String, u64)>, String> {
-    let mut len = [0u8; 2];
-    match r.read(&mut len[..1]) {
-        Ok(0) => return Ok(None),
-        Ok(_) => {}
-        Err(_) => return Err(DAMAGED.to_string()),
-    }
-    r.read_exact(&mut len[1..]).map_err(|_| DAMAGED.to_string())?;
-    let mut path = vec![0u8; u16::from_le_bytes(len) as usize];
-    r.read_exact(&mut path).map_err(|_| DAMAGED.to_string())?;
-    let path = String::from_utf8(path).map_err(|_| DAMAGED.to_string())?;
-    let mut size = [0u8; 8];
-    r.read_exact(&mut size).map_err(|_| DAMAGED.to_string())?;
-    Ok(Some((path, u64::from_le_bytes(size))))
 }
 
 /// At launch, before anything's opened: a backup unpacked whole takes

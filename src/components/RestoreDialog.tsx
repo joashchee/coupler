@@ -1,6 +1,7 @@
 import { Dialog } from "./Dialog";
 import * as backup from "../lib/backup";
 import * as mud from "../lib/mud";
+import { WEB } from "../lib/web";
 
 /** A backup chosen or dropped, waiting for a yes. */
 export interface RestoreOffer {
@@ -46,10 +47,18 @@ export function RestoreDialog({ offer, busy, onCancel, onRestore }: RestoreDialo
             {name}: made {backup.madeInWords(m.made)} by Coupler {m.app}. It holds {m.files} {m.files === 1 ? "file" : "files"} ({mud.sizeInWords(m.bytes)}) and {m.settings}{" "}
             {m.settings === 1 ? "setting" : "settings"}.
           </p>
-          <p>
-            Everything Coupler keeps now is replaced by the backup's: the settings, the Assets folder, the hooks, the maps, the characters' voices, the room
-            pictures' looks, the journal and the log. Coupler then starts again.
-          </p>
+          {WEB ? (
+            <p>
+              Everything Coupler keeps in this browser now is replaced by the backup's: the settings, the maps, the characters' voices, the room pictures'
+              looks, the journal and the log, and the Bestiary. A backup from the desktop app brings its maps, voices, looks and settings; its sounds,
+              hooks, journal and Bestiary stay there. Coupler then starts again.
+            </p>
+          ) : (
+            <p>
+              Everything Coupler keeps now is replaced by the backup's: the settings, the Assets folder, the hooks, the maps, the characters' voices, the room
+              pictures' looks, the journal and the log. Coupler then starts again.
+            </p>
+          )}
         </>
       )}
     </Dialog>

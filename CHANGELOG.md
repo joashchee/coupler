@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.33.0 (2026-10-23)
+
+- **The web build does what the desktop does** (2026-10-23): on the web
+  now too, the journal and the log (Cmd+Shift+J/K/U/N, a typed channel
+  LAST answered from the log), the Bestiary and the Items with their
+  faces and pictures (Cmd+Shift+B, and the unobtrusive look), room
+  pictures by Coupler's painter (the Picture panel, Pictures…,
+  Cmd+Shift+P), Characters' Voices with the browser's voices, the
+  greeting at launch (times played and who's online, by MSSP over the
+  game's own WebSocket, never logging in), and Coupler Backup (a
+  download, and a backup chosen or dropped on the page; a desktop
+  backup's maps, voices, looks and settings restore on the web, and a
+  web backup restores on the desktop). CoffeeMUD's own sounds play where
+  no hook gives one, as on the desktop: the mirror now publishes every
+  sound of coffeemud.sf2 as Ogg Opus (250 files, about 8 MB, fetched as
+  they're wanted). Left on the desktop alone: the hooks list and editor,
+  the player's own assets, Create Asset, the Music Editor, the bundled
+  voices and the update check. The journal and the Bestiary share their
+  code with the desktop: each keeps its SQLite half in a store of its
+  own (`journal_store.rs`, `bestiary_store.rs`), and the web's stores
+  keep the same rows as JSON in the browser, the same tests run against
+  both; Coupler Backup's file is `backup_format.rs`, shared too.
+
 ## 0.32.1 (2026-10-23)
 
 - **No more blue screen in Workshop** (2026-10-23): Workshop shows

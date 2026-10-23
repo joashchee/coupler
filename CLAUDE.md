@@ -309,7 +309,8 @@ and its order is in the roadmap's phase 2.
   Mixer's volumes (`components/MixerDialog.tsx`, `coupler.volume.*`),
   each trigger's volume a share of its bus; rendered music is
   normalized to just under full scale (`louder`).
-- `src-tauri/src/backup.rs`: **Coupler Backup**, unit-tested: gear →
+- `src-tauri/src/backup.rs`: **Coupler Backup**, unit-tested (the
+  file's format is `backup_format.rs`, shared with the web build): gear →
   Export Coupler Backup… writes `KEPT` (the app-data items backed up:
   Assets but `.smaller`, maps, pictures, cast, hooks, journal and bestiary through
   `VACUUM INTO`, played.json) and the frontend's `coupler.` settings
@@ -320,7 +321,10 @@ and its order is in the roadmap's phase 2.
   `apply` swaps it in at launch before anything opens (the old in
   `.before-restore`), and `start` in `lib.rs` puts the settings back by
   the window's initialization script. **New data in app data joins
-  `KEPT`.** Desktop only.
+  `KEPT`** (`web`: a web backup's journal and Bestiary). On the web it's
+  a download (one stored block, no Brotli encoder in the page), and a
+  backup chosen or dropped restores what the web keeps of it
+  (`kept_on_the_web`, `src-web/src/ffi.rs`); then the page reloads.
 - `src-tauri/src/music.rs`: **the Music Editor's song**, pure and
   unit-tested: a MIDI asset read into parts (a channel of a track),
   bars and notes, every event it doesn't show kept and written back
@@ -382,7 +386,8 @@ and its order is in the roadmap's phase 2.
   comes on, `Sounds::warm` renders those once a run on a thread. A
   login that turns MSP off (the character's `SOUNDS` off) emits
   `sounds-off` once a connection: the tip to type SOUNDS. The web build
-  plays only the mirror's triggers on them. **The bank's loops are the
+  plays the same defaults from the mirror's renders of every bank sound
+  (`hooks.json`'s `bank`). **The bank's loops are the
   default BGN and BGW**: where the player's triggers leave either
   silent, `update_ambience` in `session.rs` fills it
   (`soundbank::fill_ambience`, at `LOOP_VOLUME`) with the terrain's loop
@@ -412,8 +417,8 @@ and its order is in the roadmap's phase 2.
   (`EVENT_SOUNDS`: footsteps, softer going than coming and creeping,
   a stomp's thud under them, `event_under`; posture, item handling,
   equip, coins)
-  where the player's triggers give none; the web plays only the
-  mirror's triggers on them.
+  where the player's triggers give none; the web the same, from the
+  mirror.
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the
@@ -566,8 +571,9 @@ and its order is in the roadmap's phase 2.
   line, for Immersive mode.
 - `src-tauri/src/bestiary.rs`: **the Bestiary and the Items**,
   unit-tested: every creature and item met, per world, in SQLite
-  (`bestiary.sqlite` in app data, game data: it stays local, and in
-  `KEPT`). CoffeeMUD tells a player no NPC's race, level or class, so
+  (`bestiary_store.rs`, `bestiary.sqlite` in app data, game data: it
+  stays local, and in `KEPT`; the web's own `bestiary_store.rs` keeps
+  the same rows as JSON in the browser, and the tests run against both). CoffeeMUD tells a player no NPC's race, level or class, so
   `Reader` gleans facts silently from GMCP (`room.mobiles`,
   `room.items.list`, `room.info`'s zone, `char.status`'s level) and
   the lines: the player's LOOK or LL at a creature (`typed`: size,
@@ -605,10 +611,12 @@ and its order is in the roadmap's phase 2.
   glowing, magical aura, invisible, floating…), its slot written on the
   bottom row (`bestiary_item_art` returns it for the facts too). Coupler's own look's answer is
   gagged from its first line to the prompt (`Reader::prompted`).
-  Desktop only.
+  Both builds.
 - `src-tauri/src/journal.rs`: **the journal and the log**, unit-tested:
-  every `comm.channel` line kept in SQLite (`journal.sqlite` in app
-  data, game data: it stays local) per world and character, by who said
+  every `comm.channel` line kept in SQLite (`journal_store.rs`,
+  `journal.sqlite` in app data, game data: it stays local; the web's own
+  `journal_store.rs` keeps the same rows as JSON in the browser, and the
+  tests run against both) per world and character, by who said
   it and when. Says, tells and the group go in the journal; every other
   channel in the log. A typed channel LAST (`OOC LAST 10`) isn't sent:
   `journal_last` answers it from the log (`last_asked`, `Journal::last`).
@@ -766,7 +774,9 @@ and its order is in the roadmap's phase 2.
   times played on this Mac (`played.json` in app data, counted when a
   character comes into the game). `launch_counts` gives both;
   `App.tsx` says them once the launch screen is gone
-  (`mud.describeLaunchCounts`). Desktop only.
+  (`mud.describeLaunchCounts`). On the web the probe is a WebSocket of
+  its own to the game's (`launchCounts` in `src/web/core.ts`), and the
+  times played are this browser's.
 - `src-tauri/src/ports.rs`: `HOST`, `PORTS` and the web build's
   `web_socket_url`. `src-tauri/src/trigger.rs`: `Trigger`, `Fired` and
   how a GMCP message becomes pairs (`hooks.rs` re-exports them).
@@ -774,17 +784,23 @@ and its order is in the roadmap's phase 2.
   read. All three exist so the web build can share them.
 - **The web build** (coupler.ansiapps.com):
   `src-web/`, a crate that includes the pure modules above by `#[path]`
-  and adds its own `session.rs` (no socket, journal, hooks database or
-  pictures), `hooks.rs` (the mirror's triggers), `clock.rs`, `synth.rs`
-  (no bundled voices) and `ffi.rs` (a C-style interface, no
-  wasm-bindgen). `src/web/` stands in for Tauri's modules in Vite's
-  `--mode web` (`vite.config.ts` aliases): `core.ts` loads the module,
-  owns the WebSocket, keeps maps and casts in IndexedDB and answers the
-  desktop's commands by name. `src/lib/web.ts` (`WEB`, `DESKTOP_ONLY`)
-  leaves out the journal, log, pictures, hooks list and Characters'
-  Voices. `src-tauri/examples/web_mirror.rs`, the maintainer's tool,
-  makes the web's hooks and assets mirror this Mac's Coupler
-  (`scripts/web-publish.sh`). Anything new on the desktop either works
+  and adds its own `session.rs` (the desktop's without the socket, the
+  threads, the hooks database and the voice cache), `journal_store.rs`
+  and `bestiary_store.rs` (the desktop's SQLite as rows kept in JSON),
+  `hooks.rs` (the mirror's triggers), `clock.rs`, `synth.rs` (no
+  bundled voices) and `ffi.rs` (a C-style interface, no wasm-bindgen).
+  `src/web/` stands in for Tauri's modules in Vite's `--mode web`
+  (`vite.config.ts` aliases): `core.ts` loads the module, owns the
+  WebSockets, keeps in IndexedDB what the desktop keeps in app data
+  (under the desktop's file names, `maps/<world>.json`; the journal and
+  Bestiary as `web/*.json`) and answers the desktop's commands by name;
+  `dialog.ts` and `webview.ts` hand it the files chosen or dropped.
+  `src/lib/web.ts` (`WEB`, `DESKTOP_ONLY`) leaves out only the hooks
+  list and the Music Editor (the player's own assets); Create Asset,
+  the bundled voices and the update check are desktop only too.
+  `src-tauri/examples/web_mirror.rs`, the maintainer's tool, makes the
+  web's hooks and assets mirror this Mac's Coupler, and renders every
+  coffeemud.sf2 sound for the defaults (`scripts/web-publish.sh`). Anything new on the desktop either works
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,

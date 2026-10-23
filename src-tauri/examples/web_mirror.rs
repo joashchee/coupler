@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! cargo run --release --manifest-path src-tauri/Cargo.toml --example web_mirror -- \
-//!     [--from <Coupler's app-data folder>] [--to web-mirror] [--allow-private]
+//!     [--from <Coupler's app-data folder>] [--to web-mirror] [--allow-private] [--no-bank]
 //! ```
 //!
 //! It reads a **copy** of `hooks.sqlite` (the app may be running), takes
@@ -26,7 +26,13 @@
 //!   rendered twice when a trigger loops it and another doesn't (`#loop`).
 //!   CoffeeMUD's sounds (`bank/…`, `soundbank.rs`), which the web build
 //!   hasn't, are rendered from this checkout's coffeemud.sf2
-//!   (scripts/coffeemud-sf2-fetch.py) and made Ogg Opus the same way.
+//!   (scripts/coffeemud-sf2-fetch.py) and made Ogg Opus the same way:
+//!   every one of them, not only those a trigger names, since the web
+//!   build plays them where no trigger gives a sound, as the desktop does
+//!   (the game's MSP sounds, Coupler's own events, creatures' cries, the
+//!   terrain's and the weather's loops). `hooks.json`'s `bank` says
+//!   they're there; `--no-bank` leaves them out (and the web silent where
+//!   no trigger plays).
 //!
 //! A trigger on a pair that may name a person or hold what someone said
 //! (`PRIVATE_KEYS`) is left out unless `--allow-private` is given: the
@@ -48,6 +54,7 @@ struct Args {
     from: PathBuf,
     to: PathBuf,
     allow_private: bool,
+    bank: bool,
 }
 
 fn args() -> Result<Args, String> {
@@ -57,15 +64,16 @@ fn args() -> Result<Args, String> {
     let support = Path::new(&home).join("Library/Application Support");
     let new = support.join("com.scorelessmusic.coupler");
     let from = if new.is_dir() { new } else { support.join("com.ansiapps.coupler") };
-    let mut a = Args { from, to: PathBuf::from("web-mirror"), allow_private: false };
+    let mut a = Args { from, to: PathBuf::from("web-mirror"), allow_private: false, bank: true };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--from" => a.from = it.next().ok_or("--from needs a folder")?.into(),
             "--to" => a.to = it.next().ok_or("--to needs a folder")?.into(),
             "--allow-private" => a.allow_private = true,
+            "--no-bank" => a.bank = false,
             "-h" | "--help" => {
-                println!("web_mirror [--from <app data>] [--to <folder>] [--allow-private]");
+                println!("web_mirror [--from <app data>] [--to <folder>] [--allow-private] [--no-bank]");
                 std::process::exit(0);
             }
             other => return Err(format!("Unknown argument {other}")),
@@ -213,10 +221,36 @@ fn run() -> Result<(), String> {
         }
     }
 
+    // Every one of CoffeeMUD's sounds, the defaults where no trigger plays.
+    let mut bank_made = 0;
+    if a.bank {
+        if !bank.available() {
+            return Err("coffeemud.sf2 isn't in this checkout: run scripts/coffeemud-sf2-fetch.py, or pass --no-bank.".into());
+        }
+        for sound in soundbank::list() {
+            if files.contains_key(&sound.path) {
+                continue;
+            }
+            let made = bank.audio(&sound.path).and_then(|wav| codecs::read_wav(&wav)).and_then(|pcm| codecs::encode_opus(&pcm, &mut |_| {})).and_then(|b| write(&b, "opus"));
+            match made {
+                Ok(name) => {
+                    bytes_out += std::fs::metadata(a.to.join(&name)).map_or(0, |m| m.len());
+                    files.insert(sound.path, name);
+                    bank_made += 1;
+                }
+                Err(e) => {
+                    println!("  FAILED {}: {e}", sound.path);
+                    failed.push(sound.path);
+                }
+            }
+        }
+        println!("  CoffeeMUD's sounds: {bank_made} more, the defaults");
+    }
+
     let _ = std::fs::remove_dir_all(&bank_cache);
 
     let triggers: Vec<_> = kept.iter().map(|(key, value, trigger)| json!({ "key": key, "value": value, "trigger": trigger })).collect();
-    let manifest = json!({ "version": 1, "triggers": triggers, "files": files });
+    let manifest = json!({ "version": 1, "triggers": triggers, "files": files, "bank": a.bank });
     std::fs::write(a.to.join("hooks.json"), serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
 
     println!(

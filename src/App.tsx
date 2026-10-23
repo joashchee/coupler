@@ -920,11 +920,11 @@ function App() {
   const connectedRef = useRef(connected);
   connectedRef.current = connected;
   useEffect(() => {
-    if (!startupDone || greeted.current || WEB) return;
+    if (!startupDone || greeted.current) return;
     greeted.current = true;
     // Only asked of GitHub when the player turned automatic checks on,
     // once a day at most; a failed check says nothing.
-    const release = updates.autoDue() && !PHONE ? updates.check().catch(() => null) : Promise.resolve(null);
+    const release = updates.autoDue() && !PHONE && !WEB ? updates.check().catch(() => null) : Promise.resolve(null);
     // No counts, no greeting: playing doesn't need it.
     void Promise.all([mud.launchCounts(portId ?? "standard").catch(() => null), release]).then(([counts, found]) => {
       const newer = found?.newer ? updates.describe(found) : null;
@@ -1102,7 +1102,7 @@ function App() {
     // What's said next answers it: the ping while it renders, if it has to be.
     voice.asked();
     // A channel's LAST (OOC LAST 10) is answered from the log, not the game.
-    if (!secret && !WEB && LAST_LIKE.test(line.trim())) {
+    if (!secret && LAST_LIKE.test(line.trim())) {
       const answer = await mud.journalLast(line.trim()).catch(() => null);
       if (answer) return tellLast(answer);
     }
@@ -1472,7 +1472,7 @@ function App() {
 
   // The Bestiary's own looks, as the player last chose (off at first).
   useEffect(() => {
-    if (!WEB && bestiary.autoLook()) bestiary.setAutoLook(true).catch(() => {});
+    if (bestiary.autoLook()) bestiary.setAutoLook(true).catch(() => {});
   }, []);
 
   // The room's picture: Rust says when the room, its weather or the time changes.
@@ -1709,18 +1709,27 @@ function App() {
   }, [restoreOffer, restoring, runActivity, showStatus, voiced]);
 
   // Files dropped anywhere on the window go into the Assets folder; a
-  // Coupler Backup dropped is offered for restoring.
+  // Coupler Backup dropped is offered for restoring. The web build has no
+  // Assets folder of the player's, and the browser names nothing dragged
+  // until it's dropped.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((e) => {
       if (e.payload.type === "enter") {
         setError(null);
         const paths = e.payload.paths;
-        setStatus(paths.length === 1 && backup.isBackup(paths[0]) ? "Drop to restore this Coupler Backup." : "Drop to add these to Coupler's Assets folder.");
+        setStatus(
+          WEB ? "Drop a Coupler Backup to restore it." : paths.length === 1 && backup.isBackup(paths[0]) ? "Drop to restore this Coupler Backup." : "Drop to add these to Coupler's Assets folder.",
+        );
       } else if (e.payload.type === "leave") {
         setStatus(null);
       } else if (e.payload.type === "drop") {
         const backups = e.payload.paths.filter(backup.isBackup);
-        if (backups.length === 0) void importAssets(e.payload.paths);
+        if (backups.length === 0) {
+          if (WEB) {
+            setStatus(null);
+            setError("Only a Coupler Backup can be dropped here: its name ends in .coupler.");
+          } else void importAssets(e.payload.paths);
+        }
         else if (e.payload.paths.length === 1) {
           setStatus(null);
           void offerRestore(backups[0]);
@@ -2184,7 +2193,6 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Artisan Skills and Mentor (Cmd+Shift+A)…")}</span>
               </button>
-              {!WEB && (
               <button
                 type="button"
                 className="menu-item"
@@ -2197,7 +2205,6 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>Pictures…</span>
               </button>
-              )}
               {/* The hooks, their sounds and music, in every way to play: the
                   ways differ only in what's on the screen, so each has these
                   here whatever buttons its layout shows. */}
@@ -2241,7 +2248,6 @@ function App() {
                 <span>Music Editor…</span>
               </button>
               )}
-              {!WEB && (
               <button
                 type="button"
                 className="menu-item"
@@ -2254,8 +2260,6 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Journal… (Cmd+Shift+J)")}</span>
               </button>
-              )}
-              {!WEB && (
               <button
                 type="button"
                 className="menu-item"
@@ -2268,8 +2272,6 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Log… (Cmd+Shift+K)")}</span>
               </button>
-              )}
-              {!WEB && (
               <button
                 type="button"
                 className="menu-item"
@@ -2282,8 +2284,6 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Bestiary… (Cmd+Shift+B)")}</span>
               </button>
-              )}
-              {!WEB && (
               <button
                 type="button"
                 className="menu-item"
@@ -2296,10 +2296,10 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>Characters' Voices…</span>
               </button>
-              )}
               {/* Not on the phone: a backup is a file to save or pick, and an
-                  iPhone app comes from the App Store, never a download. */}
-              {!WEB && !PHONE && (
+                  iPhone app comes from the App Store, never a download. On
+                  the web it's a download, and a file chosen or dropped. */}
+              {!PHONE && (
                 <>
                   <div className="menu-sep" />
                   <button
@@ -2327,7 +2327,12 @@ function App() {
                     <span>Restore Coupler Backup…</span>
                   </button>
                   <div className="menu-sep" />
-                  {/* A newer Coupler (lib/updates.ts): asked of GitHub only by the button or once turned on. */}
+                </>
+              )}
+              {/* A newer Coupler (lib/updates.ts): asked of GitHub only by the
+                  button or once turned on. The web build is always the newest. */}
+              {!WEB && !PHONE && (
+                <>
                   <label className="menu-item menu-item-checkbox">
                     <input type="checkbox" data-testid="auto-updates-toggle" checked={autoUpdates} onChange={(e) => toggleAutoUpdates(e.currentTarget.checked)} />
                     <span>Check for updates automatically</span>
@@ -2565,7 +2570,7 @@ function App() {
               music={nowPlaying}
               cues={cues}
               voice={voiced}
-              picture={!WEB && ux === "immersive" && pictureSettings.engine !== "none" && pictureScene ? { scene: pictureScene, settings: pictureSettings, shows: pictureOn } : null}
+              picture={ux === "immersive" && pictureSettings.engine !== "none" && pictureScene ? { scene: pictureScene, settings: pictureSettings, shows: pictureOn } : null}
             />
           </Movable>
         )}
@@ -2595,7 +2600,7 @@ function App() {
           </Movable>
         )}
 
-        {!WEB && ux !== "immersive" && has("picture") && (
+        {ux !== "immersive" && has("picture") && (
           <Movable id="picture" label="Picture panel" usual={usual.picture} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <PicturePanel scene={pictureScene} settings={pictureSettings} shows={pictureOn} />
           </Movable>
@@ -2887,7 +2892,6 @@ function App() {
         }}
       />
 
-      {!WEB && (
       <PicturesDialog
         open={picturesOpen}
         onClose={() => setPicturesOpen(false)}
@@ -2903,29 +2907,18 @@ function App() {
             .catch((e) => setError(String(e)));
         }}
       />
-      )}
 
-      {!WEB && (
       <JournalDialog book="journal" open={journalOpen} onClose={() => setJournalOpen(false)} unheard={journal.unheard} onPlay={journal.play} onStatus={showStatus} onError={showError} />
-      )}
-      {!WEB && (
       <JournalDialog book="log" open={logOpen} onClose={() => setLogOpen(false)} unheard={journal.unheard} onPlay={journal.play} onStatus={showStatus} onError={showError} />
-      )}
 
-      {!WEB && (
       <CastDialog open={castOpen} onClose={() => setCastOpen(false)} onStatus={showStatus} onError={showError} />
-      )}
-      {!WEB && (
       <BestiaryDialog open={bestiaryOpen} onClose={() => setBestiaryOpen(false)} onStatus={showStatus} onError={showError} />
-      )}
 
       {!WEB && (
       <ShrinkDialog offers={shrinkOffer} onKeep={keepWavs} onShrink={() => void makeSmaller()} />
       )}
 
-      {!WEB && (
       <RestoreDialog offer={restoreOffer} busy={restoring} onCancel={() => !restoring && setRestoreOffer(null)} onRestore={() => void restoreBackup()} />
-      )}
 
       <MixerDialog open={mixerOpen} onClose={() => setMixerOpen(false)} playing={nowPlaying} onStatus={showStatus} />
 

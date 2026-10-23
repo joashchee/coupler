@@ -20,6 +20,11 @@ mod ambient;
 mod ansi;
 #[path = "../../src-tauri/src/ansi_art.rs"]
 mod ansi_art;
+#[path = "../../src-tauri/src/backup_format.rs"]
+mod backup_format;
+#[path = "../../src-tauri/src/bestiary.rs"]
+mod bestiary;
+mod bestiary_store;
 #[path = "../../src-tauri/src/cast.rs"]
 mod cast;
 #[path = "../../src-tauri/src/character.rs"]
@@ -33,16 +38,25 @@ mod creation;
 mod daytime;
 #[path = "../../src-tauri/src/echo.rs"]
 mod echo;
+#[path = "../../src-tauri/src/face.rs"]
+mod face;
 mod ffi;
 #[path = "../../src-tauri/src/foley.rs"]
 mod foley;
 #[path = "../../src-tauri/src/hidden.rs"]
 mod hidden;
 mod hooks;
+#[path = "../../src-tauri/src/item_art.rs"]
+mod item_art;
+#[path = "../../src-tauri/src/journal.rs"]
+mod journal;
+mod journal_store;
 #[path = "../../src-tauri/src/mapper.rs"]
 mod mapper;
 #[path = "../../src-tauri/src/msp.rs"]
 mod msp;
+#[path = "../../src-tauri/src/mssp.rs"]
+mod mssp;
 #[path = "../../src-tauri/src/paint.rs"]
 mod paint;
 #[path = "../../src-tauri/src/painter.rs"]
@@ -54,6 +68,8 @@ mod ports;
 #[path = "../../src-tauri/src/senses.rs"]
 mod senses;
 mod session;
+#[path = "../../src-tauri/src/soundbank.rs"]
+mod soundbank;
 #[path = "../../src-tauri/src/speech.rs"]
 mod speech;
 mod synth;
@@ -61,5 +77,7 @@ mod synth;
 mod telnet;
 #[path = "../../src-tauri/src/trigger.rs"]
 mod trigger;
+#[path = "../../src-tauri/src/wav.rs"]
+mod wav;
 #[path = "../../src-tauri/src/who.rs"]
 mod who;

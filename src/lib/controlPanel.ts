@@ -19,8 +19,8 @@ export const CONTROLS = [
 export type ControlId = (typeof CONTROLS)[number]["id"];
 export type Controls = Record<ControlId, boolean>;
 
-/** The desktop's alone: the web build has no pictures, journal, log or hooks list. */
-const DESKTOP: ControlId[] = ["picture", "journal", "log", "hooks"];
+/** The desktop's alone: the web build has no hooks list (its hooks are the mirror's). */
+const DESKTOP: ControlId[] = ["hooks"];
 export const offered = () => CONTROLS.filter((c) => !(WEB && DESKTOP.includes(c.id)));
 
 const KEY = "coupler.terminalPanels";

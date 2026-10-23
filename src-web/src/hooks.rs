@@ -13,11 +13,17 @@ pub use crate::trigger::{pairs, Fired, Trigger};
 #[derive(Default)]
 pub struct Hooks {
     triggers: HashMap<(String, String), Trigger>,
+    /// The mirror holds coffeemud.sf2's sounds (`bank/…`), rendered: the
+    /// game's sounds, Coupler's own events, creatures' cries and the
+    /// ambience play them where no trigger gives one, as on the desktop.
+    bank: bool,
 }
 
 #[derive(Deserialize)]
 struct Mirror {
     triggers: Vec<Mirrored>,
+    #[serde(default)]
+    bank: bool,
 }
 
 #[derive(Deserialize)]
@@ -34,7 +40,7 @@ impl Hooks {
             return Ok(Hooks::default());
         }
         let mirror: Mirror = serde_json::from_str(json).map_err(|e| format!("The hooks couldn't be read. ({e})"))?;
-        Ok(Hooks { triggers: mirror.triggers.into_iter().map(|m| ((m.key, m.value), m.trigger)).collect() })
+        Ok(Hooks { triggers: mirror.triggers.into_iter().map(|m| ((m.key, m.value), m.trigger)).collect(), bank: mirror.bank })
     }
 
     /// The triggers a GMCP message sets off, in the message's order.
@@ -56,6 +62,11 @@ impl Hooks {
     pub fn len(&self) -> usize {
         self.triggers.len()
     }
+
+    /// Whether the bank's sounds are on the web (`bank`).
+    pub fn bank(&self) -> bool {
+        self.bank
+    }
 }
 
 #[cfg(test)]
@@ -75,6 +86,14 @@ mod tests {
 
     #[test]
     fn no_mirror_is_no_triggers() {
-        assert_eq!(Hooks::from_mirror("").unwrap().len(), 0);
+        let none = Hooks::from_mirror("").unwrap();
+        assert_eq!(none.len(), 0);
+        assert!(!none.bank());
+    }
+
+    #[test]
+    fn the_mirror_says_whether_the_bank_came() {
+        assert!(Hooks::from_mirror(r#"{"files":{},"triggers":[],"bank":true}"#).unwrap().bank());
+        assert!(!Hooks::from_mirror(r#"{"files":{},"triggers":[]}"#).unwrap().bank());
     }
 }

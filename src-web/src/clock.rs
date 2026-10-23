@@ -61,3 +61,13 @@ pub fn unix_now() -> u64 {
     #[cfg(not(target_arch = "wasm32"))]
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
+
+/// Milliseconds since 1970, by the computer's clock: when a line of talk
+/// or a creature was met, as the desktop keeps it.
+pub fn unix_ms() -> i64 {
+    #[cfg(target_arch = "wasm32")]
+    // SAFETY: as above.
+    return unsafe { coupler_unix_ms() } as i64;
+    #[cfg(not(target_arch = "wasm32"))]
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+}

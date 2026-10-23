@@ -649,9 +649,9 @@ pub fn render_once(bank: &Arc<SoundBank>, slot: &Slot, tier: Tier) -> Vec<u8> {
     }
     let samples: Vec<i16> = out.iter().map(|x| (x.clamp(-1.0, 1.0) * 32767.0) as i16).collect();
     if samples.as_chunks::<2>().0.iter().all(|[l, r]| l == r) {
-        crate::assets::wav(1, RATE, &samples.iter().step_by(2).copied().collect::<Vec<_>>())
+        crate::wav::wav(1, RATE, &samples.iter().step_by(2).copied().collect::<Vec<_>>())
     } else {
-        crate::assets::wav(2, RATE, &samples)
+        crate::wav::wav(2, RATE, &samples)
     }
 }
 
@@ -683,9 +683,9 @@ pub fn loop_take(font: &SoundFont, slot: &Slot) -> Result<Vec<u8>, String> {
     let take = |s: &Sample| s.data.get(s.loop_start as usize..s.loop_end as usize).filter(|t| !t.is_empty()).map(<[i16]>::to_vec);
     let left_take = take(left).ok_or_else(|| format!("{} doesn't loop.", slot.name))?;
     match right.map(take) {
-        None => Ok(crate::assets::wav(1, left.rate, &left_take)),
+        None => Ok(crate::wav::wav(1, left.rate, &left_take)),
         Some(Some(right_take)) if right_take.len() == left_take.len() => {
-            Ok(crate::assets::wav(2, left.rate, &left_take.iter().zip(&right_take).flat_map(|(l, r)| [*l, *r]).collect::<Vec<_>>()))
+            Ok(crate::wav::wav(2, left.rate, &left_take.iter().zip(&right_take).flat_map(|(l, r)| [*l, *r]).collect::<Vec<_>>()))
         }
         Some(_) => Err(format!("{}'s two sides don't loop together.", slot.name)),
     }

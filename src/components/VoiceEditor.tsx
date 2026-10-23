@@ -21,6 +21,7 @@
 import { useEffect, useId, useState } from "react";
 import * as mud from "../lib/mud";
 import * as voice from "../lib/voice";
+import { WEB } from "../lib/web";
 import { WHO } from "./CastDialog";
 import { Dialog } from "./Dialog";
 
@@ -126,7 +127,7 @@ export function VoiceEditor({ member, onChange, onReset, onForget, onClose, narr
                 <option value="feminine">Feminine</option>
                 <option value="masculine">Masculine</option>
               </select>
-              <span className="hook-value">Which voices Automatic picks from; Flite, one voice for everyone, is pitched to suit.</span>
+              <span className="hook-value">{WEB ? "Which voices Automatic picks from." : "Which voices Automatic picks from; Flite, one voice for everyone, is pitched to suit."}</span>
             </div>
             )}
             <div className="hook-edit-row">
@@ -161,7 +162,11 @@ export function VoiceEditor({ member, onChange, onReset, onForget, onClose, narr
                 {/* One chosen that's no longer here still shows. */}
                 {v.engine && v.voiceName && !known && <option value={chosen}>{v.voiceName} (not installed)</option>}
               </select>
-              <span className="hook-value">Built-in voices sound the same on every Mac. More system voices: System Settings, Accessibility, Spoken Content.</span>
+              <span className="hook-value">
+                {WEB
+                  ? "These are your browser's voices, which come from your computer: more can be added in its speech settings."
+                  : "Built-in voices sound the same on every Mac. More system voices: System Settings, Accessibility, Spoken Content."}
+              </span>
             </div>
             <div className="hook-edit-row">
               <label htmlFor={`${id}-pitch`}>Pitch</label>

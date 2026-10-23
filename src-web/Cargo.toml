@@ -1,6 +1,7 @@
 # Coupler's web build (coupler.ansiapps.com): the protocol and the game's
 # logic from src-tauri/src, the pure modules only, compiled to WebAssembly.
-# No SQLite, no speech engines, no codecs: as slim as it can be
+# No SQLite (the journal and the Bestiary are kept as JSON by the page),
+# no speech engines, no codecs.
 # No GPL/AGPL/LGPL dependencies (CLAUDE.md rule 5).
 [package]
 name = "coupler-web"
@@ -22,6 +23,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # MCCP2 (telnet.rs), the pure-Rust backend as on the desktop.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Coupler Backup (backup.rs), the desktop's format, pure Rust.
+brotli = "9"
+# soundbank.rs's map of coffeemud.sf2 (its rendering is the desktop's;
+# the web plays the mirror's renders). Standard library only.
+neumetik-midi = { path = "../src-tauri/vendor/neumetik-midi" }
+# The shared modules' warnings; nothing prints them in a browser.
+log = "0.4"
 
 [profile.release]
 opt-level = "s"

@@ -17,7 +17,9 @@ pub mod ansi_art;
 #[doc(hidden)]
 pub mod assets;
 mod backup;
+mod backup_format;
 mod bestiary;
+mod bestiary_store;
 mod cast;
 #[doc(hidden)]
 pub mod codecs;
@@ -40,6 +42,7 @@ mod moved;
 #[doc(hidden)]
 pub mod hooks;
 mod journal;
+mod journal_store;
 mod mapper;
 mod msp;
 mod mssp;
@@ -62,6 +65,7 @@ mod update;
 #[doc(hidden)]
 pub mod trigger;
 mod voicecache;
+mod wav;
 mod who;
 
 use session::Session;
