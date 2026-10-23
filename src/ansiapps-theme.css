@@ -585,6 +585,30 @@
 :root[data-theme="ansiapps"] .hooks-head.echoes-row,
 :root[data-theme="ansiapps"] .hooks-list.echoes-list li { grid-template-columns: 136px minmax(0, 1fr) 200px 56px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .echoes-on { margin: 16px 0 0; }
+/* Triggers, Gags, Aliases and Tickers: the last lines (10 rows), each with
+   its button (9 cells); the rules (10 rows): on (3 cells), the rest, what it does
+   (30 cells), Edit... (7) and Delete (8). */
+:root[data-theme="ansiapps"] .automation-heading { margin: 16px 0 0; font-size: 16px; line-height: 16px; font-weight: normal; }
+:root[data-theme="ansiapps"] .automation-bar { gap: 16px; margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .automation-bar .automation-heading { margin: 0; }
+:root[data-theme="ansiapps"] .hooks-list.automation-recent,
+:root[data-theme="ansiapps"] .hooks-list.automation-rules { height: 160px; margin-top: 0; }
+:root[data-theme="ansiapps"] .hooks-list.automation-recent li { grid-template-columns: minmax(0, 1fr) 72px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.automation-rules li { grid-template-columns: 24px minmax(0, 1fr) 240px 56px 64px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 24px minmax(0, 1fr) 240px 64px; }
+:root[data-theme="ansiapps"] .automation-own,
+:root[data-theme="ansiapps"] .automation-commands textarea { border: none; border-radius: 0; font-size: 16px; line-height: 16px; padding: 0 8px; }
+:root[data-theme="ansiapps"] .automation-commands textarea { height: 64px; margin: 16px 0; }
+:root[data-theme="ansiapps"] .automation-own { margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .automation-own,
+:root[data-theme="ansiapps"] .automation-commands textarea { background: var(--dos-black); color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .hooks-list.automation-recent li.automation-empty,
+:root[data-theme="ansiapps"] .hooks-list.automation-rules li.automation-empty { display: block; }
+:root[data-theme="ansiapps"] .automation-commands { gap: 0; font-size: 16px; line-height: 16px; }
+:root[data-theme="ansiapps"] .automation-commands p { font-size: 16px; line-height: 16px; }
+:root[data-theme="ansiapps"] .automation-known { min-height: 16px; }
+:root[data-theme="ansiapps"] .automation-tips { gap: 0 8px; }
+:root[data-theme="ansiapps"] .automation-tip { font-size: 16px; line-height: 16px; padding: 0 8px; }
 /* Priority Audio: what (the rest), its kind (10 cells) and Remove (7);
    its menus 60 cells wide. */
 :root[data-theme="ansiapps"] .hooks-head.priority-row,

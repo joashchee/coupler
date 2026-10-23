@@ -40,6 +40,11 @@
 //! - **Deaths and drops**: "An orc is DEAD!!!", and "You get a dagger
 //!   from the body of an orc." (`Get.java`, `StdRace.getCorpseContainer`)
 //!   is a drop of that creature's.
+//! - **Butchering**: "You manage to skin and chop up the body of a
+//!   wolf." (`Butchering.unInvoke`), then the room's list sent again
+//!   with what it gave, each named by the race's own resources
+//!   (`myResources`: "a pound of wolf meat", "some wolf hair"), so the
+//!   race is read from those, as the game says it.
 //! - **Bodies**: a creature's body has no race to show (`Corpse.java`),
 //!   but EXAMINE at one says the creature's own level (exact at 18
 //!   intelligence, a range below) and weight, and any look at one lists
@@ -121,9 +126,20 @@ fn words(name: &str) -> Vec<String> {
 /// The race a creature's name says: the longest race name in its words,
 /// the first of those.
 pub fn race_in_name(name: &str) -> Option<Race> {
+    race_among(name, |r| !NOT_IN_NAMES.contains(&r.name))
+}
+
+/// The race a butchered body's resource names ("a pound of wolf meat",
+/// `myResources`, the race's own name in lower case): every race counts,
+/// since the game put it there.
+fn race_in_material(name: &str) -> Option<Race> {
+    race_among(name, |_| true)
+}
+
+fn race_among(name: &str, eligible: impl Fn(&Race) -> bool) -> Option<Race> {
     let said = words(name);
     let mut best: Option<(usize, usize, Race)> = None;
-    for race in races().iter().filter(|r| !NOT_IN_NAMES.contains(&r.name)) {
+    for race in races().iter().filter(|r| eligible(r)) {
         let own = words(race.name);
         let Some(at) = said.windows(own.len()).position(|w| w == own.as_slice()) else { continue };
         let better = match best {
@@ -415,6 +431,8 @@ pub enum Fact {
     Dropped { name: String, item: String },
     /// Seen in its body, so many of it.
     Carried { name: String, item: String, count: u32 },
+    /// What butchering its body gave: "a pound of wolf meat".
+    Butchered { name: String, item: String },
     /// Its weight, exactly: its body's.
     Weight { name: String, weight: u32 },
     /// What the viewer's senses or the item's own state add after its
@@ -478,6 +496,8 @@ pub struct Reader {
     examining: Option<Examining>,
     /// A body's contents being listed: whose.
     contents: Option<String>,
+    /// A body just butchered: whose, till the room's list brings what it gave.
+    butchered: Option<String>,
     /// The last read's lines that were Coupler's own look's answer.
     hidden: Vec<usize>,
     /// Coupler's own look's answer began (when): every line is hidden
@@ -575,6 +595,7 @@ impl Reader {
                     self.room = room;
                     self.moved_mobiles = true;
                     self.moved_items = true;
+                    self.butchered = None;
                 }
             }
             "room.mobiles" => {
@@ -591,9 +612,13 @@ impl Reader {
             "room.items.list" if value.get("location").and_then(Value::as_str) == Some("room") => {
                 let moved = std::mem::take(&mut self.moved_items);
                 let mut now = Vec::new();
+                let mut fresh = Vec::new();
                 for item in value.get("items").and_then(Value::as_array).into_iter().flatten() {
                     let Some(name) = item.get("name").and_then(Value::as_str) else { continue };
                     now.push(name.to_string());
+                    if !self.items.iter().any(|i| i == name) {
+                        fresh.push(name.to_string());
+                    }
                     if corpse(name).is_some() || (!moved && self.items.iter().any(|i| i == name)) {
                         continue;
                     }
@@ -601,6 +626,13 @@ impl Reader {
                     facts.push(Fact::ItemSeen { name: name.to_string(), container });
                 }
                 self.items = now;
+                if let Some(body) = self.butchered.clone() {
+                    let found = butchered(&body, &fresh);
+                    if !found.is_empty() {
+                        self.butchered = None;
+                        facts.extend(found);
+                    }
+                }
             }
             "char.status" => {
                 if let Some(level) = value.get("level").and_then(Value::as_i64) {
@@ -819,6 +851,13 @@ impl Reader {
             }
             return false;
         }
+        // A body butchered: what it gave comes in the room's next list.
+        if let Some(body) = line.strip_prefix("You manage to skin and chop up ").and_then(|l| l.strip_suffix('.')) {
+            if let Some(name) = corpse(body) {
+                self.butchered = Some(name);
+            }
+            return false;
+        }
         if let Some(name) = line.strip_suffix(" is DEAD!!!") {
             if self.creature(name) {
                 facts.push(Fact::Died { name: name.to_string() });
@@ -1009,6 +1048,24 @@ fn pairs(value: &Value, key: &str) -> Vec<(String, String)> {
 
 /// The creature a body is of: "the body of an orc" is an orc's. The game
 /// writes a name's apostrophes as backquotes in it (`getCorpseContainer`).
+/// What butchering `name`'s body gave, among the items new in the room:
+/// those named for one race, the race most of them name, and that race.
+fn butchered(name: &str, fresh: &[String]) -> Vec<Fact> {
+    let mut counts: Vec<(Race, usize)> = Vec::new();
+    for item in fresh {
+        let Some(race) = race_in_material(item) else { continue };
+        match counts.iter_mut().find(|(r, _)| r.name == race.name) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((race, 1)),
+        }
+    }
+    // The first named wins a tie: the list is in the order they fell.
+    let Some((race, _)) = counts.iter().fold(None, |best: Option<&(Race, usize)>, c| if best.is_none_or(|b| c.1 > b.1) { Some(c) } else { best }) else { return Vec::new() };
+    let mut facts = vec![Fact::Race { name: name.to_string(), race: race.name.to_string() }];
+    facts.extend(fresh.iter().filter(|item| race_in_material(item).is_some_and(|r| r.name == race.name)).map(|item| Fact::Butchered { name: name.to_string(), item: item.clone() }));
+    facts
+}
+
 fn corpse(name: &str) -> Option<String> {
     let lower = name.to_lowercase();
     ["the body of ", "the corpse of "].iter().find_map(|p| lower.starts_with(p).then(|| name[p.len()..].replace('`', "'")))
@@ -1130,6 +1187,8 @@ pub struct MobEntry {
     pub wears: Vec<Counted>,
     /// Seen in its body, the most at once.
     pub carried: Vec<Counted>,
+    /// What butchering its body gave.
+    pub butchered: Vec<Counted>,
 }
 
 /// An item in the list.
@@ -1166,6 +1225,8 @@ pub struct ItemEntry {
     pub worn_by: Vec<Counted>,
     /// The creatures whose bodies held it.
     pub carried_by: Vec<Counted>,
+    /// The creatures whose bodies gave it when butchered.
+    pub butchered_from: Vec<Counted>,
     /// What's been seen after its name: "glowing", "magical aura", "floating".
     pub auras: Vec<String>,
 }
@@ -1326,6 +1387,24 @@ mod tests {
     }
 
     #[test]
+    fn butchering_shows_the_race_in_what_it_gives() {
+        let mut reader = Reader::default();
+        in_room(&mut reader);
+        let t = Instant::now();
+        reader.gmcp("room.items.list", r#"{"location":"room","items":[{"id":"1","name":"the body of a large beast","attrib":"c"},{"id":"2","name":"a sword","attrib":""}]}"#);
+        assert_eq!(read(&mut reader, &["You manage to skin and chop up the body of a large beast."], t), []);
+        let after = r#"{"location":"room","items":[{"id":"2","name":"a sword","attrib":""},{"id":"3","name":"a pound of wolf meat","attrib":""},{"id":"4","name":"some wolf hair","attrib":""},{"id":"5","name":"a dagger","attrib":""}]}"#;
+        let facts = reader.gmcp("room.items.list", after).0;
+        assert!(facts.contains(&Fact::Race { name: "a large beast".into(), race: "Wolf".into() }), "{facts:?}");
+        assert!(facts.contains(&Fact::Butchered { name: "a large beast".into(), item: "a pound of wolf meat".into() }));
+        assert!(facts.contains(&Fact::Butchered { name: "a large beast".into(), item: "some wolf hair".into() }));
+        assert!(!facts.contains(&Fact::Butchered { name: "a large beast".into(), item: "a dagger".into() }));
+        // Once only: the next list is the room's again.
+        let facts = reader.gmcp("room.items.list", r#"{"location":"room","items":[{"id":"6","name":"a pile of wolf bones","attrib":""}]}"#).0;
+        assert!(!facts.iter().any(|f| matches!(f, Fact::Race { .. } | Fact::Butchered { .. })));
+    }
+
+    #[test]
     fn examining_an_item() {
         let mut reader = Reader::default();
         in_room(&mut reader);
@@ -1471,6 +1550,12 @@ mod tests {
         assert_eq!(rat.carried, [Counted { name: "a cheese".into(), what: None, count: 2 }]);
         let cheese = b.item_entry("w", "acheese").unwrap().unwrap();
         assert_eq!(cheese.carried_by, [Counted { name: "a rat".into(), what: None, count: 2 }]);
+        b.record("w", None, &Fact::Butchered { name: "a rat".into(), item: "some rat hair".into() }, 6).unwrap();
+        b.record("w", None, &Fact::Butchered { name: "a rat".into(), item: "some rat hair".into() }, 7).unwrap();
+        let rat = b.mob_entry("w", "arat").unwrap().unwrap();
+        assert_eq!(rat.butchered, [Counted { name: "some rat hair".into(), what: None, count: 2 }]);
+        let hair = b.item_entry("w", "somerathair").unwrap().unwrap();
+        assert_eq!(hair.butchered_from, [Counted { name: "a rat".into(), what: None, count: 2 }]);
     }
 
     #[test]

@@ -363,6 +363,23 @@ impl Who {
         (QUIET_AFTER_TYPING..IDLE_AFTER).contains(&since_typed)
     }
 
+    /// Whether the player's rules may send on their own now (a ticker,
+    /// `automation.rs`): a character in the game, no password being
+    /// typed, nothing being made, no WHO waiting, and the player not
+    /// away 9 minutes (it would defeat the game's idle timers).
+    pub fn present(&self, now: Instant) -> bool {
+        if self.me.is_empty() || self.secret || self.creating || self.listing.is_some() || self.asked.is_some() {
+            return false;
+        }
+        self.typed_at.is_some_and(|typed| now.saturating_duration_since(typed) < IDLE_AFTER)
+    }
+
+    /// Whether a trigger may send now: a character in the game, no
+    /// password being typed, nothing being made.
+    pub fn acting(&self) -> bool {
+        !self.me.is_empty() && !self.secret && !self.creating
+    }
+
     /// The unfinished line is the one seen most, and often enough.
     fn at_usual_prompt(&self) -> bool {
         let Some(prompt) = &self.prompt else { return false };
@@ -665,6 +682,17 @@ mod tests {
         assert_eq!(announcement("Account alice has logged on."), None);
         assert_eq!(announcement("Erin says 'Alice has logged on.'"), None);
         assert_eq!(announcement("Alice has logged on to the forum."), None);
+    }
+
+    #[test]
+    fn present_for_the_tickers() {
+        let t = Instant::now();
+        let mut who = playing(t);
+        assert!(who.present(t + secs(1)) && who.acting());
+        assert!(!who.present(t + IDLE_AFTER));
+        who.echo(true);
+        assert!(!who.present(t + secs(1)) && !who.acting());
+        assert!(!Who::default().present(t) && !Who::default().acting());
     }
 
     #[test]

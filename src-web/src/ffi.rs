@@ -262,6 +262,13 @@ fn call(input: &[u8]) -> Result<Value, String> {
             let art = app.bestiary_item(&s("key"))?.map(|i| crate::item_art::painted(&crate::item_art::Thing::from(&i)));
             serde_json::to_value(art).map_err(|e| e.to_string())
         }
+        "automation_set" => {
+            app.automation_set(serde_json::from_value(args.get("rules").cloned().unwrap_or_default()).map_err(|e| e.to_string())?);
+            Ok(Value::Null)
+        }
+        "automation_recent" => json(app.automation_recent()),
+        "automation_suggest" => json(app.automation_suggest(&s("line"))),
+        "automation_match" => Ok(serde_json::json!(crate::automation::Pattern::new(&s("pattern")).captures(&s("line")))),
         "bestiary_auto_look" => {
             app.bestiary_auto_look(args.get("on").and_then(Value::as_bool).unwrap_or(false));
             Ok(Value::Null)

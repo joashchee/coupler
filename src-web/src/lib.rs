@@ -16,6 +16,8 @@
 mod account;
 #[path = "../../src-tauri/src/ambient.rs"]
 mod ambient;
+#[path = "../../src-tauri/src/automation.rs"]
+mod automation;
 #[path = "../../src-tauri/src/ansi.rs"]
 mod ansi;
 #[path = "../../src-tauri/src/ansi_art.rs"]

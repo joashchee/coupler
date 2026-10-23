@@ -356,6 +356,16 @@ impl Bestiary {
                     None => t.add_mob_item(world, &key, &item_key, "drop", "", 1),
                 }
             }
+            Fact::Butchered { name, item } => {
+                let m = t.mob(world, name, at);
+                let key = t.mobs[m].key.clone();
+                let i = t.item(world, item, at);
+                let item_key = t.items[i].key.clone();
+                match t.mob_item(world, &key, &item_key, "butcher", "") {
+                    Some(row) => row.count += 1,
+                    None => t.add_mob_item(world, &key, &item_key, "butcher", "", 1),
+                }
+            }
             Fact::Carried { name, item, count } => {
                 let m = t.mob(world, name, at);
                 let key = t.mobs[m].key.clone();
@@ -509,6 +519,7 @@ impl Bestiary {
             drops: Self::mob_items(&t, world, key, "drop"),
             wears: Self::mob_items(&t, world, key, "worn"),
             carried: Self::mob_items(&t, world, key, "carry"),
+            butchered: Self::mob_items(&t, world, key, "butcher"),
         }))
     }
 
@@ -569,6 +580,7 @@ impl Bestiary {
             dropped_by: Self::holders(&t, world, key, "drop"),
             worn_by: Self::holders(&t, world, key, "worn"),
             carried_by: Self::holders(&t, world, key, "carry"),
+            butchered_from: Self::holders(&t, world, key, "butcher"),
             auras: t.item_auras.iter().filter(|(w, k, _)| w == world && k == key).map(|(_, _, a)| a.clone()).collect(),
         }))
     }

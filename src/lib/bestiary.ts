@@ -88,7 +88,7 @@ export function mobFacts(m: MobEntry): string[] {
     const kind = m.category && m.category !== m.race ? ` (${m.category})` : "";
     lines.push(`Race: ${m.race}${kind}, ${m.raceSeen ? "as the game said" : "read from its name"}.`);
   } else {
-    lines.push("Race: not known yet. A long look (LL) tells it when it's stronger or weaker than most of its kind.");
+    lines.push("Race: not known yet. A long look (LL) tells it when it's stronger or weaker than most of its kind, and butchering its body (BUTCHER BODY) shows it in what the body gives.");
   }
   if (m.creature) lines.push(`Its cry: CoffeeMUD's ${m.creature} sound, as it comes, fights you and dies.`);
   if (m.seems) lines.push(`Seems to be: a ${m.seems}, by the abilities it uses.`);
@@ -101,6 +101,7 @@ export function mobFacts(m: MobEntry): string[] {
   if (m.drops.length > 0) lines.push(`Dropped: ${counted(m.drops)}.`);
   if (m.wears.length > 0) lines.push(`Wears: ${counted(m.wears, (c) => c.what)}.`);
   if (m.carried.length > 0) lines.push(`Carried, seen in its body: ${counted(m.carried)}.`);
+  if (m.butchered.length > 0) lines.push(`Butchered, its body gave: ${counted(m.butchered)}.`);
   if (m.deaths > 0) lines.push(`Seen to die ${times(m.deaths)}.`);
   lines.push(`First seen ${whenWords(m.firstSeen)}, last ${whenWords(m.lastSeen)}.`);
   if (m.description) lines.push(m.description);
@@ -132,6 +133,7 @@ export function itemFacts(i: ItemEntry, slot: string | null = null): string[] {
   if (i.droppedBy.length > 0) lines.push(`Dropped by: ${counted(i.droppedBy)}.`);
   if (i.wornBy.length > 0) lines.push(`Worn by: ${counted(i.wornBy)}.`);
   if (i.carriedBy.length > 0) lines.push(`Carried by: ${counted(i.carriedBy)}.`);
+  if (i.butcheredFrom.length > 0) lines.push(`Butchered from: ${counted(i.butcheredFrom)}.`);
   lines.push(`First seen ${whenWords(i.firstSeen)}, last ${whenWords(i.lastSeen)}.`);
   if (i.description) lines.push(i.description);
   return lines;

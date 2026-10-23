@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager, State};
 
 mod account;
 mod ambient;
+mod automation;
 // Public for the web mirror tool (examples/web_mirror.rs), not an API.
 #[doc(hidden)]
 pub mod ansi;
@@ -148,6 +149,30 @@ fn community_open(id: String) -> Result<(), String> {
 #[tauri::command]
 fn mud_send(app: AppHandle, line: String, session: State<'_, Session>) -> Result<(), String> {
     session.send_line(&app, &line)
+}
+
+/// The player's triggers, gags, aliases and tickers, as the frontend keeps them.
+#[tauri::command]
+fn automation_set(rules: automation::Rules, session: State<'_, Session>) {
+    session.automation_set(rules);
+}
+
+/// The last lines seen, gagged or not, the newest last.
+#[tauri::command]
+fn automation_recent(session: State<'_, Session>) -> Vec<automation::Recent> {
+    session.automation_recent()
+}
+
+/// Patterns a trigger or a gag on `line` could have.
+#[tauri::command]
+fn automation_suggest(line: String, session: State<'_, Session>) -> Vec<automation::Suggestion> {
+    session.automation_suggest(&line)
+}
+
+/// What each `*` of `pattern` is in `line`, or None when it doesn't match.
+#[tauri::command]
+fn automation_match(pattern: String, line: String) -> Option<Vec<String>> {
+    automation::Pattern::new(&pattern).captures(&line)
 }
 
 /// The map around the player, and the current room in words.
@@ -897,6 +922,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             server_info,
             mud_connect,
+            automation_set,
+            automation_recent,
+            automation_suggest,
+            automation_match,
             launch_counts,
             update_check,
             update_open,

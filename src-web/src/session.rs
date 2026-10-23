@@ -22,6 +22,7 @@ use serde_json::{json, Value};
 
 use crate::ambient::{self, Ambience, Ambient};
 use crate::ansi::{Line, Screen};
+use crate::automation::{self, Automation};
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
@@ -164,9 +165,14 @@ pub struct Coupler {
     told_sounds_off: bool,
     /// The lines that say how someone came or went (`foley.rs`).
     comings: Comings,
+    /// The player's triggers, gags, aliases and tickers (`automation.rs`).
+    automation: Automation,
     outgoing: Vec<u8>,
     events: Vec<Value>,
 }
+
+/// As the desktop's: something held back of the player's rules.
+const HELD: &str = "Coupler held back commands of your triggers or tickers: too many at once. A trigger may be answering its own line.";
 
 impl Coupler {
     /// `mirror` is the mirror's `hooks.json`, or empty. A mirror that
@@ -218,6 +224,7 @@ impl Coupler {
             shown_partial: None,
             told_sounds_off: false,
             comings: Comings::default(),
+            automation: Automation::default(),
             outgoing: Vec::new(),
             events: Vec::new(),
         })
@@ -275,6 +282,7 @@ impl Coupler {
         self.creation.clear();
         self.shown_partial = None;
         self.told_sounds_off = false;
+        self.automation.closed();
         self.outgoing.clear();
         Ok(ports::web_socket_url(port))
     }
@@ -294,14 +302,24 @@ impl Coupler {
         self.telnet.is_some()
     }
 
-    /// A line the player typed.
+    /// A line the player typed: an alias's commands if it's one, as the desktop's.
     pub fn send_line(&mut self, line: &str) -> Result<(), String> {
         if self.telnet.is_none() {
             return Err("Not connected to CoffeeMUD.".into());
         }
         self.stop_walk("Stopped walking: you typed a command.");
+        let expanded = if self.who.acting() { self.automation.expand(line) } else { None };
+        for line in expanded.unwrap_or_else(|| vec![line.to_string()]) {
+            self.who.typed(&line, Instant::now());
+            self.send_command(&line);
+        }
+        Ok(())
+    }
+
+    /// Sends a command and tells everything that waits for its answer;
+    /// a trigger's or a ticker's isn't the player typing (`Who::typed`).
+    fn send_command(&mut self, line: &str) {
         self.outgoing.extend(telnet::encode_line(line));
-        self.who.typed(line, Instant::now());
         self.echoes.typed(line, Instant::now());
         self.long_look.typed(line, Instant::now());
         self.beasts.reader.typed(line, Instant::now());
@@ -309,7 +327,27 @@ impl Coupler {
         if let Some(left) = self.character.sent(line) {
             self.character_left(left);
         }
-        Ok(())
+    }
+
+    // ---- The player's rules (automation.rs), as the desktop's ----
+
+    pub fn automation_set(&mut self, rules: automation::Rules) {
+        self.automation.set(rules);
+    }
+
+    pub fn automation_recent(&self) -> String {
+        json!(self.automation.recent()).to_string()
+    }
+
+    pub fn automation_suggest(&self, line: &str) -> String {
+        let names: Vec<String> = self.cast.list().into_iter().map(|c| c.name).collect();
+        json!(automation::suggest(line, &names)).to_string()
+    }
+
+    fn automation_held(&mut self) {
+        if self.automation.take_held() {
+            self.emit("automation-held", json!(HELD));
+        }
     }
 
     pub fn resize(&mut self, width: u16, height: u16) {
@@ -326,6 +364,11 @@ impl Coupler {
             return;
         }
         let now = Instant::now();
+        let due = self.automation.tick(now, self.who.present(now));
+        for line in due {
+            self.send_command(&line);
+        }
+        self.automation_held();
         if self.who.due(now) {
             self.outgoing.extend(telnet::encode_line("who"));
         } else if self.who.gentle(now) && self.ambient.weather_wanted(now) {
@@ -493,6 +536,30 @@ impl Coupler {
                 i += 1;
                 !hidden_lines.contains(&(i - 1))
             });
+        }
+        // The player's gags, and what their triggers set off (automation.rs).
+        let (gagged, actions) = self.automation.lines(&texts, self.who.acting(), Instant::now());
+        if !gagged.is_empty() {
+            let mut i = 0;
+            lines.retain(|_| {
+                i += 1;
+                !gagged.contains(&(i - 1))
+            });
+            let mut i = 0;
+            texts.retain(|_| {
+                i += 1;
+                !gagged.contains(&(i - 1))
+            });
+        }
+        for line in &actions.send {
+            self.send_command(line);
+        }
+        self.automation_held();
+        if !actions.say.is_empty() || !actions.sounds.is_empty() {
+            self.emit("automation-fired", json!(actions));
+        }
+        if self.automation.take_recent_changed() {
+            self.emit("automation-recent", json!(self.automation.recent()));
         }
         for talk in self.kinds.heard(&texts, Instant::now()) {
             let (event, new) = self.cast_talk(talk);

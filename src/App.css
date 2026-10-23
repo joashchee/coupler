@@ -796,6 +796,41 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .hooks-head.echoes-row,
 .hooks-list.echoes-list li { display: grid; grid-template-columns: 136px minmax(0, 1fr) 200px 64px; gap: 0 12px; align-items: start; }
 .echoes-on { margin: 10px 0 0; }
+/* Triggers, Gags, Aliases and Tickers (AutomationDialog.tsx): the game's
+   last lines with a button each, then the rules: on, the pattern, word or
+   wait, what it does, Edit and Delete. */
+.automation-heading { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.automation-bar { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin: 12px 0 0; }
+.automation-bar p { margin: 0; }
+.automation-bar button { flex-shrink: 0; }
+.automation-bar .automation-heading { margin: 0; }
+.hooks-list.automation-recent li.automation-empty,
+.hooks-list.automation-rules li.automation-empty { display: block; }
+.hooks-list.automation-recent { height: 160px; }
+.hooks-list.automation-recent li { display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 0 12px; align-items: start; }
+.hooks-list.automation-rules { height: 160px; }
+.hooks-list.automation-rules li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 240px 64px 64px; gap: 0 12px; align-items: start; }
+.hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 16px minmax(0, 1fr) 240px 64px; }
+.automation-patterns .hook-key { font-family: var(--font-mono); }
+.automation-own,
+.automation-commands textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.automation-commands { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.automation-commands textarea { resize: vertical; }
+.automation-commands p { margin: 0; font-size: 12px; }
+.automation-known { min-height: 18px; color: var(--text); }
+.automation-tips { display: flex; flex-wrap: wrap; gap: 6px; }
+.automation-row-button { justify-self: start; }
+.automation-tip { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; }
 /* Priority Audio (PriorityDialog.tsx): what, its kind, then Remove. */
 .hooks-head.priority-row,
 .hooks-list.priority-list li { display: grid; grid-template-columns: minmax(0, 1fr) 96px 64px; gap: 0 12px; align-items: start; }

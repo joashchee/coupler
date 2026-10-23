@@ -230,6 +230,16 @@ impl Bestiary {
                 )
                 .map_err(failed)?;
             }
+            Fact::Butchered { name, item } => {
+                let key = self.mob(world, name, at)?;
+                let item_key = self.item(world, item, at)?;
+                db.execute(
+                    "INSERT INTO mob_items (world, key, item, how, place, count) VALUES (?1, ?2, ?3, 'butcher', '', 1)
+                     ON CONFLICT (world, key, item, how, place) DO UPDATE SET count = count + 1",
+                    params![world, key, item_key],
+                )
+                .map_err(failed)?;
+            }
             Fact::Carried { name, item, count } => {
                 let key = self.mob(world, name, at)?;
                 let item_key = self.item(world, item, at)?;
@@ -353,6 +363,7 @@ impl Bestiary {
                         drops: Vec::new(),
                         wears: Vec::new(),
                         carried: Vec::new(),
+                        butchered: Vec::new(),
                     })
                 },
             )
@@ -403,6 +414,7 @@ impl Bestiary {
         entry.drops = items("drop")?;
         entry.wears = items("worn")?;
         entry.carried = items("carry")?;
+        entry.butchered = items("butcher")?;
         Ok(Some(entry))
     }
 
@@ -452,6 +464,7 @@ impl Bestiary {
                         dropped_by: Vec::new(),
                         worn_by: Vec::new(),
                         carried_by: Vec::new(),
+                        butchered_from: Vec::new(),
                         auras: Vec::new(),
                     })
                 },
@@ -479,6 +492,7 @@ impl Bestiary {
         entry.dropped_by = by("drop")?;
         entry.worn_by = by("worn")?;
         entry.carried_by = by("carry")?;
+        entry.butchered_from = by("butcher")?;
         let mut stmt = db.prepare("SELECT aura FROM item_auras WHERE world = ?1 AND key = ?2 ORDER BY rowid").map_err(failed)?;
         entry.auras = stmt.query_map(params![world, key], |r| r.get(0)).map_err(failed)?.collect::<Result<_, _>>().map_err(failed)?;
         Ok(Some(entry))

@@ -451,6 +451,10 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
     case "bestiary_face":
     case "bestiary_item_art":
     case "bestiary_auto_look":
+    case "automation_set":
+    case "automation_recent":
+    case "automation_suggest":
+    case "automation_match":
     case "picture_now":
     case "picture_again":
     case "picture_forget_looks":

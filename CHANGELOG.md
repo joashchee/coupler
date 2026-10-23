@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## 0.34.0 (2026-10-24)
+
+- **Triggers, gags, aliases and tickers** (2026-10-24): gear →
+  Triggers, Gags, Aliases and Tickers…, in both the desktop and the web
+  build. Triggers: the game's last ten lines, gagged ones too, each
+  with Create…, which offers patterns for it (the exact line, any
+  number, anyone in place of a name, whatever's said, how it starts or
+  ends) or your own, with `*` for any text and `%1`, `%2`… for what it
+  stood for; then what happens: commands sent, words the narrator says,
+  a sound, and the line gagged too. Gags: the last ten lines shown, a
+  Gag button each, or a pattern of your own; a gagged line isn't shown,
+  said or read. Aliases: a word that stands for commands (`%1`… and
+  `%*` for the words after it; `\` first sends a line as typed).
+  Tickers: commands sent every so often. As you type an alias's or a
+  ticker's commands, tips from CoffeeMUD's own commands, skills and
+  spells say what each is, how it's used, and what could finish the
+  word. Gentle to the game: nothing's sent without a character in the
+  game or into a password, a ticker waits 15 seconds at least and not
+  once you've been away 9 minutes, and a trigger answering its own line
+  is held back.
+- **The Bestiary learns a race by butchering** (2026-10-24): a body
+  butchered gives materials named for its race ("a pound of wolf
+  meat"), so the creature's race is the game's own word, and its entry
+  lists what its body gave.
 - **The phone screen in sections** (2026-10-23): Game, Map, Here and
   Heard, one at a time, as a carousel: swipe in from the right edge for
   the next, from the left for the one before (or the bar's ◄ and ►),

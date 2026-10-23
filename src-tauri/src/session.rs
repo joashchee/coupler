@@ -18,7 +18,10 @@
 //! many are online, and the game's version, by MSSP (`game_status`, `mssp`). It keeps who's
 //! online (`who`): it asks WHO once a minute and hides the reply, and
 //! hides the game's login and logout announcements, emitting `who` with
-//! each change instead.
+//! each change instead. It runs the player's triggers, gags, aliases and
+//! tickers (`automation`): gagged lines aren't shown, a trigger's or a
+//! ticker's commands are sent, and `automation-fired` says what to say
+//! and play.
 //!
 //! **Coupler connects to one place only** (CLAUDE.md rule 2): the host
 //! and the list of its ports are constants here, and no command takes an
@@ -37,6 +40,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::ambient::{self, Ambience, Ambient};
 use crate::ansi::{Line, Screen};
+use crate::automation::{self, Automation};
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
@@ -301,7 +305,12 @@ pub struct Session {
     /// The lines that say how someone came or went, until GMCP says who
     /// (`foley.rs`).
     comings: Mutex<Comings>,
+    /// The player's triggers, gags, aliases and tickers (`automation.rs`).
+    automation: Mutex<Automation>,
 }
+
+/// Something Coupler held back of the player's rules: too much at once.
+const HELD: &str = "Coupler held back commands of your triggers or tickers: too many at once. A trigger may be answering its own line.";
 
 /// What `who` sends: who logged on or off.
 #[derive(Serialize, Clone)]
@@ -475,6 +484,7 @@ impl Session {
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
+        self.automation.lock().unwrap().closed();
         *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
 
         // WHO's clock, for as long as this connection lasts.
@@ -504,11 +514,32 @@ impl Session {
         Ok(())
     }
 
-    /// A line the player typed. Typing takes over from a walk in progress.
+    /// A line the player typed: an alias's commands if it's one
+    /// (`automation.rs`; only in the game, never into a password). Typing
+    /// takes over from a walk in progress.
     pub fn send_line(&self, app: &AppHandle, line: &str) -> Result<(), String> {
         self.stop_walk(app, "Stopped walking: you typed a command.");
+        let acting = self.who.lock().unwrap().acting();
+        let expanded = if acting { self.automation.lock().unwrap().expand(line) } else { None };
+        for line in expanded.unwrap_or_else(|| vec![line.to_string()]) {
+            self.who.lock().unwrap().typed(&line, Instant::now());
+            self.send_command(app, &line)?;
+        }
+        Ok(())
+    }
+
+    /// A command of the player's rules (a trigger's, a ticker's): sent as
+    /// typed, but it isn't the player at the keyboard (`Who::typed`), so
+    /// it never keeps an away player "here".
+    fn send_auto(&self, app: &AppHandle, line: &str) {
+        if let Err(e) = self.send_command(app, line) {
+            log::warn!("{e}");
+        }
+    }
+
+    /// Sends a command and tells everything that waits for its answer.
+    fn send_command(&self, app: &AppHandle, line: &str) -> Result<(), String> {
         self.write(&telnet::encode_line(line))?;
-        self.who.lock().unwrap().typed(line, Instant::now());
         self.echoes.lock().unwrap().typed(line, Instant::now());
         self.long_look.lock().unwrap().typed(line, Instant::now());
         self.bestiary.lock().unwrap().reader.typed(line, Instant::now());
@@ -557,6 +588,39 @@ impl Session {
         self.live.lock().unwrap().is_some()
     }
 
+    // ---- The player's rules (automation.rs) ----
+
+    pub fn automation_set(&self, rules: automation::Rules) {
+        self.automation.lock().unwrap().set(rules);
+    }
+
+    pub fn automation_recent(&self) -> Vec<automation::Recent> {
+        self.automation.lock().unwrap().recent()
+    }
+
+    /// Patterns for a line, anyone met in this world a name it may be about.
+    pub fn automation_suggest(&self, line: &str) -> Vec<automation::Suggestion> {
+        let names: Vec<String> = self.cast.lock().unwrap().cast.list().into_iter().map(|c| c.name).collect();
+        automation::suggest(line, &names)
+    }
+
+    /// Sends the tickers that are due (`who_tick`, each second).
+    fn automation_tick(&self, app: &AppHandle, now: Instant) {
+        let present = self.who.lock().unwrap().present(now);
+        let due = self.automation.lock().unwrap().tick(now, present);
+        for line in due {
+            self.send_auto(app, &line);
+        }
+        self.automation_held(app);
+    }
+
+    /// Tells the player once when their rules wanted more than the allowance.
+    fn automation_held(&self, app: &AppHandle) {
+        if self.automation.lock().unwrap().take_held() {
+            let _ = app.emit("automation-held", HELD);
+        }
+    }
+
     // ---- Who's online (who.rs) ----
 
     /// Sends WHO when it's due, and WEATHER when the painter's sky needs
@@ -564,6 +628,7 @@ impl Session {
     fn who_tick(&self, app: &AppHandle) {
         let now = Instant::now();
         self.keep_alive(now);
+        self.automation_tick(app, now);
         if self.who.lock().unwrap().due(now) {
             if let Err(e) = self.write(&telnet::encode_line("who")) {
                 log::warn!("{e}");
@@ -2008,6 +2073,31 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 i += 1;
                 !hidden_lines.contains(&(i - 1))
             });
+        }
+        // The player's gags, and what their triggers set off (automation.rs).
+        let acting = session.who.lock().unwrap().acting();
+        let (gagged, actions) = session.automation.lock().unwrap().lines(&texts, acting, Instant::now());
+        if !gagged.is_empty() {
+            let mut i = 0;
+            lines.retain(|_| {
+                i += 1;
+                !gagged.contains(&(i - 1))
+            });
+            let mut i = 0;
+            texts.retain(|_| {
+                i += 1;
+                !gagged.contains(&(i - 1))
+            });
+        }
+        for line in &actions.send {
+            session.send_auto(app, line);
+        }
+        session.automation_held(app);
+        if !actions.say.is_empty() || !actions.sounds.is_empty() {
+            let _ = app.emit("automation-fired", &actions);
+        }
+        if session.automation.lock().unwrap().take_recent_changed() {
+            let _ = app.emit("automation-recent", session.automation_recent());
         }
         for talk in kinds.heard(&texts, Instant::now()) {
             let (event, new) = session.cast_talk(app, talk);

@@ -25,6 +25,8 @@ import { CreationDialog } from "./components/CreationDialog";
 import { CuesDialog } from "./components/CuesDialog";
 import { ArtisanDialog } from "./components/ArtisanDialog";
 import { EchoesDialog } from "./components/EchoesDialog";
+import { AutomationDialog } from "./components/AutomationDialog";
+import * as automation from "./lib/automation";
 import { PriorityDialog } from "./components/PriorityDialog";
 import { DisplayDialog } from "./components/DisplayDialog";
 import { PicturePanel } from "./components/PicturePanel";
@@ -620,6 +622,7 @@ function App() {
   const [pictureAskedFor, setPictureAskedFor] = useState<string | null>(null);
   const [castOpen, setCastOpen] = useState(false);
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
+  const [automationOpen, setAutomationOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   /** What the screen reader is given to read: the hidden live region's lines. */
@@ -1953,7 +1956,25 @@ function App() {
     };
   }, [onFired]);
 
-  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  // The player's triggers, gags, aliases and tickers (lib/automation.ts): kept rules to Rust at launch;
+  // a trigger's words said by the narrator (or given to the screen reader), its sound played.
+  useEffect(() => {
+    automation.startAutomation();
+    const fired = mud.onAutomationFired((f) => {
+      for (const words of f.say) {
+        if (voicedRef.current && voice.voiceVolume() > 0) voice.speak(words);
+        else hear(words, "note");
+      }
+      for (const path of f.sounds) void sound.playEffect(path).catch(() => {});
+    });
+    const held = mud.onAutomationHeld((message) => setError(message));
+    return () => {
+      void fired.then((f) => f());
+      void held.then((f) => f());
+    };
+  }, [hear]);
+
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
   const turnPhone = useCallback(
@@ -2622,6 +2643,18 @@ function App() {
               >
                 <ChecklistIcon aria-hidden="true" />
                 <span>Narrator's Answers…</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="automation-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setAutomationOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Triggers, Gags, Aliases and Tickers…</span>
               </button>
               <button
                 type="button"
@@ -3302,6 +3335,7 @@ function App() {
 
       <CuesDialog open={cuesOpen} onClose={() => setCuesOpen(false)} onStatus={showStatus} />
       <EchoesDialog open={echoesOpen} onClose={() => setEchoesOpen(false)} onStatus={showStatus} />
+      <AutomationDialog open={automationOpen} onClose={() => setAutomationOpen(false)} onStatus={showStatus} onError={showError} />
       <PriorityDialog open={priorityOpen} onClose={() => setPriorityOpen(false)} onStatus={showStatus} />
       <ArtisanDialog open={artisanOpen} onClose={() => setArtisanOpen(false)} voiced={voiced} />
 

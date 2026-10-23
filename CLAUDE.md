@@ -607,7 +607,10 @@ and its order is in the roadmap's phase 2.
   body, "than the average Orc" its race, description, what it wears),
   CONSIDER's words (a level range by stock EXPRATE 6), "(glowing
   red)", "is DEAD!!!", "You get X from the body of Y" (a drop), and
-  EXAMINE's "is a level N item". The race until then is read from the
+  EXAMINE's "is a level N item", and butchering ("You manage to skin and
+  chop up the body of X.", then the room's `room.items.list` brings
+  materials named by the race's resources: `butchered`, the race as
+  the game says it, `Fact::Butchered`). The race until then is read from the
   name (`race_in_name`, `races.tsv`); abilities by the lines they print
   when used (`abilities.tsv`, only from each ability's `invoke`); both
   tables made by `scripts/coffeemud-bestiary.py` from the snapshot
@@ -639,6 +642,28 @@ and its order is in the roadmap's phase 2.
   bottom row (`bestiary_item_art` returns it for the facts too). Coupler's own look's answer is
   gagged from its first line to the prompt (`Reader::prompted`).
   Both builds.
+- `src-tauri/src/automation.rs`: **triggers, gags, aliases and
+  tickers**, pure and unit-tested, shared with the web build: a
+  pattern is the whole line, `*` any text (`%1`… in what it sets off,
+  `%0` the line); an alias's `%1`… and `%*` are the words after it
+  (`\` first: as typed). The rules are the frontend's
+  (`lib/automation.ts`, `coupler.automation`, so in a backup), handed
+  over by `automation_set`. `session.rs` (both builds) runs them after
+  the Bestiary's own hiding: gagged lines dropped before speech and
+  talk, a trigger's commands sent (`send_auto`: not `Who::typed`, so an
+  away player stays away), `automation-fired` (the narrator's words,
+  sounds; `App.tsx` says and plays them), `automation-recent` (the last
+  lines), `automation-held`; aliases in `send_line`; tickers on WHO's
+  clock. **Gentle to the game**: only `Who::acting` (in the game, no
+  password, nothing being made), tickers `MIN_EVERY` 15 s and only
+  `Who::present` (not away 9 minutes), one allowance (`BURST`) for all
+  of it. `automation_suggest` offers patterns for a line (the cast's
+  names as `*`), `automation_match` tells the captures.
+  `components/AutomationDialog.tsx` (gear menu) is the four tabs; the
+  commands' tips are `lib/commandWords.ts`, from
+  `public/command-words.json` (fetched when first wanted), made by
+  `scripts/command-words.py` from the snapshot's commands, abilities
+  and help (run it again with a new snapshot). Both builds.
 - `src-tauri/src/journal.rs`: **the journal and the log**, unit-tested:
   every `comm.channel` line kept in SQLite (`journal_store.rs`,
   `journal.sqlite` in app data, game data: it stays local; the web's own
@@ -831,11 +856,12 @@ and its order is in the roadmap's phase 2.
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,
-  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`). It feeds the mapper, saves one map per
+  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`, `automation-fired`, `automation-recent`, `automation-held`). It feeds the mapper, saves one map per
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
-  (takes a port ID), `launch_counts` (takes a port ID), `update_check`,
+  (takes a port ID), `automation_set`, `automation_recent`,
+  `automation_suggest`, `automation_match`, `launch_counts` (takes a port ID), `update_check`,
   `update_open`, `community_open`, `mud_send`, `mud_disconnect`, `mud_resize`,
   `map_snapshot`, `map_find`, `map_directions`, `map_walk`, `map_stop`,
   `map_set_landmark`, `map_clear`, `who_now`, `who_ask`, `echo_list`, `cast_list`, `cast_set_voice`,

@@ -375,6 +375,8 @@ export interface MobEntry {
   wears: Counted[];
   /** Seen in its body, the most at once. */
   carried: Counted[];
+  /** What butchering its body gave. */
+  butchered: Counted[];
 }
 /** An item in the list. */
 export interface ItemRow {
@@ -403,6 +405,8 @@ export interface ItemEntry {
   wornBy: Counted[];
   /** The creatures whose bodies held it. */
   carriedBy: Counted[];
+  /** The creatures whose bodies gave it when butchered. */
+  butcheredFrom: Counted[];
   /** What's been seen after its name: "glowing", "magical aura", "floating". */
   auras: string[];
 }
@@ -418,6 +422,72 @@ export const bestiaryItem = (key: string) => invoke<ItemEntry | null>("bestiary_
 export const bestiaryAutoLook = (on: boolean) => invoke<void>("bestiary_auto_look", { on });
 /** The Bestiary learned something. */
 export const onBestiaryChanged = (f: () => void): Promise<UnlistenFn> => listen("bestiary-changed", () => f());
+
+// ---- Triggers, gags, aliases and tickers (src-tauri/src/automation.rs) ----
+
+export interface LineTrigger {
+  id: string;
+  /** The whole line, any case; `*` any text, each its own %1, %2… */
+  pattern: string;
+  /** Commands, one a line. */
+  send: string;
+  /** Words the narrator says. */
+  say: string;
+  /** An SFX asset's path, or one of CoffeeMUD's sounds (`bank/…`). */
+  sound: string | null;
+  /** The line isn't shown either. */
+  gag: boolean;
+  on: boolean;
+}
+export interface Gag {
+  id: string;
+  pattern: string;
+  on: boolean;
+}
+export interface Alias {
+  id: string;
+  /** One word. */
+  name: string;
+  send: string;
+  on: boolean;
+}
+export interface Ticker {
+  id: string;
+  /** Seconds, MIN_EVERY at least. */
+  every: number;
+  send: string;
+  on: boolean;
+}
+export interface Rules {
+  triggers: LineTrigger[];
+  gags: Gag[];
+  aliases: Alias[];
+  tickers: Ticker[];
+}
+/** A line seen lately, and whether a gag hid it. */
+export interface RecentLine {
+  text: string;
+  gagged: boolean;
+}
+export interface Suggestion {
+  pattern: string;
+  about: string;
+}
+/** What a read's lines set off: the narrator's words and the sounds. */
+export interface AutomationFired {
+  say: string[];
+  sounds: string[];
+}
+/** A ticker's shortest wait, in seconds (automation.rs `MIN_EVERY`). */
+export const MIN_EVERY = 15;
+export const automationSet = (rules: Rules) => invoke<void>("automation_set", { rules });
+export const automationRecent = () => invoke<RecentLine[]>("automation_recent");
+export const automationSuggest = (line: string) => invoke<Suggestion[]>("automation_suggest", { line });
+/** What each `*` of the pattern is in the line; null when it doesn't match. */
+export const automationMatch = (pattern: string, line: string) => invoke<string[] | null>("automation_match", { pattern, line });
+export const onAutomationRecent = (f: (recent: RecentLine[]) => void): Promise<UnlistenFn> => listen<RecentLine[]>("automation-recent", (e) => f(e.payload));
+export const onAutomationFired = (f: (fired: AutomationFired) => void): Promise<UnlistenFn> => listen<AutomationFired>("automation-fired", (e) => f(e.payload));
+export const onAutomationHeld = (f: (message: string) => void): Promise<UnlistenFn> => listen<string>("automation-held", (e) => f(e.payload));
 
 // ---- The account menu (src-tauri/src/account.rs) ----
 
