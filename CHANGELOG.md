@@ -2,6 +2,89 @@
 
 ## Unreleased
 
+## 0.32.0 (2026-10-23)
+
+- **The account menu lists your characters** (2026-10-23): CoffeeMUD
+  writes the list on the prompt's own line (`Command or Name (?):  Name
+  Race …`), so its header was never recognized and the dialog said
+  Reading your characters… for good. `account.rs` now reads past the
+  prompt, a header cut short by a narrow wrap (`Nam Rac Leve`), a row
+  wrapped onto a second line by `(email)` or `(post)`, and a list the
+  prompt ends with no total.
+- **Coupler's own look is silent** (2026-10-23): once the answer to its
+  unobtrusive look begins, every line is gagged until the game's prompt
+  comes back, so a line the Bestiary's reader doesn't follow (equipment
+  on one line, an odd health line) no longer slips into the terminal.
+- **LOOK says the room too** (2026-10-23): a plain LOOK (LOOK, LOO, LO,
+  L) has the narrator say the room's description, as LL does, with the
+  hidden details the last long look at that room found; the room's
+  title is found on the prompt's line too, where it often comes.
+  Priority Audio's item is now "A look at the room".
+- **Pictures in the Bestiary** (2026-10-23): Show… has the creature's
+  face or the item beside the facts, 25 by 12 cells (25 by 24 painter
+  pixels, 200 by 192), by Coupler's painter. A face (`face.rs`): a person, a beast,
+  a bird, a scaled head, a bug, a skull or a being of fire, stone or
+  slime by its race's category; colors, beards, scars, eye patches,
+  horns, tusks, glowing eyes and old age from its description and name;
+  what it wears on its head, neck, ears, eyes, mouth, torso and back.
+  An item (`item_art.rs`): one of 52 kinds by the word in its name
+  (weapons, armor and clothes, jewelry, potions, scrolls and books,
+  containers, food, coins, gems, keys, lights, instruments, tools,
+  rocks; a bundle otherwise), in its name's colors and what EXAMINE
+  says it's made of. What the game writes after an item's name is kept
+  (`item_auras`) and drawn on it: glowing (a halo, red, blue, purple or
+  white for the auras), a magical aura (sparks), a metallic or mithril
+  aura (glints), invisible (half seen through), hidden (in shadow),
+  floating or flying (lifted over its shadow), bound (a chain). Its
+  slot is written on the picture's bottom row, centered (where it was
+  seen worn, else where its kind goes, else Carried), and the facts
+  say both in words.
+- **The release build runs on Python 3.9 again** (2026-10-23):
+  `scripts/third-party-licenses.py` no longer passes `newline=` to
+  `Path.write_text`, which needs 3.10 (Xcode's `python3` is 3.9).
+- **The Bestiary** (2026-10-23, gear → Bestiary…, Cmd+Shift+B): every
+  creature and every item you come across in a game, and all you learn
+  of each as you play, kept quietly on this Mac. A creature: the areas
+  it's found in and, in each, its level (from CONSIDER, beside your
+  own), its hit points (from a fight) and its alignment (glowing red
+  or blue); its race, read from its name until a long look says it;
+  its size, body and description from a LOOK or LL; the abilities it
+  uses, known by the lines CoffeeMUD prints for them (about 1,100 from
+  the game's source), and from them what it seems to be (a Mage, a
+  Cleric…); what it drops and what it wears; how often you've seen it
+  die. An item: where it lies, its level, weight and material from
+  EXAMINE, its description, and who dropped or wore it. Search finds a
+  name, a race or material, or an area; Show… says everything known,
+  a fact a line. Kept in Coupler Backup.
+- **Every way to play sounds the same** (2026-10-23): the cues,
+  Coupler's voice and all of Immersive's audio now play in Terminal and
+  Workshop too; the ways differ only in what's on the screen. Workshop's
+  sound layers (now on unless you turn one off) are its own choice.
+  Cues…, Narrator's Answers… and Priority Audio… are in the gear menu in
+  every way. With a screen reader, VOX at 0 in the Mixer gives the
+  game's lines back to it.
+- **Coupler looks for you, if you like** (2026-10-23): ticked in the
+  Bestiary, Coupler looks at each creature you've never looked at, once,
+  with LOOK … UNOBTRUSIVELY (the room isn't told), when a command of its
+  own would go unnoticed and never in a fight, and keeps what it sees
+  without showing it. Off at first.
+- **What a body tells** (2026-10-23): EXAMINE at a creature's body gives
+  its level (exact at 18 intelligence, a range below) and its weight;
+  any look at a body lists what it carried. The game shows no race on a
+  body, so that still comes from a long look or the name.
+- **Hooks, the same in every way to play** (2026-10-23): Hooks…,
+  Mixer… and Music Editor… are in the gear menu in Terminal, Immersive
+  and Workshop alike. Triggers already played the same in all three;
+  now each can set them, their volumes and their music.
+- **Creatures' cries** (2026-10-23): a creature of a kind
+  coffeemud.sf2 has a voice for (humanoid, goblinoid, giant-kin,
+  canine, beasts, birds, reptiles, insects, the undead, dragons,
+  elementals, constructs) cries as it comes into the room, as a fight
+  with it starts, and as it dies, by its race in the Bestiary. Each is
+  Coupler's own pair `coupler.creature` (`"canine fights"`), all 36 in
+  the hooks list from the start and in CoffeeMUD's Sounds' Creatures,
+  for a sound of your own.
+
 - **CoffeeMUD's Sounds, a tab of the Hooks list** (2026-10-23): every
   pair CoffeeMUD's sounds play for while you've set none, in groups
   (places, weather, combat, magic, creatures, nature, doors and locks,

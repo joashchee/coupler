@@ -67,7 +67,7 @@ export function CuesDialog({ open, onClose, onStatus }: CuesDialogProps) {
         }
       >
         <p>
-          Every cue Coupler makes: a sound, and a caption that writes it in Heard with sound captions on (Display). They play with Immersive's sound cues on. Edit changes
+          Every cue Coupler makes: a sound, and a caption that writes it in Heard with sound captions on (Display). They play in every way to play (in Workshop, with its sound cues on). Edit changes
           how one sounds and reads; your changes are kept.
         </p>
         <p className="hooks-summary" data-testid="cues-summary">
@@ -160,7 +160,7 @@ function CueEditor({ id, onClose, onStatus }: CueEditorProps) {
       {info && s && (
         <>
           <p>
-            {info.summary}{info.id === "loggedOn" || info.id === "loggedOff" ? "" : " Plays with Immersive's sound cues on."}
+            {info.summary}{info.id === "loggedOn" || info.id === "loggedOff" ? "" : " Plays with the sound cues on."}
           </p>
           <div className="hook-edit-rows">
             <div className="hook-edit-row">

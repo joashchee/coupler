@@ -20,11 +20,21 @@
 //! of its letters) is a hidden detail. Highlighted words next to each
 //! other are one detail ("marble fountain"), each named once.
 //!
+//! A plain LOOK at the room (LOOK, LOO, LO, L: `Commands/Look.java`)
+//! colors nothing, so its room is found the same way and its details are
+//! the ones the last long look at that description found, if any: the
+//! narrator says the room either way.
+//!
+//! The room's title may come on the prompt's line (the game writes the
+//! answer after the prompt, with no newline after the player's Enter),
+//! so the title is the first line holding the room's name.
+//!
 //! The player's colors don't matter (any HIGHLIGHT unlike their ROOMDESC
 //! works). What can mislead: a builder's own colors inside a description,
 //! and EXVIEW PARAGRAPH or MIXED, which adds the exits in color to it
 //! (coffeemud.ini has DEFAULT).
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -39,6 +49,9 @@ const WAITS: Duration = Duration::from_secs(5);
 /// The words that call a long look (`Examine.java`'s access words).
 const LONG_LOOK: &[&str] = &["EXAMINE", "EXAM", "EXA", "LONGLOOK", "LLOOK", "LL", "ID"];
 
+/// The words that call a plain look (`Look.java`'s).
+const LOOK: &[&str] = &["LOOK", "LOO", "LO", "L"];
+
 /// A long look's room: its description, and what was in color in it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,13 +63,18 @@ pub struct Hidden {
     /// The description, its lines joined back up.
     pub text: String,
     /// The hidden details, in the order they came; none found, empty.
+    /// After a plain look, the last long look's at this room.
     pub words: Vec<String>,
+    /// A long look's: its details were looked for, so none is "none".
+    pub long: bool,
 }
 
 #[derive(Default)]
 pub struct LongLook {
-    /// When a long look was sent, until its room comes.
-    asked: Option<Instant>,
+    /// When a look at the room was sent (and whether a long one), until its room comes.
+    asked: Option<(Instant, bool)>,
+    /// The details each description's long look found, by its text.
+    known: HashMap<String, Vec<String>>,
 }
 
 /// Spaces collapsed, ends trimmed: wrapping and padding don't count.
@@ -64,15 +82,19 @@ fn squeeze(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Whether a typed line is a long look at the room: one of the words
-/// alone (or with UNOBTRUSIVELY, which only keeps the room from hearing).
-fn long_look(line: &str) -> bool {
-    let words: Vec<String> = line.split_whitespace().map(str::to_uppercase).collect();
-    match words.as_slice() {
-        [word] => LONG_LOOK.contains(&word.as_str()),
-        [word, quiet] => LONG_LOOK.contains(&word.as_str()) && quiet == "UNOBTRUSIVELY",
+/// Whether a typed line is a look at the room: one of `words` alone (or
+/// with UNOBTRUSIVELY, which only keeps the room from hearing).
+fn looks(line: &str, words: &[&str]) -> bool {
+    let typed: Vec<String> = line.split_whitespace().map(str::to_uppercase).collect();
+    match typed.as_slice() {
+        [word] => words.contains(&word.as_str()),
+        [word, quiet] => words.contains(&word.as_str()) && quiet == "UNOBTRUSIVELY",
         _ => false,
     }
+}
+
+fn long_look(line: &str) -> bool {
+    looks(line, LONG_LOOK)
 }
 
 /// What tells one color from another here: the foreground, the
@@ -157,7 +179,7 @@ fn find(lines: &[Line], kinds: &[LineKind], room: Option<&str>) -> Option<Hidden
         ours(i)
             && !line.is_empty()
             && match &room {
-                Some(room) => line.starts_with(room.as_str()),
+                Some(room) => line.starts_with(room.as_str()) || line.contains(&format!(" {room}")),
                 None => !line.starts_with("you examine"),
             }
     })?;
@@ -167,14 +189,16 @@ fn find(lines: &[Line], kinds: &[LineKind], room: Option<&str>) -> Option<Hidden
         return None;
     }
     let text = (first..end).map(text).collect::<Vec<_>>().join(" ");
-    Some(Hidden { line: first, lines: end - first, text, words: details(&lines[first..end]) })
+    Some(Hidden { line: first, lines: end - first, text, words: details(&lines[first..end]), long: true })
 }
 
 impl LongLook {
     /// A line the player sent.
     pub fn typed(&mut self, line: &str, now: Instant) {
         if long_look(line) {
-            self.asked = Some(now);
+            self.asked = Some((now, true));
+        } else if looks(line, LOOK) {
+            self.asked = Some((now, false));
         }
     }
 
@@ -186,13 +210,20 @@ impl LongLook {
     /// The long look's room, once a read has it. `room` is the current
     /// room's name, if the map knows it.
     pub fn lines(&mut self, lines: &[Line], kinds: &[LineKind], room: Option<&str>, now: Instant) -> Option<Hidden> {
-        let asked = self.asked?;
+        let (asked, long) = self.asked?;
         if now.duration_since(asked) > WAITS {
             self.asked = None;
             return None;
         }
-        let found = find(lines, kinds, room)?;
+        let mut found = find(lines, kinds, room)?;
         self.asked = None;
+        if long {
+            self.known.insert(found.text.clone(), found.words.clone());
+        } else {
+            // A plain look colors nothing: what the last long look found.
+            found.words = self.known.get(&found.text).cloned().unwrap_or_default();
+            found.long = false;
+        }
         Some(found)
     }
 }
@@ -288,6 +319,29 @@ mod tests {
     }
 
     #[test]
+    fn a_plain_look_says_the_room_and_what_a_long_look_found() {
+        let lines = |marked: &str| vec![line("Hall"), line(marked), line("")];
+        let kinds = [LineKind::Game; 3];
+        let mut look = LongLook::default();
+        let now = Instant::now();
+        look.typed("look", now);
+        let found = look.lines(&lines("A |bell| hangs."), &kinds, Some("Hall"), now).unwrap();
+        // A plain look's colors are a builder's, not details.
+        assert_eq!((found.text.as_str(), found.words.len(), found.long), ("A bell hangs.", 0, false));
+        look.typed("ll", now);
+        assert_eq!(look.lines(&lines("A |bell| hangs."), &kinds, Some("Hall"), now).unwrap().words, ["bell"]);
+        look.typed("l", now);
+        let found = look.lines(&lines("A bell hangs."), &kinds, Some("Hall"), now).unwrap();
+        assert_eq!((found.words.clone(), found.long), (vec!["bell".to_string()], false));
+    }
+
+    #[test]
+    fn the_title_on_the_prompts_line_is_found() {
+        let found = look(&["<20Hp 10m 50mv> Hall", "A |bell| hangs.", ""], Some("Hall")).unwrap();
+        assert_eq!(found.words, ["bell"]);
+    }
+
+    #[test]
     fn a_read_without_the_room_keeps_waiting() {
         let mut look = LongLook::default();
         let now = Instant::now();
@@ -306,7 +360,7 @@ mod tests {
         let mut look = LongLook::default();
         let now = Instant::now();
         assert_eq!(look.lines(&room, &[LineKind::Game; 3], Some("Hall"), now), None);
-        look.typed("look", now);
+        look.typed("look sword", now);
         assert_eq!(look.lines(&room, &[LineKind::Game; 3], Some("Hall"), now), None);
         look.typed("ll", now);
         assert_eq!(look.lines(&room, &[LineKind::Game; 3], Some("Hall"), now + WAITS + Duration::from_secs(1)), None);

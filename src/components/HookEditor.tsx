@@ -10,8 +10,9 @@
  * Background noise is offered only on a room's pairs and weather sound
  * only on coupler.weather (src-tauri/src/ambient.rs), with a line
  * saying so elsewhere, so nothing offered does nothing. A sound the game
- * names (msp.sound) or one of Coupler's own events (coupler.event,
- * src-tauri/src/foley.rs) says which of CoffeeMUD's sounds plays while
+ * names (msp.sound), one of Coupler's own events (coupler.event,
+ * src-tauri/src/foley.rs) or a creature's cry (coupler.creature,
+ * src-tauri/src/bestiary.rs) says which of CoffeeMUD's sounds plays while
  * its SFX is None, and a terrain or weather which of its loops plays while
  * its BGN or BGW is None (soundbank.rs `fill_ambience`). Every control
  * has a visible label. A change is saved at once and said in the status
@@ -28,6 +29,7 @@ export interface Choice {
   /** One of CoffeeMUD's sounds: the game's sounds, and Coupler's own events, that play it when nothing's chosen. */
   msp?: string[];
   events?: string[];
+  cries?: string[];
   /** A loop of CoffeeMUD's: the terrains and weathers it plays for when nothing's chosen. */
   terrains?: string[];
   weathers?: string[];
@@ -69,6 +71,9 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
   /** On one of Coupler's own events: the same. */
   const eventName = pair?.key === mud.EVENT_KEY ? pair.value.replace(/^"|"$/g, "") : null;
   const eventDefault = eventName === null ? null : (bank.once.find((c) => c.events?.includes(eventName)) ?? null);
+  /** On a creature's cry: the same. */
+  const cryName = pair?.key === mud.CREATURE_KEY ? pair.value.replace(/^"|"$/g, "") : null;
+  const cryDefault = cryName === null ? null : (bank.once.find((c) => c.cries?.includes(cryName)) ?? null);
   /** On a terrain or the weather: the bank's loops that play while BGN or BGW is None. */
   const value = pair?.value.replace(/^"|"$/g, "").toLowerCase() ?? "";
   const loopsFor = (field: "terrains" | "weathers") => bank.loops.filter((c) => c[field]?.includes(value)).map((c) => c.shown);
@@ -222,6 +227,13 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
           {eventDefault
             ? `Coupler hears this happen in the game. While Sound effect is None, CoffeeMUD's ${eventDefault.shown} plays.`
             : "Coupler hears this happen in the game. Nothing plays for it until a sound effect is chosen."}
+        </p>
+      )}
+      {cryName !== null && (
+        <p>
+          {cryDefault
+            ? `Plays when a creature of this kind comes into the room, starts a fight with you or dies, by its race in the Bestiary. While Sound effect is None, CoffeeMUD's ${cryDefault.shown} plays.`
+            : "Plays when a creature of this kind comes into the room, starts a fight with you or dies, by its race in the Bestiary. Nothing plays for it until a sound effect is chosen."}
         </p>
       )}
     </Dialog>

@@ -1,16 +1,18 @@
 /**
- * The three ways Coupler can look and sound:
+ * The three ways Coupler can look. They differ only in what's on the
+ * screen: everything heard (the hooks, CoffeeMUD's sounds, Coupler's
+ * cues and voice, lib/immersive.ts) is the same in each, but for
+ * Workshop's own choice of its sound layers.
  *
  * - **Terminal**: a plain text terminal, 80 characters wide and as many
  *   rows as the screen holds, the command line under it, one status row.
- *   Nothing else. For screen readers and anyone who wants the old way.
- * - **Immersive**: the game told in layers of sound, so as little as
- *   possible has to be read or said. Coupler speaks for itself (no
- *   screen reader needed) and only what can't be a sound: talk, the
- *   login, and the answers to its keys (lib/immersive.ts).
+ *   Nothing else.
+ * - **Immersive**: the screen for playing by ear: where you are, the
+ *   vitals and the fight beside the game output, which leaves out what's
+ *   heard instead (talk, the prompt, the exits, the commands' answers).
  * - **Workshop**: everything Coupler has, and every part of it the
- *   player's to arrange, show or hide, including Immersive's sound
- *   layers (components/WorkshopDialog.tsx).
+ *   player's to arrange, show or hide, and the sound layers on or off
+ *   (components/WorkshopDialog.tsx).
  *
  * Kept as `coupler.ux`; Workshop until chosen otherwise, since it's the
  * screen Coupler always had.
@@ -19,13 +21,13 @@ import { keys } from "./keys";
 export type Ux = "terminal" | "immersive" | "workshop";
 
 export const UXES: { id: Ux; name: string; key: string; summary: string }[] = [
-  { id: "terminal", name: "Terminal", key: keys("Ctrl+Cmd+1"), summary: "A plain text terminal, 80 characters wide and as tall as the screen. Best with a screen reader." },
-  { id: "immersive", name: "Immersive", key: keys("Ctrl+Cmd+2"), summary: "The game in layers of sound, with as little read aloud as possible. Coupler speaks for itself: no screen reader needed." },
+  { id: "terminal", name: "Terminal", key: keys("Ctrl+Cmd+1"), summary: "A plain text terminal, 80 characters wide and as tall as the screen." },
+  { id: "immersive", name: "Immersive", key: keys("Ctrl+Cmd+2"), summary: "The screen for playing by ear: where you are and how you are beside the game, which leaves out what you hear instead." },
   { id: "workshop", name: "Workshop", key: keys("Ctrl+Cmd+3"), summary: "Everything Coupler has, and every part of the screen yours to move, resize, show or hide." },
 ];
 
 const UX_KEY = "coupler.ux";
-/** Workshop's choices: which things show (only those changed from the default), and whether Immersive's cues and voice play there too. */
+/** Workshop's choices: which things show (only those changed from the default), and whether Coupler's cues and voice play there. */
 const SHOW_KEY = "coupler.workshop.show";
 const LAYERS_KEY = "coupler.workshop.layers";
 
@@ -95,7 +97,7 @@ export function storeShown(shown: Record<string, boolean>) {
   }
 }
 
-/** Immersive's two layers of its own, which Workshop can have too. */
+/** Coupler's cues and voice, which play in every way to play: Workshop's own choice of each (on unless turned off there). */
 export interface Layers {
   cues: boolean;
   voice: boolean;
@@ -104,9 +106,9 @@ export interface Layers {
 export function loadLayers(): Layers {
   try {
     const kept = JSON.parse(localStorage.getItem(LAYERS_KEY) ?? "{}") as Partial<Layers>;
-    return { cues: kept.cues === true, voice: kept.voice === true };
+    return { cues: kept.cues !== false, voice: kept.voice !== false };
   } catch {
-    return { cues: false, voice: false };
+    return { cues: true, voice: true };
   }
 }
 

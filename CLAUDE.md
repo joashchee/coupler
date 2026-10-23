@@ -311,7 +311,7 @@ and its order is in the roadmap's phase 2.
   normalized to just under full scale (`louder`).
 - `src-tauri/src/backup.rs`: **Coupler Backup**, unit-tested: gear →
   Export Coupler Backup… writes `KEPT` (the app-data items backed up:
-  Assets but `.smaller`, maps, pictures, cast, hooks and journal through
+  Assets but `.smaller`, maps, pictures, cast, hooks, journal and bestiary through
   `VACUUM INTO`, played.json) and the frontend's `coupler.` settings
   (`lib/backup.ts`) to one `.coupler` file, Brotli (strongest setting,
   largest window; what's compressed already stored), each block
@@ -503,11 +503,11 @@ and its order is in the roadmap's phase 2.
   `speech.rs`, marks the next reply's answer `echo` and sends it with
   `mud-output` as `echoes`. Immersive doesn't write them (Terminal's
   `hide.echo`) and `lib/immersive.ts` has the narrator say them;
-  Workshop's gear → Narrator's Answers… (`components/EchoesDialog.tsx`,
+  gear → Narrator's Answers… (`components/EchoesDialog.tsx`,
   `lib/echoes.ts`, `coupler.echoes`, the table from `echo_list`)
   changes the words.
 - **Priority Audio** (`src/lib/priority.ts`, `coupler.priority`;
-  Workshop's gear → Priority Audio…, `components/PriorityDialog.tsx`):
+  gear → Priority Audio…, `components/PriorityDialog.tsx`):
   cues (`earcons.ts` routes them through `voice.interrupt`), talk kinds
   (`lib/journal.ts`), the time and a long look and a command's answer
   (`lib/immersive.ts`), and game lines holding the player's words, said
@@ -521,7 +521,9 @@ and its order is in the roadmap's phase 2.
   (`CommonMsgs.getFullRoomView`, `LOOK_LONG`); without MXP the color is
   all that marks them. `session.rs` tells it each line sent and, after
   `echo.rs`, finds the room (`Map::here_name`), its description and the
-  words in another color, sent with `mud-output` as `hidden`. Immersive's
+  words in another color, sent with `mud-output` as `hidden`. A plain
+  LOOK sends the room too (`long` false), with the details the last
+  long look at that description found. Immersive's
   narrator says them (`lib/immersive.ts`); the screen reader hears
   them after the room (`App.tsx`).
 - `src-tauri/src/creation.rs`: **making a character**, pure and
@@ -562,6 +564,48 @@ and its order is in the roadmap's phase 2.
   tell, group, say, channel; their own lines marked), pure and
   unit-tested. `session.rs` emits `vitals` on a change and `talk` per
   line, for Immersive mode.
+- `src-tauri/src/bestiary.rs`: **the Bestiary and the Items**,
+  unit-tested: every creature and item met, per world, in SQLite
+  (`bestiary.sqlite` in app data, game data: it stays local, and in
+  `KEPT`). CoffeeMUD tells a player no NPC's race, level or class, so
+  `Reader` gleans facts silently from GMCP (`room.mobiles`,
+  `room.items.list`, `room.info`'s zone, `char.status`'s level) and
+  the lines: the player's LOOK or LL at a creature (`typed`: size,
+  body, "than the average Orc" its race, description, what it wears),
+  CONSIDER's words (a level range by stock EXPRATE 6), "(glowing
+  red)", "is DEAD!!!", "You get X from the body of Y" (a drop), and
+  EXAMINE's "is a level N item". The race until then is read from the
+  name (`race_in_name`, `races.tsv`); abilities by the lines they print
+  when used (`abilities.tsv`, only from each ability's `invoke`); both
+  tables made by `scripts/coffeemud-bestiary.py` from the snapshot
+  (run it again with a new one). MSDP's opponent maximum is its hit
+  points. A race's category (`Creature::of_race`) picks its cry from
+  coffeemud.sf2's creature keys: Coupler's own pair
+  `coupler.creature` (`"canine fights"`, 36, listed from the start),
+  as it comes into the room (`room.enter`, placed as its footsteps),
+  fights the player and dies (`soundbank::creature_default`).
+  A body's EXAMINE gives the creature's level and weight, and any look
+  at it lists what it carried (no race: `Corpse.java` has none to show).
+  The player's choice (`coupler.bestiaryLook`, off at first,
+  `bestiary_auto_look`): Coupler sends `LOOK <it> UNOBTRUSIVELY` once
+  per creature never looked at (`auto_looked`), on WHO's clock when
+  `Who::gentle` and no fight, one every `AUTO_LOOK_EVERY`, and its answer
+  (and the prompt written again before it) isn't shown (`Reader::hidden`).
+  `session.rs` emits `bestiary-changed`; `components/BestiaryDialog.tsx`
+  (gear menu, Cmd+Shift+B) lists both, Show… says one a fact a line
+  (`lib/bestiary.ts`) beside its picture, 25 by 12 cells (25 by 24
+  painter pixels, 200 by 192, nothing clipped): a creature's
+  face, `src-tauri/src/face.rs`, pure and unit-tested, from the race's
+  category (a person by `portrait::race`, a beast, a bird, scales, a
+  bug, a skull, stuff), the description's and name's words and what it
+  wears (`bestiary_face`); an item, `src-tauri/src/item_art.rs`, pure
+  and unit-tested, its kind by the word in its name (`KINDS`), its
+  colors from the name and its material, what's on it from the
+  blurbs after its name (`Fact::ItemAura`, table `item_auras`:
+  glowing, magical aura, invisible, floating…), its slot written on the
+  bottom row (`bestiary_item_art` returns it for the facts too). Coupler's own look's answer is
+  gagged from its first line to the prompt (`Reader::prompted`).
+  Desktop only.
 - `src-tauri/src/journal.rs`: **the journal and the log**, unit-tested:
   every `comm.channel` line kept in SQLite (`journal.sqlite` in app
   data, game data: it stays local) per world and character, by who said
@@ -600,12 +644,16 @@ and its order is in the roadmap's phase 2.
   right its Control Panel, `components/ControlPanel.tsx` and
   `lib/controlPanel.ts`, what shows beside it and arranged under the
   `terminal:` layout scope, `LayoutScopeContext`), Immersive
-  (sound first, self-voiced) and Workshop (everything, arranged by the
-  player; the default). Layouts in `uxLayout` (`App.tsx`); only
+  (the screen for playing by ear) and Workshop (everything, arranged by
+  the player; the default). **They differ only in what's on the screen**
+  (decided 2026-10-23): the cues, Coupler's voice and all Immersive's
+  audio (`cues`, `voiced` in `App.tsx`) play in each, Workshop's sound
+  layers (on unless turned off) the one override; while the voice
+  speaks the screen reader isn't given the game (VOX at 0 gives it back). Layouts in `uxLayout` (`App.tsx`); only
   Workshop's arrangement is kept (`KeptContext`). Immersive's director
   is `src/lib/immersive.ts`, its cues `src/lib/earcons.ts` (Web Audio,
   the CUE bus, no files; each cue's sound and caption the player's to
-  change in Workshop's gear → Cues…, `components/CuesDialog.tsx`,
+  change in gear → Cues…, `components/CuesDialog.tsx`,
   `CUES`, `coupler.cues`), its voice `src/lib/voice.ts` (the system's
   speech, behind one module so a bundled engine can replace it;
   `pronounce` says keys and initialisms as words, "Esc" as "escape",
@@ -618,6 +666,10 @@ and its order is in the roadmap's phase 2.
   `components/ScenePanel.tsx` (Here) and `HeardPanel.tsx` (Heard) are
   its panels, `WorkshopDialog.tsx` Workshop's Customize the Screen.
   The grand goal: **fewer spoken words**; what can be a sound is one.
+  **The ways differ only in what's on the screen** (and choices made in
+  them, like Workshop's layers): hooks, sounds and everything behind
+  them work the same in each, and what a layout has no button for is in
+  the gear menu (Hooks…, Mixer…, Music Editor…).
 - **Artisan Skills** (`src/lib/artisan.ts`,
   `components/ArtisanDialog.tsx`, gear menu and Cmd+Shift+A): the
   Artisan class's skill tree and its mentor. `scripts/artisan-tree.py`
@@ -736,7 +788,7 @@ and its order is in the roadmap's phase 2.
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,
-  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`). It feeds the mapper, saves one map per
+  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`). It feeds the mapper, saves one map per
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
@@ -750,7 +802,8 @@ and its order is in the roadmap's phase 2.
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,
   `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `soundbank_defaults`, `asset_picture`, `asset_ansi`,
   `music_open`, `music_new`, `music_save`, `music_save_as`, `music_render`,
-  `music_instruments`, `backup_export`, `backup_inspect`, `backup_restore`,
+  `music_instruments`, `bestiary_mobs`, `bestiary_mob`, `bestiary_items`,
+  `bestiary_item`, `backup_export`, `backup_inspect`, `backup_restore`,
   `app_restart`, `window_set_fullscreen`,
   `window_is_fullscreen`).
 - `src/lib/mud.ts`: typed wrappers over the commands and events, and the

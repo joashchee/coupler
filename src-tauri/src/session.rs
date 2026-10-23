@@ -37,6 +37,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::ambient::{self, Ambience, Ambient};
 use crate::ansi::{Line, Screen};
+use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
@@ -200,6 +201,33 @@ struct JournalStore {
     character: String,
 }
 
+/// The Bestiary and the Items (`bestiary.rs`), opened the first time
+/// they're wanted, the world last played (so they can be read after
+/// hanging up), what's being read from the game, and the fight's
+/// opponent and hit points last kept.
+#[derive(Default)]
+struct BestiaryStore {
+    bestiary: Option<Bestiary>,
+    opened: bool,
+    world: Option<&'static str>,
+    reader: Reader,
+    opponent: Option<String>,
+    /// When the fight turned to this opponent: MSDP's figures follow
+    /// within a second, so until then they're the last one's.
+    since: Option<Instant>,
+    health: Option<i64>,
+    /// Coupler looks at each creature never looked at, unobtrusively
+    /// (the player's choice, `bestiary_auto_look`).
+    auto: bool,
+    /// Creatures seen that want a look, the first met first.
+    to_look: VecDeque<String>,
+    /// When Coupler last looked by itself.
+    looked_at: Option<Instant>,
+}
+
+/// How often Coupler looks at a creature by itself, at most.
+const AUTO_LOOK_EVERY: Duration = Duration::from_secs(4);
+
 /// What `cast_list` answers.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -253,6 +281,8 @@ pub struct Session {
     cast: Mutex<CastStore>,
     /// Every line of talk, in the journal or the log (`journal.rs`).
     journal: Mutex<JournalStore>,
+    /// Every creature and item come across (`bestiary.rs`).
+    bestiary: Mutex<BestiaryStore>,
     /// What the room's picture shows (`paint.rs`).
     picture: Mutex<PictureStore>,
     /// This character's coming into the game was counted (`played.json`);
@@ -366,6 +396,13 @@ fn journal_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("journal.sqlite"))
 }
 
+/// Where the Bestiary and the Items are kept: one database for every
+/// world, each entry marked with its world.
+fn bestiary_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
+    Ok(dir.join("bestiary.sqlite"))
+}
+
 /// Where the hooks database is kept: one for every world, since the
 /// games share one GMCP.
 fn hooks_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -421,6 +458,14 @@ impl Session {
                 journal.character.clear();
             }
         }
+        {
+            let mut store = self.bestiary.lock().unwrap();
+            store.world = Some(port.world);
+            store.reader.clear();
+            store.opponent = None;
+            store.health = None;
+            store.to_look.clear();
+        }
         *self.character.lock().unwrap() = Character::default();
         *self.combat.lock().unwrap() = CombatStore::default();
         *self.senses.lock().unwrap() = SensesStore::default();
@@ -440,7 +485,7 @@ impl Session {
             if session.live.lock().unwrap().as_ref().is_none_or(|l| l.id != id) {
                 break;
             }
-            session.who_tick();
+            session.who_tick(&clock);
         });
 
         let app = app.clone();
@@ -466,6 +511,7 @@ impl Session {
         self.who.lock().unwrap().typed(line, Instant::now());
         self.echoes.lock().unwrap().typed(line, Instant::now());
         self.long_look.lock().unwrap().typed(line, Instant::now());
+        self.bestiary.lock().unwrap().reader.typed(line, Instant::now());
         self.creation.lock().unwrap().typed(line);
         let left = self.character.lock().unwrap().sent(line);
         if let Some(left) = left {
@@ -515,7 +561,7 @@ impl Session {
 
     /// Sends WHO when it's due, and WEATHER when the painter's sky needs
     /// it (`ambient.rs`'s `weather_wanted`), each only when it's gentle to.
-    fn who_tick(&self) {
+    fn who_tick(&self, app: &AppHandle) {
         let now = Instant::now();
         self.keep_alive(now);
         if self.who.lock().unwrap().due(now) {
@@ -532,6 +578,11 @@ impl Session {
             if let Err(e) = self.write(&telnet::encode_line("weather")) {
                 log::warn!("{e}");
             }
+            return;
+        }
+        drop(ambient);
+        if gentle {
+            self.bestiary_tick(app, now);
         }
     }
 
@@ -770,6 +821,224 @@ impl Session {
             self.journal_changed(app);
         }
         Ok(())
+    }
+
+    // ---- The Bestiary and the Items (bestiary.rs) ----
+
+    /// The Bestiary, opened first if it hasn't been.
+    fn bestiary_store(&self, app: &AppHandle) -> MutexGuard<'_, BestiaryStore> {
+        let mut store = self.bestiary.lock().unwrap();
+        if !store.opened {
+            store.opened = true;
+            let open = |path: &Path| {
+                std::fs::create_dir_all(path.parent().expect("the file is inside the app-data dir")).map_err(|e| e.to_string())?;
+                Bestiary::open(path)
+            };
+            let opened = bestiary_path(app).and_then(|path| {
+                open(&path).or_else(|e| {
+                    // Start fresh rather than lose play; the old file is kept aside.
+                    log::warn!("{e}");
+                    let _ = std::fs::rename(&path, path.with_extension("sqlite.unreadable"));
+                    open(&path)
+                })
+            });
+            // Rather than refuse to play: a Bestiary for this run only.
+            store.bestiary = opened
+                .or_else(|e| {
+                    log::warn!("{e}");
+                    Bestiary::in_memory()
+                })
+                .map_err(|e| log::warn!("{e}"))
+                .ok();
+        }
+        store
+    }
+
+    /// Keeps facts in the world's Bestiary. Returns whether there were any.
+    fn bestiary_keep(store: &BestiaryStore, facts: &[Fact]) -> bool {
+        let (Some(world), Some(bestiary)) = (store.world, store.bestiary.as_ref()) else { return false };
+        let at = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+        for fact in facts {
+            if let Err(e) = bestiary.record(world, store.reader.area(), fact, at) {
+                log::warn!("{e}");
+            }
+        }
+        !facts.is_empty()
+    }
+
+    /// A creature's cry, by what the Bestiary knows of its race.
+    fn bestiary_cry(store: &BestiaryStore, name: &str, cry: Cry) -> Option<(Creature, Cry)> {
+        let world = store.world?;
+        store.bestiary.as_ref()?.creature(world, name).map(|c| (c, cry))
+    }
+
+    /// A GMCP message for the Bestiary. Returns whether it learned
+    /// anything, and the cry of a creature that came into the room (not
+    /// someone the cast knows for a player).
+    fn bestiary_gmcp(&self, app: &AppHandle, package: &str, data: &str) -> (bool, Option<(Creature, Cry)>) {
+        let (facts, entered) = self.bestiary_store(app).reader.gmcp(package, data);
+        self.bestiary_queue(app, &facts);
+        let entered = entered.filter(|name| {
+            let cast = self.cast.lock().unwrap();
+            cast.cast.character(&crate::senses::letters_and_digits(name)).is_none_or(|c| c.who != cast::Who::Pc)
+        });
+        let store = self.bestiary_store(app);
+        let changed = Self::bestiary_keep(&store, &facts);
+        (changed, entered.and_then(|name| Self::bestiary_cry(&store, &name, Cry::Comes)))
+    }
+
+    /// Creatures just seen that have never been looked at, waiting for
+    /// Coupler's own look, when the player has asked for it.
+    fn bestiary_queue(&self, app: &AppHandle, facts: &[Fact]) {
+        let mut store = self.bestiary_store(app);
+        if !store.auto {
+            return;
+        }
+        let Some(world) = store.world else { return };
+        let wanted: Vec<String> = facts
+            .iter()
+            .filter_map(|f| match f {
+                Fact::Seen { name } => Some(name.clone()),
+                _ => None,
+            })
+            .filter(|name| store.bestiary.as_ref().is_some_and(|b| b.wants_look(world, name)) && !store.to_look.contains(name))
+            .collect();
+        store.to_look.extend(wanted);
+    }
+
+    /// The player's choice: Coupler looks at each creature never looked
+    /// at, once, unobtrusively.
+    pub fn bestiary_auto_look(&self, app: &AppHandle, on: bool) {
+        let mut store = self.bestiary_store(app);
+        store.auto = on;
+        if !on {
+            store.to_look.clear();
+            return;
+        }
+        // Those in the room already.
+        let here: Vec<Fact> = store.reader.here().map(|name| Fact::Seen { name: name.to_string() }).collect();
+        drop(store);
+        self.bestiary_queue(app, &here);
+    }
+
+    /// On WHO's clock, when a command of Coupler's own would go unnoticed
+    /// (`Who::gentle`) and no fight is on: a look at the next creature
+    /// waiting, if it's still here and still unlooked at. Returns whether
+    /// one was sent.
+    fn bestiary_tick(&self, app: &AppHandle, now: Instant) -> bool {
+        let fighting = self.combat.lock().unwrap().combat.opponent().is_some();
+        let mut store = self.bestiary_store(app);
+        if !store.auto || fighting || store.reader.busy() || store.looked_at.is_some_and(|t| now.duration_since(t) < AUTO_LOOK_EVERY) {
+            return false;
+        }
+        let Some(world) = store.world else { return false };
+        while let Some(name) = store.to_look.pop_front() {
+            if !store.reader.here().any(|n| n == name) || !store.bestiary.as_ref().is_some_and(|b| b.wants_look(world, &name)) {
+                continue;
+            }
+            let Some(line) = store.reader.auto_look(&name, now) else { continue };
+            store.looked_at = Some(now);
+            let at = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+            if let Some(Err(e)) = store.bestiary.as_ref().map(|b| b.looked(world, &name, at)) {
+                log::warn!("{e}");
+            }
+            drop(store);
+            if let Err(e) = self.write(&telnet::encode_line(&line)) {
+                log::warn!("{e}");
+            }
+            return true;
+        }
+        false
+    }
+
+    /// A read's lines for the Bestiary, as printed. Returns whether it
+    /// learned anything, the cries of creatures that died, and the lines
+    /// that answered Coupler's own look (not to be shown).
+    /// `prompted`: the read ended on the game's prompt.
+    fn bestiary_lines(&self, app: &AppHandle, texts: &[String], prompted: bool) -> (bool, Vec<(Creature, Cry)>, Vec<usize>) {
+        let me = self.senses.lock().unwrap().senses.name().to_string();
+        let mut store = self.bestiary_store(app);
+        store.reader.character(&me);
+        store.reader.examined(texts);
+        let facts = store.reader.lines(texts, Instant::now());
+        let hidden = store.reader.hidden().to_vec();
+        if prompted {
+            store.reader.prompted();
+        }
+        let changed = Self::bestiary_keep(&store, &facts);
+        let cries = facts
+            .iter()
+            .filter_map(|f| match f {
+                Fact::Died { name } => Self::bestiary_cry(&store, name, Cry::Dies),
+                _ => None,
+            })
+            .collect();
+        (changed, cries, hidden)
+    }
+
+    /// The fight, for the Bestiary: the opponent's hit points in all
+    /// (MSDP's), and its cry as a fight with someone new starts.
+    fn bestiary_fight(&self, app: &AppHandle) -> (bool, Option<(Creature, Cry)>) {
+        let opponent = self.combat.lock().unwrap().combat.opponent();
+        let name = opponent.as_ref().and_then(|o| o.name.clone());
+        let health = opponent.as_ref().and_then(|o| o.health_max);
+        let mut store = self.bestiary_store(app);
+        store.reader.opponent(name.as_deref());
+        let mut changed = false;
+        let mut cry = None;
+        if name != store.opponent {
+            store.opponent = name.clone();
+            store.since = Some(Instant::now());
+            store.health = None;
+            cry = name.as_deref().and_then(|n| Self::bestiary_cry(&store, n, Cry::Fights));
+        }
+        let settled = store.since.is_some_and(|t| t.elapsed() > Duration::from_millis(1500));
+        if let (Some(name), Some(max), true) = (name, health.filter(|h| *h > 0), settled) {
+            if store.health != Some(max) {
+                store.health = Some(max);
+                changed = Self::bestiary_keep(&store, &[Fact::Health { name, max }]);
+            }
+        }
+        (changed, cry)
+    }
+
+    /// Runs `f` on the Bestiary of the world last played.
+    fn with_bestiary<T: Default>(&self, app: &AppHandle, f: impl FnOnce(&Bestiary, &str) -> Result<T, String>) -> Result<T, String> {
+        let store = self.bestiary_store(app);
+        let bestiary = store.bestiary.as_ref().ok_or("The Bestiary couldn't be opened.")?;
+        match store.world {
+            Some(world) => f(bestiary, world),
+            None => Ok(T::default()),
+        }
+    }
+
+    pub fn bestiary_mobs(&self, app: &AppHandle, query: &str) -> Result<Vec<bestiary::MobRow>, String> {
+        self.with_bestiary(app, |b, world| b.mobs(world, query))
+    }
+
+    pub fn bestiary_mob(&self, app: &AppHandle, key: &str) -> Result<Option<bestiary::MobEntry>, String> {
+        self.with_bestiary(app, |b, world| b.mob_entry(world, key))
+    }
+
+    pub fn bestiary_items(&self, app: &AppHandle, query: &str) -> Result<Vec<bestiary::ItemRow>, String> {
+        self.with_bestiary(app, |b, world| b.items(world, query))
+    }
+
+    pub fn bestiary_item(&self, app: &AppHandle, key: &str) -> Result<Option<bestiary::ItemEntry>, String> {
+        self.with_bestiary(app, |b, world| b.item_entry(world, key))
+    }
+
+    /// Creatures' cries, each recorded as its `coupler.creature` pair and
+    /// played as the player's trigger on it, else the bank's.
+    fn cry_sounds(&self, app: &AppHandle, cries: &[(Creature, Cry, Option<Place>)]) -> (bool, Vec<hooks::Fired>) {
+        let bank = app.state::<soundbank::Sounds>().available();
+        let values: Vec<String> = cries.iter().map(|(c, cry, _)| bestiary::cry_value(*c, *cry)).collect();
+        let heard: Vec<_> = values
+            .iter()
+            .zip(cries)
+            .map(|(value, (_, _, place))| Heard { key: bestiary::CREATURE_KEY, value, default: soundbank::creature_default(value).filter(|_| bank).map(|p| (p, 100)), under: None, place: place.clone() })
+            .collect();
+        self.own_sounds(app, &heard)
     }
 
     pub fn cast_list(&self) -> CastListing {
@@ -1034,6 +1303,7 @@ impl Session {
         *self.counted.lock().unwrap() = false;
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
+        self.bestiary.lock().unwrap().reader.clear();
         let message = match &left {
             Left::Logout => {
                 self.left_the_game(app, "Stopped walking: you logged out.");
@@ -1165,6 +1435,11 @@ impl Session {
                     log::warn!("{e}");
                 }
                 if let Err(e) = hooks.add_own(foley::EVENT_KEY, &Happening::ALL.map(Happening::name)) {
+                    log::warn!("{e}");
+                }
+                // And every creature's cry (bestiary.rs).
+                let cries = bestiary::cry_values();
+                if let Err(e) = hooks.add_own(bestiary::CREATURE_KEY, &cries.iter().map(String::as_str).collect::<Vec<_>>()) {
                     log::warn!("{e}");
                 }
             }
@@ -1586,6 +1861,9 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         let mut sounds = Vec::new();
         // Coupler's own events, from the text and GMCP (foley.rs).
         let mut happenings = Vec::new();
+        // Creatures' cries, and whether the Bestiary learned anything.
+        let mut cries: Vec<(Creature, Cry, Option<Place>)> = Vec::new();
+        let mut bestiary_changed = false;
         let session = app.state::<Session>();
         for event in out.events {
             match event {
@@ -1665,7 +1943,14 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         session.character_left(app, left);
                     }
                     session.combat.lock().unwrap().combat.gmcp(&package, &data);
-                    happenings.extend(session.comings.lock().unwrap().gmcp(&package, &data, Instant::now()));
+                    let moved = session.comings.lock().unwrap().gmcp(&package, &data, Instant::now());
+                    let (learned, cry) = session.bestiary_gmcp(app, &package, &data);
+                    bestiary_changed |= learned;
+                    if let Some((creature, cry)) = cry {
+                        // Heard from where its footsteps are.
+                        cries.push((creature, cry, moved.as_ref().and_then(|m| m.place.clone())));
+                    }
+                    happenings.extend(moved);
                     let talk: Option<Talk> = session.senses.lock().unwrap().senses.gmcp(&package, &data);
                     // A login or logout on a channel is a sound, not talk.
                     let talk = talk.filter(|t| !session.who.lock().unwrap().heard(&t.text, Instant::now()));
@@ -1697,7 +1982,33 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         }
         // Talk, as the player saw it: a mood's words, a language
         // scrambled or translated, a whisper (speech.rs `heard`).
-        let texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
+        let mut texts: Vec<String> = lines.iter().map(|line| line.iter().map(|span| span.text.as_str()).collect()).collect();
+        // The Bestiary reads them (bestiary.rs); the answer to Coupler's
+        // own look isn't shown, nor the prompt it was asked at, written
+        // again as a line when the answer began.
+        let prompted = screen.partial().is_some_and(|line| line.iter().any(|span| !span.text.trim().is_empty()));
+        let (learned, died, mut hidden_lines) = session.bestiary_lines(app, &texts, prompted);
+        bestiary_changed |= learned;
+        cries.extend(died.into_iter().map(|(c, cry)| (c, cry, None)));
+        if let Some(&first) = hidden_lines.first() {
+            let before = (0..first).rev().find(|&i| !texts[i].trim().is_empty() || i == 0);
+            let prompt = shown_partial.as_ref().map(|line| line.iter().map(|span| span.text.as_str()).collect::<String>());
+            if let (Some(i), Some(prompt)) = (before, prompt) {
+                if texts[i].trim() == prompt.trim() {
+                    hidden_lines.extend(i..first);
+                }
+            }
+            let mut i = 0;
+            lines.retain(|_| {
+                i += 1;
+                !hidden_lines.contains(&(i - 1))
+            });
+            let mut i = 0;
+            texts.retain(|_| {
+                i += 1;
+                !hidden_lines.contains(&(i - 1))
+            });
+        }
         for talk in kinds.heard(&texts, Instant::now()) {
             let (event, new) = session.cast_talk(app, talk);
             met |= new;
@@ -1722,6 +2033,17 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
             let (added, set_off) = session.event_sounds(app, &happenings);
             hooks_changed |= added;
             fired.extend(set_off);
+        }
+        let (learned, fights) = session.bestiary_fight(app);
+        bestiary_changed |= learned;
+        cries.extend(fights.map(|(c, cry)| (c, cry, None)));
+        if !cries.is_empty() {
+            let (added, set_off) = session.cry_sounds(app, &cries);
+            hooks_changed |= added;
+            fired.extend(set_off);
+        }
+        if bestiary_changed {
+            let _ = app.emit("bestiary-changed", ());
         }
         if hooks_changed {
             session.hooks_changed(app);

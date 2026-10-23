@@ -103,7 +103,7 @@ export function PriorityDialog({ open, onClose, onStatus }: PriorityDialogProps)
     >
       <p>
         What's on this list never waits its turn. If Coupler is saying something, it pauses, the bell rings, the priority audio plays, and then it carries on where
-        it stopped. Speech needs Immersive's voice on, and cues its sound cues.
+        it stopped. Speech needs Coupler's voice on, and cues its sound cues.
       </p>
       <div className="hooks-search">
         <label htmlFor={`${id}-bell`}>Bell</label>

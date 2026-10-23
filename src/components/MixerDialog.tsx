@@ -1,6 +1,6 @@
 /**
  * The Mixer: the master volumes for sound effects (SFX), music (BGM),
- * background noise (BGN), background weather (BGW) and Immersive's
+ * background noise (BGN), background weather (BGW) and Coupler's
  * sound cues (CUE, lib/earcons.ts), which every
  * trigger's own volume is a share of (lib/assets.ts), what music, noise
  * and weather are playing, and a way to stop it all. Opened from the menu bar's
@@ -30,7 +30,7 @@ const BUSES: [sound.Bus, string, string][] = [
   ["bgm", "BGM", "Music"],
   ["bgn", "BGN", "Background noise"],
   ["bgw", "BGW", "Background weather"],
-  ["cue", "CUE", "Immersive's sound cues"],
+  ["cue", "CUE", "Coupler's sound cues"],
 ];
 
 const levelsNow = () => Object.fromEntries(sound.BUSES.map((b) => [b, sound.masterVolume(b)])) as Record<sound.Bus, number>;
@@ -77,7 +77,7 @@ export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogPro
         </>
       }
     >
-      <p>How loud the hooks' sounds, music, background noise and weather play, all together, and Immersive's cues and voice. Each hook's own volume is a share of these.</p>
+      <p>How loud the hooks' sounds, music, background noise and weather play, all together, and Coupler's cues and voice. Each hook's own volume is a share of these.</p>
       <div className="mixer-rows">
         {BUSES.map(([bus, short, long]) => (
           <div key={bus} className="mixer-row">

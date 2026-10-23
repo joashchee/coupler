@@ -17,6 +17,7 @@ pub mod ansi_art;
 #[doc(hidden)]
 pub mod assets;
 mod backup;
+mod bestiary;
 mod cast;
 #[doc(hidden)]
 pub mod codecs;
@@ -47,6 +48,8 @@ mod paint;
 mod ports;
 mod painter;
 mod portrait;
+mod face;
+mod item_art;
 mod screen_reader;
 mod senses;
 mod session;
@@ -181,6 +184,52 @@ fn map_set_landmark(app: AppHandle, id: String, name: String, session: State<'_,
 #[tauri::command]
 fn map_clear(app: AppHandle, session: State<'_, Session>) {
     session.map_clear(&app);
+}
+
+/// The creatures in the Bestiary of the world last played whose name,
+/// race or area has the words, the most lately seen first.
+#[tauri::command]
+fn bestiary_mobs(app: AppHandle, query: String, session: State<'_, Session>) -> Result<Vec<bestiary::MobRow>, String> {
+    session.bestiary_mobs(&app, &query)
+}
+
+/// Everything the Bestiary knows of a creature.
+#[tauri::command]
+fn bestiary_mob(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<bestiary::MobEntry>, String> {
+    session.bestiary_mob(&app, &key)
+}
+
+/// A creature's face by Coupler's painter (face.rs), from all that's
+/// known of it; None if it isn't in the Bestiary.
+#[tauri::command]
+fn bestiary_face(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
+    Ok(session.bestiary_mob(&app, &key)?.map(|m| face::face(&face::Sitter::from(&m))))
+}
+
+/// An item's picture by Coupler's painter (item_art.rs), from all that's
+/// known of it; None if it isn't in the Bestiary.
+#[tauri::command]
+fn bestiary_item_art(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<item_art::Picture>, String> {
+    Ok(session.bestiary_item(&app, &key)?.map(|i| item_art::painted(&item_art::Thing::from(&i))))
+}
+
+/// The items whose name, material or area has the words.
+#[tauri::command]
+fn bestiary_items(app: AppHandle, query: String, session: State<'_, Session>) -> Result<Vec<bestiary::ItemRow>, String> {
+    session.bestiary_items(&app, &query)
+}
+
+/// The player's choice: Coupler looks at each creature never looked at,
+/// once, unobtrusively, and keeps what it sees without showing it.
+#[tauri::command]
+fn bestiary_auto_look(app: AppHandle, on: bool, session: State<'_, Session>) {
+    session.bestiary_auto_look(&app, on);
+}
+
+/// Everything known of an item.
+#[tauri::command]
+fn bestiary_item(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<bestiary::ItemEntry>, String> {
+    session.bestiary_item(&app, &key)
 }
 
 /// A book's lines (`journal` or `log`) for the character last played:
@@ -862,6 +911,11 @@ pub fn run() {
             cast_set_voice,
             cast_reset,
             cast_forget,
+            bestiary_mobs,
+            bestiary_mob,
+            bestiary_items,
+            bestiary_item,
+            bestiary_auto_look,
             journal_list,
             journal_last,
             journal_unheard,
@@ -885,6 +939,8 @@ pub fn run() {
             picture_forget_looks,
             picture_paint,
             portrait_paint,
+            bestiary_face,
+            bestiary_item_art,
             assets_list,
             assets_import,
             assets_compress,

@@ -55,15 +55,17 @@ export interface Echoed {
   says: string;
 }
 
-/** A long look's room (src-tauri/src/hidden.rs): its description, and the words in it only color marked. */
+/** A look's room (src-tauri/src/hidden.rs): its description, and the words in it only a long look's color marked. */
 export interface Hidden {
   /** The description's first line in `lines`, and how many it took. */
   line: number;
   lines: number;
   /** The description, its lines joined back up. */
   text: string;
-  /** The hidden details, in order; empty when there were none. */
+  /** The hidden details, in order; empty when there were none. After a plain look, the last long look's here. */
   words: string[];
+  /** A long look's: its details were looked for, so none means none. */
+  long: boolean;
 }
 
 /** The hidden details as words: "marble fountain and statue". */
@@ -221,6 +223,8 @@ export const onSoundsOff = (f: (message: string) => void): Promise<UnlistenFn> =
 export const MSP_SOUND_KEY = "msp.sound";
 /** Coupler's own events (src-tauri/src/foley.rs): someone arriving, the player sitting, getting, wearing… */
 export const EVENT_KEY = "coupler.event";
+/** A creature's cry (src-tauri/src/bestiary.rs): its kind and when, `canine fights`. */
+export const CREATURE_KEY = "coupler.creature";
 /** The player logged out or switched character, still connected (src-tauri/src/character.rs): words for the status line. */
 export const onCharacterLeft = (f: (message: string) => void): Promise<UnlistenFn> =>
   listen<{ message: string }>("character-left", (e) => f(e.payload.message));
@@ -315,6 +319,106 @@ export interface Unheard {
 }
 export const NOTHING_UNHEARD: Unheard = { journal: 0, log: 0, speakers: [], channels: [] };
 export const journalList = (book: Book, query: string, who: string | null) => invoke<JournalListing>("journal_list", { book, query, who });
+// ---- The Bestiary and the Items (src-tauri/src/bestiary.rs) ----
+
+/** A creature in the Bestiary's list. */
+export interface MobRow {
+  key: string;
+  name: string;
+  race: string | null;
+  /** The areas it's been seen in, the latest first. */
+  areas: string[];
+  deaths: number;
+  lastSeen: number;
+}
+/** What's known of a creature in one area. */
+export interface MobArea {
+  area: string;
+  seen: number;
+  lastSeen: number;
+  levelLow: number | null;
+  /** null: no top known ("far superior"). */
+  levelHigh: number | null;
+  maxHp: number | null;
+  alignment: "evil" | "good" | null;
+}
+/** A name counted: an ability and its kind, an item and where it's worn, an area. */
+export interface Counted {
+  name: string;
+  what: string | null;
+  count: number;
+}
+/** Everything the Bestiary knows of a creature. */
+export interface MobEntry {
+  key: string;
+  name: string;
+  race: string | null;
+  /** The game said it (a long look), rather than its name. */
+  raceSeen: boolean;
+  category: string | null;
+  /** Its cry's kind in CoffeeMUD's sounds: `canine`. */
+  creature: string | null;
+  sex: "male" | "female" | "neuter" | null;
+  height: number | null;
+  weight: number | null;
+  body: string | null;
+  stats: string[];
+  description: string | null;
+  /** What it seems to be from the abilities it uses: `Mage`. */
+  seems: string | null;
+  firstSeen: number;
+  lastSeen: number;
+  deaths: number;
+  areas: MobArea[];
+  abilities: Counted[];
+  drops: Counted[];
+  wears: Counted[];
+  /** Seen in its body, the most at once. */
+  carried: Counted[];
+}
+/** An item in the list. */
+export interface ItemRow {
+  key: string;
+  name: string;
+  levelLow: number | null;
+  levelHigh: number | null;
+  areas: string[];
+  lastSeen: number;
+}
+/** Everything known of an item. */
+export interface ItemEntry {
+  key: string;
+  name: string;
+  levelLow: number | null;
+  levelHigh: number | null;
+  weightLow: number | null;
+  weightHigh: number | null;
+  material: string | null;
+  description: string | null;
+  container: boolean;
+  firstSeen: number;
+  lastSeen: number;
+  areas: Counted[];
+  droppedBy: Counted[];
+  wornBy: Counted[];
+  /** The creatures whose bodies held it. */
+  carriedBy: Counted[];
+  /** What's been seen after its name: "glowing", "magical aura", "floating". */
+  auras: string[];
+}
+export const bestiaryMobs = (query: string) => invoke<MobRow[]>("bestiary_mobs", { query });
+export const bestiaryMob = (key: string) => invoke<MobEntry | null>("bestiary_mob", { key });
+/** A creature's face by Coupler's painter (src-tauri/src/face.rs): 25 by 12 cells, 200 by 192. */
+export const bestiaryFace = (key: string) => invoke<AnsiArt | null>("bestiary_face", { key });
+/** An item's picture by Coupler's painter (src-tauri/src/item_art.rs), the same size as a face, and its slot in words (written on it). */
+export const bestiaryItemArt = (key: string) => invoke<{ art: AnsiArt; slot: string } | null>("bestiary_item_art", { key });
+export const bestiaryItems = (query: string) => invoke<ItemRow[]>("bestiary_items", { query });
+export const bestiaryItem = (key: string) => invoke<ItemEntry | null>("bestiary_item", { key });
+/** Whether Coupler looks at each creature never looked at, once, unobtrusively (lib/bestiary.ts keeps the choice). */
+export const bestiaryAutoLook = (on: boolean) => invoke<void>("bestiary_auto_look", { on });
+/** The Bestiary learned something. */
+export const onBestiaryChanged = (f: () => void): Promise<UnlistenFn> => listen("bestiary-changed", () => f());
+
 // ---- The account menu (src-tauri/src/account.rs) ----
 
 /** One of the account's characters, as the game's list shows it. */
@@ -881,6 +985,8 @@ export interface BankSound {
   msp: string[];
   /** Coupler's own events (coupler.event) that play it when the player has chosen none: `you sit`. */
   events: string[];
+  /** Creatures' cries (coupler.creature) that play it when the player has chosen none: `canine fights`. */
+  cries: string[];
   /** The terrains it loops in while their BGN is None (`woods`; by night or by day). */
   terrains: string[];
   /** The weathers it loops for while their BGW is None (`rain`). */

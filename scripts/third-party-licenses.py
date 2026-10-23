@@ -204,7 +204,7 @@ def main():
     ]
     for names, text in groups:
         parts.append(f"{rule}\n" + "\n".join(names) + f"\n{'-' * 72}\n\n{text}\n")
-    OUT.write_text("\n".join(parts), encoding="utf-8", newline="\n")
+    OUT.write_bytes("\n".join(parts).encode("utf-8"))
     home = str(Path.home())
     if home in OUT.read_text(encoding="utf-8"):
         sys.exit(f"{OUT} contains {home}: a license text named a local path.")

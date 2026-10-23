@@ -74,9 +74,9 @@ const LOW = 20;
 /** TIME's "(Hour: 0/5)" as it's said: ", hour 1 of 6." */
 const spokenTime = (text: string) => text.replace(/\s*\(Hour: (\d+)\/(\d+)\)/, (_, hour: string, last: string) => `, hour ${Number(hour) + 1} of ${Number(last) + 1}.`);
 
-/** A long look said: "Hidden details found.", the description, then the details by name. */
-const spokenLook = ({ text, words }: mud.Hidden) =>
-  words.length > 0 ? `Hidden details found. ${text} Hidden: ${mud.hiddenList(words)}.` : `${text} No hidden details.`;
+/** A look at the room said: the description, then the details by name ("Hidden details found." first). A plain look's are what the last long look here found. */
+const spokenLook = ({ text, words, long }: mud.Hidden) =>
+  words.length > 0 ? `Hidden details found. ${text} Hidden: ${mud.hiddenList(words)}.` : long ? `${text} No hidden details.` : text;
 
 /** The game's first line on connecting: the narrator says "Connecting…" and nothing more till the welcome. */
 const CONNECTING = /^\s*Connecting to CoffeeMUD/i;
@@ -232,7 +232,7 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         });
         // The commands' one-line answers, in short (lib/echoes.ts).
         if (echoes.echoesOn()) e.echoes.forEach((answer) => say(echoes.spoken(answer), priority.isAnswer(answer.id)));
-        // A long look: the room as written, and what only color showed (src-tauri/src/hidden.rs).
+        // A look at the room: the room as written, and what only a long look's color showed (src-tauri/src/hidden.rs).
         if (e.hidden) say(spokenLook(e.hidden), priority.isSpeech("look"));
         // The game's lines with the player's priority words, said at once, as written (not an answer, said above).
         const answered = new Set(e.echoes.flatMap((a) => Array.from({ length: a.lines }, (_, k) => a.line + k)));

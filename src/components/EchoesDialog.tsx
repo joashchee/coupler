@@ -1,7 +1,7 @@
 /**
- * Narrator's Answers (Workshop, gear menu): every one-line answer a
- * command can give (src-tauri/src/echo.rs), each row the command, the
- * line as the game writes it and what Immersive's narrator says instead,
+ * Narrator's Answers (gear menu, every way to play): every one-line
+ * answer a command can give (src-tauri/src/echo.rs), each row the
+ * command, the line as the game writes it and what the narrator says,
  * then Edit, which opens the answer's editor over the list. A search
  * narrows the list down; the checkbox above it turns the whole thing
  * off (Immersive writes the answers again, and says nothing).
@@ -98,8 +98,8 @@ export function EchoesDialog({ open, onClose, onStatus }: EchoesDialogProps) {
         }
       >
         <p>
-          Many commands answer in one line: SIT says "You sit down and take a rest." In Immersive, that line isn't written; the narrator says it in short instead
-          ("Sitting."). Edit changes what the narrator says; your changes are kept. Any other one-line answer is said as the game wrote it.
+          Many commands answer in one line: SIT says "You sit down and take a rest." The narrator says it in short instead ("Sitting."),
+          and Immersive doesn't write the line. Edit changes what the narrator says; your changes are kept. Any other one-line answer is said as the game wrote it.
         </p>
         <label className="check-row echoes-on">
           <input
@@ -109,10 +109,10 @@ export function EchoesDialog({ open, onClose, onStatus }: EchoesDialogProps) {
             onChange={(e) => {
               const now = e.currentTarget.checked;
               echoes.setEchoesOn(now);
-              onStatus(now ? "Immersive's narrator says the commands' answers in short." : "Immersive writes the commands' answers again.");
+              onStatus(now ? "The narrator says the commands' answers in short; Immersive doesn't write them." : "The narrator says no answers, and Immersive writes them again.");
             }}
           />
-          <span>In Immersive, say these answers instead of writing them</span>
+          <span>Say these answers in short (Immersive leaves them unwritten)</span>
         </label>
         <div className="hooks-search">
           <label htmlFor={`${id}-search`}>Search</label>

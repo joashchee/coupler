@@ -567,6 +567,18 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .hooks-list.journal-list li { display: grid; grid-template-columns: 12px 100px 160px minmax(0, 1fr) 56px; gap: 0 12px; align-items: start; }
 .journal-when { white-space: pre; }
 .hooks-search .journal-who { flex: 0 0 240px; width: 240px; }
+/* The Bestiary (BestiaryDialog.tsx): the name, its race or level, where
+   it's found, then Show. What's known of one is a fact a line. */
+.hooks-head.bestiary-row,
+.hooks-list.bestiary-list li { display: grid; grid-template-columns: 280px 160px minmax(0, 1fr) 64px; gap: 0 12px; align-items: start; }
+.bestiary-facts { list-style: none; margin: 10px 0 0; padding: 0; height: 320px; overflow-y: auto; font-size: 13px; line-height: 1.5; color: var(--text); user-select: text; }
+.bestiary-facts li + li { margin-top: 4px; }
+.bestiary-entry { display: flex; gap: 16px; align-items: flex-start; }
+.bestiary-entry .bestiary-facts { flex: 1 1 auto; min-width: 0; height: 400px; }
+/* 25 by 12 cells (25 by 24 painter pixels): 200 by 192, nothing clipped. */
+.bestiary-picture { flex: 0 0 auto; margin-top: 10px; }
+.bestiary-look { margin: 10px 0 0; }
+.bestiary-facts:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Their buttons by the message bar: the count keeps its width, the bullet its cell. */
 .journal-button { flex: 0 0 auto; font-family: var(--font-mono); white-space: pre; }
 .journal-button .asset-dot { display: inline-block; width: 1ch; }

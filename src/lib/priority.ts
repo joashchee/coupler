@@ -37,7 +37,7 @@ export const SPEECHES: { id: SpeechId; name: string; summary: string }[] = [
   { id: "group", name: "The group", summary: "Your group's talk, said as it comes." },
   { id: "say", name: "A say", summary: "Someone speaking in the room, said as it comes." },
   { id: "time", name: "The time of day", summary: "Dawn, dusk and night, and what TIME says." },
-  { id: "look", name: "A long look", summary: "The room and its hidden details, after LL." },
+  { id: "look", name: "A look at the room", summary: "The room and its hidden details, after LOOK or LL." },
 ];
 
 export type BellSound = "bell" | "chime" | "dingDong" | "ping";

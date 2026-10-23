@@ -30,23 +30,23 @@ use crate::painter::*;
 const MOST: (usize, usize) = (80, 40);
 const LEAST: (usize, usize) = (8, 4);
 
-/// How a race looks.
+/// How a race looks (`face.rs` draws its face from it too).
 #[derive(Clone, Copy)]
-struct Build {
+pub(crate) struct Build {
     /// Height in inches.
-    inches: i32,
+    pub(crate) inches: i32,
     /// Width against a human's, in tenths.
-    bulk: i32,
-    skin: u8,
-    hair: Option<u8>,
-    clothes: u8,
-    feature: Feature,
+    pub(crate) bulk: i32,
+    pub(crate) skin: u8,
+    pub(crate) hair: Option<u8>,
+    pub(crate) clothes: u8,
+    pub(crate) feature: Feature,
     /// Sees in the dark: its eyes glow.
-    infravision: bool,
+    pub(crate) infravision: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Feature {
+pub(crate) enum Feature {
     None,
     PointedEars,
     BeardAndHelmet,
@@ -111,7 +111,7 @@ fn bulk(inches: i32, pounds: i32) -> i32 {
 
 /// How each player race looks: its skin, hair, clothes and feature; its
 /// size from `SIZES`.
-fn race(name: &str) -> Build {
+pub(crate) fn race(name: &str) -> Build {
     use Feature::*;
     let k = key(name);
     let look: Option<(u8, Option<u8>, u8, Feature)> = match k.as_str() {

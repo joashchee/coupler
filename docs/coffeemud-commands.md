@@ -9,7 +9,7 @@ Coupler uses it for **the narrator's answers**: in Immersive, a
 command's one-line answer isn't written in the game output, and the
 narrator says it in short ("You sit down and take a rest." is
 "Sitting."). `src-tauri/src/echo.rs` holds section 3's list (`COMMANDS`)
-and the narrator's words for each line (`ECHOES`); Workshop's gear →
+and the narrator's words for each line (`ECHOES`); the gear menu's
 Narrator's Answers… (`components/EchoesDialog.tsx`, `lib/echoes.ts`,
 `coupler.echoes`) lets the player change them.
 

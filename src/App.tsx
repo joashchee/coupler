@@ -16,6 +16,7 @@ import { ScreenReadout } from "./components/ScreenReadout";
 import { ShrinkDialog } from "./components/ShrinkDialog";
 import { RestoreDialog, type RestoreOffer } from "./components/RestoreDialog";
 import * as backup from "./lib/backup";
+import * as bestiary from "./lib/bestiary";
 import { SpeechDialog } from "./components/SpeechDialog";
 import { TutorialDialog } from "./components/TutorialDialog";
 import { AccountMenuDialog } from "./components/AccountMenuDialog";
@@ -30,6 +31,7 @@ import { PicturePanel } from "./components/PicturePanel";
 import { VitalsPanel } from "./components/VitalsPanel";
 import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
+import { BestiaryDialog } from "./components/BestiaryDialog";
 import { CastDialog } from "./components/CastDialog";
 import { JournalDialog } from "./components/JournalDialog";
 import { SpeakingPopup } from "./components/SpeakingPopup";
@@ -370,6 +372,7 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Play the journal's unheard lines, oldest first", "Cmd+Shift+N"],
   ["Show the journal: what's said in the game", "Cmd+Shift+J"],
   ["Show the log: OOC, INFO and the other channels", "Cmd+Shift+K"],
+  ["Show the Bestiary: the creatures and items you've come across", "Cmd+Shift+B"],
   ["Review the output: the line before, the line after", "Option+Up, Option+Down"],
   ["Review from the oldest line", "Option+Home"],
   ["Back to live output", "Option+End"],
@@ -502,6 +505,7 @@ function App() {
   /** The room whose picture was asked for by key (Cmd+Shift+P), where pictures don't show in every room. */
   const [pictureAskedFor, setPictureAskedFor] = useState<string | null>(null);
   const [castOpen, setCastOpen] = useState(false);
+  const [bestiaryOpen, setBestiaryOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   /** What the screen reader is given to read: the hidden live region's lines. */
@@ -537,9 +541,14 @@ function App() {
   guideHiddenRef.current = guideHidden;
   /** A character is in the game (it sent `room.info` or `char.vitals`), past the login, whose questions always show. */
   const [inGame, setInGame] = useState(false);
-  /** Immersive's cues and voice: always there, in Workshop when chosen, never in Terminal. */
-  const cues = ux === "immersive" || (ux === "workshop" && layers.cues);
-  const voiced = ux === "immersive" || (ux === "workshop" && layers.voice);
+  /**
+   * Coupler's cues and voice (Immersive's audio): in every way to play,
+   * since the ways differ only in what's on the screen. Workshop's own
+   * choices (its sound layers, on unless the player turned one off) are
+   * the one override.
+   */
+  const cues = ux === "workshop" ? layers.cues : true;
+  const voiced = ux === "workshop" ? layers.voice : true;
   /** The first line of output after the last command sent, for Cmd+Shift+O. */
   const sentAt = useRef(0);
   const linesRef = useRef<TermLine[]>([]);
@@ -568,9 +577,8 @@ function App() {
   useEffect(() => voice.onSaid(setLastSaid), []);
   /**
    * Whether the narrator answers the say keys and tells the connection
-   * closing: Immersive and Workshop alike, whatever Workshop's voice
-   * layer, since the player asked or must know. Terminal leaves it to
-   * the screen reader, through the status bar.
+   * closing: wherever the voice is on, and in Workshop whatever its voice
+   * layer, since the player asked or must know.
    */
   const narrated = voiced || ux === "workshop";
   const narratedRef = useRef(narrated);
@@ -696,10 +704,12 @@ function App() {
   /**
    * Gives a line to the screen reader, if its kind is one the player
    * keeps on. Not while Coupler's own voice speaks (it would be said
-   * twice) or while reviewing (the output holds still).
+   * twice; VOX at 0 in the Mixer, or Workshop's voice layer off, hands
+   * the game back to the screen reader in any way to play) or while
+   * reviewing (the output holds still).
    */
   const hear = useCallback((text: string, kind: SpokenKind) => {
-    if (voicedRef.current || reviewingRef.current || !spokenRef.current[kind] || text.trim() === "") return;
+    if ((voicedRef.current && voice.voiceVolume() > 0) || reviewingRef.current || !spokenRef.current[kind] || text.trim() === "") return;
     // While the guide to making a character is open, it says the question in few words: not the screens of text.
     if ((guideOpenRef.current || accountOpenRef.current) && (kind === "game" || kind === "prompt")) return;
     setHeard((list) => list.slice(-(HEARD_KEPT - 1)).concat({ id: nextHeardId.current++, text: voice.pronounce(text) }));
@@ -748,8 +758,8 @@ function App() {
           const kind = e.kinds[i] ?? "game";
           if (kind !== "prompt") hear(line.map((span) => span.text).join(""), kind);
         });
-        // A long look's hidden details are shown only by color: they're said in words after the room.
-        if (e.hidden) hear(e.hidden.words.length > 0 ? `Hidden details: ${mud.hiddenList(e.hidden.words)}.` : "No hidden details.", "game");
+        // A long look's hidden details are shown only by color: they're said in words after the room (a plain look's, the last long look's here).
+        if (e.hidden && (e.hidden.long || e.hidden.words.length > 0)) hear(e.hidden.words.length > 0 ? `Hidden details: ${mud.hiddenList(e.hidden.words)}.` : "No hidden details.", "game");
         const prompt = e.partial ? e.partial.map((span) => span.text).join("").trim() : "";
         if (prompt !== lastPrompt.current) {
           lastPrompt.current = prompt;
@@ -1284,7 +1294,9 @@ function App() {
       }
       storeUx(next);
       setUx(next);
-      if (next === "immersive" || (next === "workshop" && layers.cues)) earcons.modeChanged();
+      const nextCues = next === "workshop" ? layers.cues : true;
+      const nextVoice = next === "workshop" ? layers.voice : true;
+      if (nextCues) earcons.modeChanged();
       const intro =
         next === "immersive"
           ? connected
@@ -1293,9 +1305,9 @@ function App() {
           : `${info.name}. ${info.summary}`;
       setError(null);
       setStatus(intro);
-      if (next === "immersive" || (next === "workshop" && layers.voice)) voice.speak(intro, true);
+      if (nextVoice) voice.speak(intro, true);
       else voice.hush();
-      if (next !== "immersive" && !(next === "workshop" && layers.cues)) earcons.stopCues();
+      if (!nextCues) earcons.stopCues();
       // The screen is built afresh: the keyboard goes back where it belongs.
       window.setTimeout(() => (connected ? inputRef.current?.focus() : firstPortRef.current?.focus()), 0);
     },
@@ -1454,6 +1466,11 @@ function App() {
       }
     }
   }, [triggerFailed]);
+
+  // The Bestiary's own looks, as the player last chose (off at first).
+  useEffect(() => {
+    if (!WEB && bestiary.autoLook()) bestiary.setAutoLook(true).catch(() => {});
+  }, []);
 
   // The room's picture: Rust says when the room, its weather or the time changes.
   useEffect(() => {
@@ -1723,7 +1740,7 @@ function App() {
     };
   }, [onFired]);
 
-  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   // With Coupler's voice on, a problem is heard: a low buzz, then the words.
   useEffect(() => {
@@ -1786,6 +1803,9 @@ function App() {
       } else if (chord && key === "k") {
         e.preventDefault();
         setLogOpen(true);
+      } else if (chord && key === "b") {
+        e.preventDefault();
+        setBestiaryOpen(true);
       } else if (chord && key === "l") {
         e.preventDefault();
         whereAmI();
@@ -2058,42 +2078,6 @@ function App() {
                   <button
                     type="button"
                     className="menu-item"
-                    data-testid="cues-button"
-                    onClick={() => {
-                      setGearOpen(false);
-                      setCuesOpen(true);
-                    }}
-                  >
-                    <ChecklistIcon aria-hidden="true" />
-                    <span>Cues…</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    data-testid="echoes-button"
-                    onClick={() => {
-                      setGearOpen(false);
-                      setEchoesOpen(true);
-                    }}
-                  >
-                    <ChecklistIcon aria-hidden="true" />
-                    <span>Narrator's Answers…</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    data-testid="priority-button"
-                    onClick={() => {
-                      setGearOpen(false);
-                      setPriorityOpen(true);
-                    }}
-                  >
-                    <ChecklistIcon aria-hidden="true" />
-                    <span>Priority Audio…</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
                     data-testid="usual-layout-button"
                     onClick={() => {
                       setGearOpen(false);
@@ -2103,6 +2087,47 @@ function App() {
                     <ChecklistIcon aria-hidden="true" />
                     <span>Reset to Default Layout</span>
                   </button>
+                </>
+              )}
+              {/* Coupler's cues and voice play in every way to play: their settings are in each. */}
+              {!PHONE && (
+                <>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="cues-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setCuesOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Cues…</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="echoes-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setEchoesOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Narrator's Answers…</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="priority-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setPriorityOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Priority Audio…</span>
+              </button>
                 </>
               )}
               <div className="menu-sep" />
@@ -2170,6 +2195,49 @@ function App() {
                 <span>Pictures…</span>
               </button>
               )}
+              {/* The hooks, their sounds and music, in every way to play: the
+                  ways differ only in what's on the screen, so each has these
+                  here whatever buttons its layout shows. */}
+              {!WEB && (
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="hooks-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  setHooksOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>{keys.keys("Hooks… (Cmd+Shift+H)")}</span>
+              </button>
+              )}
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="mixer-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  setMixerOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Mixer…</span>
+              </button>
+              {!WEB && (
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="music-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  setMusicOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Music Editor…</span>
+              </button>
+              )}
               {!WEB && (
               <button
                 type="button"
@@ -2196,6 +2264,20 @@ function App() {
               >
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Log… (Cmd+Shift+K)")}</span>
+              </button>
+              )}
+              {!WEB && (
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="bestiary-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  setBestiaryOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>{keys.keys("Bestiary… (Cmd+Shift+B)")}</span>
               </button>
               )}
               {!WEB && (
@@ -2829,6 +2911,9 @@ function App() {
 
       {!WEB && (
       <CastDialog open={castOpen} onClose={() => setCastOpen(false)} onStatus={showStatus} onError={showError} />
+      )}
+      {!WEB && (
+      <BestiaryDialog open={bestiaryOpen} onClose={() => setBestiaryOpen(false)} onStatus={showStatus} onError={showError} />
       )}
 
       {!WEB && (

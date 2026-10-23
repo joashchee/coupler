@@ -4,8 +4,9 @@
 //! What's kept (`KEPT`, the app-data items by name): the Assets folder
 //! (but the smaller copies waiting for an answer), the maps, the rooms'
 //! looks, the casts and their voices, the hooks database, the journal and
-//! the log, and the times played; with the settings the frontend keeps
-//! (every `coupler.` key in its storage, as JSON). Not the voice cache
+//! the log, the Bestiary and the Items, and the times played; with the
+//! settings the frontend keeps (every `coupler.` key in its storage, as
+//! JSON). Not the voice cache
 //! (made again as lines come) nor the first-run warning's answer. A new
 //! kind of data in app data joins `KEPT`.
 //!
@@ -47,7 +48,7 @@ pub const FORMAT: u32 = 1;
 pub const EXTENSION: &str = "coupler";
 
 /// What's backed up and restored, by name in app data.
-pub const KEPT: &[&str] = &["Assets", "maps", "pictures", "cast", "hooks.sqlite", "journal.sqlite", "played.json"];
+pub const KEPT: &[&str] = &["Assets", "maps", "pictures", "cast", "hooks.sqlite", "journal.sqlite", "bestiary.sqlite", "played.json"];
 /// Inside the kept items, left out: the smaller copies waiting for an answer.
 const LEFT_OUT: &[&str] = &["Assets/.smaller"];
 

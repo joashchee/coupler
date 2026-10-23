@@ -390,6 +390,19 @@ pub fn event_default(happening: Happening) -> Option<(String, u8)> {
     slots().iter().find(|s| !s.looped && s.name == *name).map(|s| (s.asset_path(Tier::Severe), *volume))
 }
 
+/// The bank's sound for a creature's cry (`bestiary.rs`, `coupler.creature`):
+/// its kind's key, idle as it comes, aggressive as it fights, pain as it dies.
+pub fn creature_default(value: &str) -> Option<String> {
+    use crate::bestiary::{cry_of, Cry};
+    let (creature, cry) = cry_of(value)?;
+    let tier = match cry {
+        Cry::Comes => Tier::Light,
+        Cry::Fights => Tier::Normal,
+        Cry::Dies => Tier::Severe,
+    };
+    slots().iter().find(|s| !s.looped && s.tiered && s.name == creature.slot()).map(|s| s.asset_path(tier))
+}
+
 /// What plays with an event's own sound when the player has set none: a
 /// stomp's heavy thud.
 pub fn event_under(happening: Happening) -> Option<String> {
@@ -422,6 +435,9 @@ pub struct Sound {
     /// Coupler's own events that play it when the player has set none
     /// (`event_default`).
     pub events: Vec<&'static str>,
+    /// Creatures' cries that play it when the player has set none
+    /// (`creature_default`): `"canine fights"`.
+    pub cries: Vec<String>,
     /// The terrains it loops in when the player has set no BGN, by day
     /// or by night (`bgn_default`).
     pub terrains: Vec<&'static str>,
@@ -441,9 +457,10 @@ pub fn list() -> Vec<Sound> {
                 let path = s.asset_path(*t);
                 let msp = names.iter().filter(|name| by_msp(name) == Some(s) && msp_default(name).as_deref() == Some(path.as_str())).cloned().collect();
                 let events = Happening::ALL.iter().filter(|h| event_default(**h).is_some_and(|(p, _)| p == path)).map(|h| h.name()).collect();
+                let cries = crate::bestiary::cry_values().into_iter().filter(|v| creature_default(v).as_deref() == Some(path.as_str())).collect();
                 let terrains = TERRAIN_LOOPS.iter().map(|(t, _)| *t).filter(|t| [false, true].iter().any(|night| bgn_default(t, *night).as_deref() == Some(path.as_str()))).collect();
                 let weathers = WEATHER_LOOPS.iter().map(|(w, _)| *w).filter(|w| bgw_default(w).as_deref() == Some(path.as_str())).collect();
-                Sound { path, looped: s.looped, msp, events, terrains, weathers }
+                Sound { path, looped: s.looped, msp, events, cries, terrains, weathers }
             })
         })
         .collect()
@@ -563,6 +580,12 @@ pub fn defaults(trigger: impl Fn(&str, &str) -> Option<crate::hooks::Trigger>, r
         let yours = sfx(crate::foley::EVENT_KEY, value);
         let own = trigger(crate::foley::EVENT_KEY, &json_text(value));
         sounds.push(BankDefault { group, key: crate::foley::EVENT_KEY, value: value.into(), when: None, bus: "SFX", sound, under: event_under(happening), volume, yours, trigger: own });
+    }
+    for value in crate::bestiary::cry_values() {
+        let Some(sound) = creature_default(&value) else { continue };
+        let yours = sfx(crate::bestiary::CREATURE_KEY, &value);
+        let own = trigger(crate::bestiary::CREATURE_KEY, &json_text(&value));
+        sounds.push(BankDefault { group: "Creatures", key: crate::bestiary::CREATURE_KEY, value, when: None, bus: "SFX", sound, under: None, volume: 100, yours, trigger: own });
     }
     // Stable: each group keeps the order it was listed in.
     sounds.sort_by_key(|d| GROUPS.iter().position(|g| *g == d.group));
@@ -951,6 +974,13 @@ mod tests {
         assert_eq!(EVENT_SOUNDS.len(), Happening::ALL.len());
         assert_eq!(event_under(Happening::Leaves(Manner::Stomps)).as_deref(), Some("bank/Heavy impact"));
         assert_eq!(event_under(Happening::Leaves(Manner::Walks)), None);
+        // Every creature's cry is in the bank, each of its three.
+        for value in crate::bestiary::cry_values() {
+            assert!(creature_default(&value).is_some(), "{value}");
+        }
+        assert_eq!(creature_default("beast comes").as_deref(), Some("bank/Feline (idle)"));
+        assert_eq!(creature_default("canine fights").as_deref(), Some("bank/Canine"));
+        assert_eq!(creature_default("undead dies").as_deref(), Some("bank/Undead (pain)"));
         let all = list();
         let posture = all.iter().find(|s| s.path == "bank/Posture").unwrap();
         assert_eq!(posture.events, ["you sit", "you stand"]);

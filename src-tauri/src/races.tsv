@@ -1,0 +1,243 @@
+race	category
+Aarakocran	Avian
+Air Elemental	Elemental
+Alligator	Reptile
+Angelfish	Fish
+Animal	Animal
+Ape	Primate
+Arachnid	Arachnid
+Ash Mephit	Mephit
+Avariel	Elf
+Badger	Mustelid
+Barghest	Demon
+Bat	Pteropine
+Bear	Ursine
+Beastkin	Animal
+Bird	Avian
+Birdman	Avian
+Blob	Slime
+Buffalo	Bovine
+Bull	Bovine
+Bullywug	Amphibian
+Cat	Feline
+Centaur	Equine
+Centipede	Insect
+Chicken	Avian
+Chimp	Primate
+Clay Golem	Stone Golem
+Clockwork	Metal Golem
+Clown Fish	Fish
+Cobra	Ophidian
+Corn Snake	Ophidian
+Cow	Bovine
+Crab	Fish
+Cricket	Insect
+Crocodile	Reptile
+Cub	Ursine
+Deer	Equine
+Demodand	Demon
+Demon	Demon
+Deva	Celestial
+Devil	Devil
+Dire Bear	Ursine
+Dire Boar	Porcine
+Dire Cat	Feline
+Dire Otter	Mustelid
+Dire Rat	Rodent
+Dire Wolf	Canine
+Dog	Canine
+Doll	Wood Golem
+Dolphin	Sea Mammal
+Draconian	Dragon
+Dragon	Dragon
+Drow	Elf
+Dryad	Fairy-kin
+Duck	Avian
+Duergar	Dwarf
+Dummy	Wood Golem
+Dust Mephit	Mephit
+Dwarf	Dwarf
+Eagle	Avian
+Earth Elemental	Elemental
+Electricity Elemental	Elemental
+Elephant	Pachyderm
+Elf	Elf
+Elf-Kin	Elf
+Equine	Equine
+Faerie	Fairy-kin
+Faerie Dragon	Dragon
+Fey	Fairy-kin
+Fido	Canine
+Fire Elemental	Elemental
+Fish	Fish
+Flesh Golem	Stone Golem
+Flower	Vegetation
+Fox	Canine
+Frog	Amphibian
+Garden Snake	Ophidian
+Gargoyle	Stone Golem
+Ghast	Undead
+Ghost	Undead
+Ghoul	Undead
+Giant	Giant-kin
+Giant Amphibian	Amphibian
+Giant Animal	Animal
+Giant Bear	Ursine
+Giant Boar	Porcine
+Giant Crab	Fish
+Giant Fish	Fish
+Giant Insect	Insect
+Giant Lizard	Reptile
+Giant Otter	Mustelid
+Giant Rat	Rodent
+Giant Scorpion	Arachnid
+Giant Seahorse	Fish
+Giant Spider	Arachnid
+Giant Turtle	Reptile
+Giant Wolf	Canine
+Giant Worm	Worm
+Githyanki	Humanoid
+Gnoll	Canine
+Gnome	Gnome
+Goat	Ovine
+Goblin	Goblinoid
+Gorilla	Primate
+Grasshopper	Insect
+Great Amphibian	Amphibian
+Great Bird	Avian
+Great Cat	Feline
+Great Fish	Fish
+Great Lizard	Reptile
+Griffon	Avian
+Grizzly Bear	Ursine
+Half Elf	Elf
+Half Ogre	Giant-kin
+Halfling	Halfling
+Harpy	Avian
+Hawk	Avian
+Hobbit	Halfling
+Hobgoblin	Goblinoid
+Horse	Equine
+Human	Humanoid
+Humanoid	Humanoid
+Ice Mephit	Mephit
+Insect	Insect
+Jelly	Slime
+Kitten	Feline
+Kobold	Reptile
+Lich	Undead
+Light Mephit	Mephit
+Lightning Mephit	Mephit
+Lion	Feline
+Lizard	Reptile
+Lizard Man	Reptile
+Magma Mephit	Mephit
+Man-Scorpion	Arachnid
+Manticore	Feline
+Mephit	Mephit
+Merfolk	Fish
+Metal Golem	Metal Golem
+Millipede	Insect
+Mindflayer	Illithid
+Mineral Mephit	Mephit
+Minotaur	Bovine
+Mold	Vegetation
+Monkey	Primate
+Moose	Equine
+Mouse	Rodent
+Mummy	Undead
+Mustelid	Mustelid
+Mustie	Mustelid
+Naga	Ophidian
+Nymph	Fairy-kin
+Ogre	Giant-kin
+Ooze Mephit	Mephit
+Orangutan	Primate
+Orc	Porcine
+Otter	Mustelid
+Owl	Avian
+Pachyderm	Pachyderm
+Pegacorn	Equine
+Pegasus	Equine
+Penguin	Avian
+Pig	Porcine
+Pixie	Fairy-kin
+Planetar	Celestial
+Plant	Vegetation
+PlayerRace	Humanoid
+Polar Bear	Ursine
+Porcupine	Rodent
+Puma	Feline
+Puppy	Canine
+Python	Ophidian
+Rabbit	Rodent
+Rat	Rodent
+Raven	Avian
+Robin	Avian
+Rodent	Rodent
+Salt Mephit	Mephit
+Sasquatch	Primate
+Scarab	Insect
+School Monster	Porcine
+Scorpion	Arachnid
+Seahorse	Fish
+Seal	Sea Mammal
+Selkie	Sea Mammal
+Shadow	Undead
+Shambler	Vegetation
+Shark	Fish
+Sheep	Ovine
+Shrimp	Fish
+Skeleton	Undead
+Slaad	Demon
+Slime	Slime
+Small Fish	Fish
+Smoke Mephit	Mephit
+Smurf	Fairy-kin
+Snake	Ophidian
+Solar	Celestial
+Song Bird	Avian
+Spectre	Undead
+Spider	Arachnid
+Spirit	Undead
+Squirrel	Rodent
+Steam Mephit	Mephit
+Stone	Stone Golem
+Stone Golem	Stone Golem
+Svirfneblin	Gnome
+Swordfish	Fish
+Tabaxi	Feline
+Tarantula	Arachnid
+Tiefling	Demon
+Toadstool	Vegetation
+Treant	Vegetation
+Tree Golem	Vegetation
+Troglodyte	Humanoid
+Troll	Giant-kin
+Tumbleweed	Vegetation
+Tuna	Fish
+Turtle	Reptile
+Umber Hulk	Giant-kin
+Undead	Undead
+Unicorn	Equine
+Vampire	Undead
+Vine	Vegetation
+Void Mephit	Mephit
+Walrus	Sea Mammal
+Water Elemental	Elemental
+Water Fowl	Avian
+Wemic	Feline
+WereAmphibian	Amphibian
+WereAnimal	Animal
+WereBat	Pteropine
+WereBear	Ursine
+WereRat	Rodent
+WereWolf	Canine
+Whale	Sea Mammal
+Wolf	Canine
+Wolverine	Mustelid
+Wooden Golem	Wood Golem
+Worm	Worm
+Wyvern	Reptile
+Yugoloth	Demon
+Zombie	Undead

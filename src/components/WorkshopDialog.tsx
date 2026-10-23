@@ -71,14 +71,14 @@ export function WorkshopDialog({ open, onClose, arranging, onArranging, shown, o
       </ul>
       <p className="about-section-desc">The game output, the command line, the message bar, the gear and the ways to play always show.</p>
 
-      <h3 className="about-section-title">Immersive's sound layers</h3>
+      <h3 className="about-section-title">Sound layers</h3>
       <label className="check-row">
         <input type="checkbox" data-testid="workshop-cues" checked={layers.cues} onChange={(e) => onLayers({ ...layers, cues: e.currentTarget.checked })} />
         <span>Sound cues: the exits as notes, footsteps, a heartbeat when hurt, the fight starting and ending.</span>
       </label>
       <label className="check-row">
         <input type="checkbox" data-testid="workshop-voice" checked={layers.voice} onChange={(e) => onLayers({ ...layers, voice: e.currentTarget.checked })} />
-        <span>Coupler's voice: tells and says, the login, and the say keys. Leave it off with a screen reader, which already reads the game.</span>
+        <span>Coupler's voice: tells and says, the login, and the say keys. Off, a screen reader reads the game instead (anywhere, VOX at 0 in the Mixer does the same).</span>
       </label>
       <p>
         <button type="button" data-testid="workshop-cues-edit" onClick={onCues}>

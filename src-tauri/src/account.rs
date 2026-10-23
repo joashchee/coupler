@@ -78,6 +78,8 @@ pub struct Account {
     /// The list being read: its columns (name, start) and rows so far.
     columns: Option<Vec<(String, usize)>>,
     rows: Vec<Character>,
+    /// Lines in a row that weren't a row, while the list's read.
+    stray: u8,
 }
 
 /// The menu's prompt, `Command or Name (?): `.
@@ -85,18 +87,37 @@ pub fn is_prompt(partial: &str) -> bool {
     partial.trim_start().to_lowercase().starts_with("command or name")
 }
 
-/// The list's header: each column's name and where it starts.
+/// A line without the menu's prompt before it: the game writes what
+/// answers the prompt on the prompt's own line (no newline after the
+/// player's Enter, `DefaultSession.onlyPrint`), so the list's header
+/// comes as `Command or Name (?):  Name   Race …`.
+fn after_prompt(text: &str) -> &str {
+    let t = text.trim_start();
+    if is_prompt(t) {
+        if let Some(at) = t.find("):") {
+            return t[at + 2..].trim_start();
+        }
+    }
+    text
+}
+
+/// The list's columns, in the game's words.
+const COLUMNS: [&str; 6] = ["Name", "Race", "Level", "Class", "Last", "Remain"];
+
+/// The list's header: each column's name and where it starts. The game
+/// sizes the columns to the player's wrap (`CMLister.fixColWidth`) and
+/// cuts what doesn't fit, so a narrow screen's header reads `Nam Rac Lev`.
 fn header(text: &str) -> Option<Vec<(String, usize)>> {
     let mut columns = Vec::new();
     let mut at = 0;
     for word in text.split(' ') {
         if !word.is_empty() {
-            columns.push((word.to_string(), at));
+            let full = COLUMNS.iter().find(|c| word.len() >= 2 && c.len() >= word.len() && c[..word.len()].eq_ignore_ascii_case(word))?;
+            columns.push((full.to_string(), at));
         }
         at += word.chars().count() + 1;
     }
-    let names: Vec<&str> = columns.iter().map(|(n, _)| n.as_str()).collect();
-    (names.first() == Some(&"Name") && names.len() >= 2 && names.iter().all(|n| ["Name", "Race", "Level", "Class", "Last", "Remain"].contains(n))).then_some(columns)
+    (columns.first().map(|c| c.0.as_str()) == Some("Name") && columns.len() >= 2).then_some(columns)
 }
 
 /// A row cut at the header's columns.
@@ -138,10 +159,12 @@ impl Account {
         let mut menu = self.known.clone().unwrap_or(Menu { characters: None, remaining: None, import: false, export: false, email: false, total_hours: None });
         let mut seen = false;
         for text in texts {
+            let text = after_prompt(text);
             let t = text.trim();
             if let Some(columns) = header(t) {
                 self.columns = Some(columns);
                 self.rows.clear();
+                self.stray = 0;
                 continue;
             }
             if let Some(columns) = self.columns.clone() {
@@ -154,10 +177,18 @@ impl Account {
                 }
                 if let Some(c) = row(text.trim_end(), &columns) {
                     self.rows.push(c);
+                    self.stray = 0;
                     continue;
                 }
+                // A row too long for the wrap goes on in a line of its own
+                // (`(email)`, `(post)`): the list isn't over for one.
                 if !t.is_empty() {
-                    self.columns = None;
+                    self.stray += 1;
+                    if self.stray > 2 {
+                        self.columns = None;
+                    } else {
+                        continue;
+                    }
                 }
             }
             if t.eq_ignore_ascii_case("account menu") {
@@ -183,6 +214,11 @@ impl Account {
             }
         }
         let open = partial.is_some_and(is_prompt);
+        // The prompt came back with no total read: what rows came are the list.
+        if open && self.columns.take().is_some() {
+            menu.characters = Some(std::mem::take(&mut self.rows));
+            seen = true;
+        }
         if open {
             // Changed from what the dialog shows: a list read in an earlier
             // read than the prompt (the game prints it, then the prompt
@@ -323,6 +359,42 @@ mod tests {
         assert_eq!(menu.characters.unwrap()[0].level, "7");
         assert_eq!(menu.remaining, None);
         assert!(!a.wants_list());
+    }
+
+    #[test]
+    fn the_list_on_the_prompts_line_is_read() {
+        let mut a = Account::default();
+        a.lines(&strings(MENU), Some(PROMPT));
+        assert!(a.wants_list());
+        // `L` answered on the prompt's line, as the game writes it.
+        let list = strings(&[
+            "Command or Name (?):  Name   Race   Level Class    Last       Remain ",
+            "Bob    Human  12    Fighter  10/03/2026            ",
+            "",
+            "Total hours played: 41",
+        ]);
+        let Some(Update::Open(menu)) = a.lines(&list, Some(PROMPT)) else { panic!("the list should show") };
+        let chars = menu.characters.unwrap();
+        assert_eq!((chars[0].name.as_str(), chars[0].class.as_str(), chars[0].last.as_str()), ("Bob", "Fighter", "10/03/2026"));
+        // The menu again on the prompt's line (Enter alone).
+        let mut b = Account::default();
+        let mut menu_after = strings(MENU);
+        menu_after[2] = format!("{PROMPT} Account Menu");
+        b.lines(&menu_after[2..], Some(PROMPT));
+        let Some(Update::Open(menu)) = b.lines(&strings(&["Command or Name (?): Name Level", "Zed  7", "Total hours played: 2"]), Some(PROMPT)) else { panic!("should read") };
+        assert_eq!(menu.characters.unwrap()[0].name, "Zed");
+    }
+
+    #[test]
+    fn a_narrow_wrap_and_a_wrapped_row_still_read() {
+        let mut a = Account::default();
+        a.lines(&strings(MENU), Some(PROMPT));
+        // Columns cut to the wrap, a row's (post) on a line of its own, and
+        // the prompt before any total.
+        let list = strings(&["Name Race Leve Clas Last", "Bob  Huma 12   Figh N/A  *", "      (post)"]);
+        let Some(Update::Open(menu)) = a.lines(&list, Some(PROMPT)) else { panic!("should read") };
+        let chars = menu.characters.unwrap();
+        assert_eq!((chars[0].name.as_str(), chars[0].level.as_str(), chars[0].online), ("Bob", "12", true));
     }
 
     #[test]
