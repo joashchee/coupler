@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.29.0 (2026-10-23)
+
+- **The game's sounds play** (2026-10-23): Coupler now accepts MSP, so
+  CoffeeMUD names a sound in its text each time one happens (a spell
+  landing, a blow, a door, a social, crafting, a level gained), and
+  Coupler cuts it out of the text and plays CoffeeMUD's sound for it
+  from coffeemud.sf2. Each is a pair in the hooks list (`msp.sound` =
+  `"fireball.wav"`), every one listed from the start, so any can be
+  given a sound of the player's instead; the hook editor says which of
+  CoffeeMUD's sounds plays while none is chosen. They're made ready in
+  the background when the game's sounds come on, so the first is on
+  time. A character whose SOUNDS is off (made before this, or in
+  another client) gets one line at login saying to type SOUNDS; a new
+  character made in Coupler has it on. Nothing is ever downloaded for
+  them. On the web, the sounds come out of the text and play where the
+  mirror has a hook on them.
 - **CoffeeMUD's sounds in the hook editor** (2026-10-23): every sound
   in coffeemud.sf2 can be chosen for a hook, under "CoffeeMUD's sounds"
   in its menus: the one-shots for SFX (each blow and creature in its

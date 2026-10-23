@@ -120,7 +120,7 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
     mud
       .soundbankList()
       .then((all) => {
-        const choice = (s: mud.BankSound) => ({ path: s.path, shown: mud.assetTitle(s.path) });
+        const choice = (s: mud.BankSound) => ({ path: s.path, shown: mud.assetTitle(s.path), msp: s.msp });
         setBank({ once: all.filter((s) => !s.looped).map(choice), loops: all.filter((s) => s.looped).map(choice) });
       })
       .catch((e) => onError(String(e)));

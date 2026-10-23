@@ -9,7 +9,9 @@
  * and how many seconds it stays (0: until it's clicked away).
  * Background noise is offered only on a room's pairs and weather sound
  * only on coupler.weather (src-tauri/src/ambient.rs), with a line
- * saying so elsewhere, so nothing offered does nothing. Every control
+ * saying so elsewhere, so nothing offered does nothing. A sound the game
+ * names (msp.sound) says which of CoffeeMUD's sounds plays while its
+ * SFX is None. Every control
  * has a visible label. A change is saved at once and said in the status
  * bar; Set Off Nothing clears them all.
  */
@@ -21,6 +23,8 @@ import { Dialog } from "./Dialog";
 export interface Choice {
   path: string;
   shown: string;
+  /** One of CoffeeMUD's sounds: the game's sounds that play it when nothing's chosen. */
+  msp?: string[];
 }
 
 interface HookEditorProps {
@@ -53,6 +57,9 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
   const t = pair?.trigger ?? mud.NO_TRIGGER;
   const roomPair = pair !== null && mud.BGN_KEYS.includes(pair.key);
   const weatherPair = pair?.key === mud.BGW_KEY;
+  /** On a sound the game names: the bank's sound that plays while SFX is None. */
+  const mspName = pair?.key === mud.MSP_SOUND_KEY ? pair.value.replace(/^"|"$/g, "") : null;
+  const mspDefault = mspName === null ? null : (bank.once.find((c) => c.msp?.includes(mspName)) ?? null);
 
   function assetMenu(slot: Slot, label: string) {
     const current = t[slot] ?? "";
@@ -177,6 +184,13 @@ export function HookEditor({ pair, choices, bank, onChange, onClose }: HookEdito
       )}
       {roomPair && <p>Background noise loops while you're here: a room's own first, then its terrain's, then indoors or outdoors.</p>}
       {weatherPair && <p>Weather sound loops while this is the weather where you are, outdoors.</p>}
+      {mspName !== null && (
+        <p>
+          {mspDefault
+            ? `The game names this sound when it happens. While Sound effect is None, CoffeeMUD's ${mspDefault.shown} plays.`
+            : "The game names this sound when it happens. Nothing plays for it until a sound effect is chosen."}
+        </p>
+      )}
     </Dialog>
   );
 }

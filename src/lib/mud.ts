@@ -215,6 +215,10 @@ export const onGmcp = (f: (e: GmcpEvent) => void): Promise<UnlistenFn> => listen
 /** `reason` is null when the user disconnected. */
 export const onClosed = (f: (reason: string | null) => void): Promise<UnlistenFn> =>
   listen<{ reason: string | null }>("mud-closed", (e) => f(e.payload.reason));
+/** The game turned its sounds (MSP) off at login: this character's SOUNDS is off. Words for the status line (src-tauri/src/msp.rs). */
+export const onSoundsOff = (f: (message: string) => void): Promise<UnlistenFn> => listen<string>("sounds-off", (e) => f(e.payload));
+/** msp.sound: a sound the game names (src-tauri/src/msp.rs). */
+export const MSP_SOUND_KEY = "msp.sound";
 /** The player logged out or switched character, still connected (src-tauri/src/character.rs): words for the status line. */
 export const onCharacterLeft = (f: (message: string) => void): Promise<UnlistenFn> =>
   listen<{ message: string }>("character-left", (e) => f(e.payload.message));
@@ -861,6 +865,8 @@ export interface BankSound {
   path: string;
   /** A loop, for BGN and BGW; otherwise a sound played once, for SFX. */
   looped: boolean;
+  /** The game's sounds (msp.sound) that play it when the player has chosen none: `fireball.wav`. */
+  msp: string[];
 }
 
 /** CoffeeMUD's sounds, every tier its own; none if this copy hasn't them. */

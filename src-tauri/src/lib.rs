@@ -39,6 +39,7 @@ mod moved;
 pub mod hooks;
 mod journal;
 mod mapper;
+mod msp;
 mod mssp;
 mod music;
 mod paint;

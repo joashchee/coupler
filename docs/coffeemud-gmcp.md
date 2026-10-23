@@ -294,7 +294,7 @@ and `Libraries/CoffeeFilter.java`. Studied 2026-10-02.
 |---|---|---|---|
 | GMCP 201, MCCP2 86, NAWS 31, TTYPE/MTTS 24, NEW-ENVIRON 39, ECHO 1 | Offers or asks | Accepted | Phase 0 |
 | MSDP 69 | Offers | `WORLD_TIME`, `OPPONENT_HEALTH`, `OPPONENT_HEALTH_MAX`, `OPPONENT_RANGE` | The hour (GMCP has none) and the opponent's exact hit points (GMCP's `enemypct` is a rounded percentage, each tick), checked every second: **preferred for Combat mode** (`combat.rs`). Left out: `OPPONENT_NAME` (only sent when a fight starts or ends: its change check compares the player's own name), `OPPONENT_LEVEL` (sends the player's own level, `M.phyStats()`), `OPPONENT_STRENGTH` (runs CONSIDER, which tells the room "<player> considers <foe>." every time it's sent). `AFFECTS` is a count, or names without durations. `ARACHNOS_*` is intermud, never. |
-| **MSP** 90 | Offers | Refused, **planned** (phase 5) | See below. |
+| **MSP** 90 | Offers | **Accepted** (2026-10-23, `msp.rs`) | Each sound cut out of the text, recorded as `msp.sound`, played from coffeemud.sf2 unless the player set one. See below. |
 | **MXP** 91 | Offers | Refused, planned (phase 3) | See below. |
 | **MCP 2.1** (in the text, not telnet) | Sends `#$#mcp version: 2.1 to: 2.1` as the first line of every connection, unless `DISABLE=MCP`. Packages: `mcp-negotiate` and `dns-org-mud-moo-simpleedit` (only in `CMGenEditor`, the builder's field editor, by typing `\#$#`) | **Lines dropped** (`ansi.rs`, `mcp_out_of_band`) | Shown, the greeting is a line of noise a screen reader reads on every connect. simple-edit does what GMCP `Siplet.Input` does (4.6), so MCP itself isn't worth speaking. |
 | MSSP 70 | Offers when asked | Refused | Name, players online, uptime, status, ports: only for the world already connected (asking the other ports means connecting to each, load on a shared server). A "players online" line in the ports panel at most. Low. |
@@ -305,7 +305,7 @@ and `Libraries/CoffeeFilter.java`. Studied 2026-10-02.
 | ATCP 200, AARD 102, MCCP v1 85 and v3 87 | Constants only, never offered or handled | — | — |
 | Sip's WebSocket JSON (`WebMacros/WebSockJSON.java`) | Web port | — | The browser Sip's transport. Coupler is telnet. |
 
-**MSP** is the one to add next. 176 calls to `CMLib.protocol().msp(…)`
+**MSP** (accepted since 2026-10-23, `msp.rs`). 176 calls to `CMLib.protocol().msp(…)`
 put `!!SOUND(name V=volume P=priority U=path)` into the text: spells
 landing (`fireball.wav` 16 places, `spelldam1.wav`, `lightning.wav`),
 blows, doors (`dooropen`, `doorlock`, `doorunlock`), `levelgain.wav`,

@@ -10,10 +10,14 @@
 //! - SGA is accepted when the server offers it (Sip refuses it by default).
 //! - LINEMODE is refused: Coupler sends whole lines, and Sip's WILL was
 //!   never followed by the subnegotiation it promises.
-//! - MXP and MSP are refused until Coupler draws and plays them, so
-//!   CoffeeMUD falls back to plain ANSI rather than sending tags Coupler
-//!   would print as text. (Every protocol CoffeeMUD offers, and why
-//!   each is taken or not: docs/coffeemud-gmcp.md, 6.1.)
+//! - MXP is refused until Coupler draws it, so CoffeeMUD falls back to
+//!   plain ANSI rather than sending tags Coupler would print as text.
+//!   (Every protocol CoffeeMUD offers, and why each is taken or not:
+//!   docs/coffeemud-gmcp.md, 6.1.)
+//! - MSP is accepted: its `!!SOUND(…)` tokens are cut out of the text
+//!   and played (`msp.rs`). The server turns it off (WONT) at login for a
+//!   character whose `SOUNDS` is off, and on again when they type SOUNDS;
+//!   each change is an `Event::Msp`.
 //! - MSDP is accepted for four variables: `WORLD_TIME` (the game's hour,
 //!   for `daytime.rs`; GMCP has no time) and the opponent's exact health,
 //!   maximum and range (`combat.rs`; GMCP has only a percentage). Coupler
@@ -47,6 +51,7 @@ const OPT_NAWS: u8 = 31;
 const OPT_NEW_ENVIRON: u8 = 39;
 const OPT_MSDP: u8 = 69;
 const OPT_MCCP2: u8 = 86;
+const OPT_MSP: u8 = 90;
 const OPT_GMCP: u8 = 201;
 
 const TTYPE_IS: u8 = 0;
@@ -92,6 +97,8 @@ pub enum Event {
     Gmcp(String, String),
     /// An MSDP variable with a plain value: its name and the value.
     Msdp(String, String),
+    /// The game's sounds (MSP) came on (true) or went off (false).
+    Msp(bool),
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -296,7 +303,7 @@ impl Telnet {
         let o = opt as usize;
         match cmd {
             WILL => {
-                let accept = matches!(opt, OPT_ECHO | OPT_SGA | OPT_EOR | OPT_GMCP | OPT_MCCP2 | OPT_MSDP);
+                let accept = matches!(opt, OPT_ECHO | OPT_SGA | OPT_EOR | OPT_GMCP | OPT_MCCP2 | OPT_MSDP | OPT_MSP);
                 if accept && self.remote_on[o] {
                     return; // already agreed: no second answer
                 }
@@ -310,14 +317,17 @@ impl Telnet {
                     OPT_ECHO => out.events.push(Event::ServerEcho(true)),
                     OPT_GMCP => out.replies.extend(self.gmcp_hello()),
                     OPT_MSDP => out.replies.extend(msdp_report()),
+                    OPT_MSP => out.events.push(Event::Msp(true)),
                     _ => {}
                 }
             }
             WONT if self.remote_on[o] => {
                 self.remote_on[o] = false;
                 out.replies.extend([IAC, DONT, opt]);
-                if opt == OPT_ECHO {
-                    out.events.push(Event::ServerEcho(false));
+                match opt {
+                    OPT_ECHO => out.events.push(Event::ServerEcho(false)),
+                    OPT_MSP => out.events.push(Event::Msp(false)),
+                    _ => {}
                 }
             }
             DO => {
@@ -562,8 +572,23 @@ mod tests {
     #[test]
     fn refuses_what_coupler_cant_show_yet() {
         let mut t = Telnet::new("0.1.0");
-        let out = feed(&mut t, &[IAC, WILL, 91, IAC, WILL, 90, IAC, DO, 34]);
-        assert_eq!(out.replies, vec![IAC, DONT, 91, IAC, DONT, 90, IAC, WONT, 34]);
+        let out = feed(&mut t, &[IAC, WILL, 91, IAC, DO, 34]);
+        assert_eq!(out.replies, vec![IAC, DONT, 91, IAC, WONT, 34]);
+    }
+
+    #[test]
+    fn msp_is_accepted_and_its_changes_reported() {
+        let mut t = Telnet::new("0.1.0");
+        let on = feed(&mut t, &[IAC, WILL, OPT_MSP]);
+        assert_eq!(on.replies, vec![IAC, DO, OPT_MSP]);
+        assert_eq!(on.events, vec![Event::Msp(true)]);
+        assert!(feed(&mut t, &[IAC, WILL, OPT_MSP]).events.is_empty(), "offered again: nothing new");
+        // A character with SOUNDS off logs in: the server turns it off.
+        let off = feed(&mut t, &[IAC, WONT, OPT_MSP]);
+        assert_eq!(off.replies, vec![IAC, DONT, OPT_MSP]);
+        assert_eq!(off.events, vec![Event::Msp(false)]);
+        // They type SOUNDS: on again.
+        assert_eq!(feed(&mut t, &[IAC, WILL, OPT_MSP]).events, vec![Event::Msp(true)]);
     }
 
     #[test]

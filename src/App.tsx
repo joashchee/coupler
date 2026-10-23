@@ -818,6 +818,12 @@ function App() {
         setError(null);
         setStatus(message);
       }),
+      // The character's SOUNDS is off: say once how to hear the game's sounds.
+      mud.onSoundsOff((message) => {
+        setError(null);
+        setStatus(message);
+        if (narratedRef.current) voice.speak(message, false);
+      }),
       // Someone logged on or off: the game's announcement isn't written, a doorbell says it instead.
       mud.onWho((changes) => changes.slice(0, 4).forEach((c, i) => earcons.loggedOnOff(c.name, c.on, i * 0.8))),
       mud.onMapChanged(setSnapshot),

@@ -209,7 +209,8 @@ and its order is in the roadmap's phase 2.
   negotiation (what Coupler accepts and why, Sip's differences listed in
   the header), TTYPE/MTTS, NAWS, NEW-ENVIRON, GMCP (Core.Hello and
   Supports), MSDP (one REPORT, `WORLD_TIME`; not CoffeeMUD's broken
-  MSDP-over-GMCP), MCCP2 inflate (`flate2`, pure Rust).
+  MSDP-over-GMCP), MSP (its sounds played by `msp.rs`), MCCP2 inflate
+  (`flate2`, pure Rust).
 - `src-tauri/src/ansi.rs`: UTF-8 decoding across reads, SGR to styled
   spans (16, 256, 24-bit), line splitting; MCP's out-of-band lines
   (`#$#`, CoffeeMUD's greeting on every connect) dropped. Colors stay
@@ -369,7 +370,18 @@ and its order is in the roadmap's phase 2.
   them (`soundbank_list`; one-shots for SFX, loops for BGN and BGW,
   under "CoffeeMUD's sounds"); `assets_list` never clears them as
   missing. The web mirror renders them from this checkout's bank.
-  Not yet: MSP, and the bank as the default sounds.
+  **MSP plays it** (`src-tauri/src/msp.rs`, pure and unit-tested;
+  shared with the web build): MSP accepted (`telnet.rs`, `Event::Msp`),
+  each ` !!SOUND(name …) ` cut out of the text (`take`; the unfinished
+  line `tidy`'d) and recorded as the pair `msp.sound` = `"name"`, every
+  name the bank's map lists put in the hooks list from the start. A
+  pair with no SFX of the player's plays `soundbank::msp_default` (a
+  one-shot; never a weather loop) in `Session::msp_sounds`; when MSP
+  comes on, `Sounds::warm` renders those once a run on a thread. A
+  login that turns MSP off (the character's `SOUNDS` off) emits
+  `sounds-off` once a connection: the tip to type SOUNDS. The web build
+  plays only the mirror's triggers on them. Not yet: the bank's loops as
+  the default BGN and BGW.
 - `src-tauri/src/daytime.rs`: the time of day, pure and unit-tested:
   CoffeeMUD has no time GMCP, so it takes the game's hour from MSDP's
   `WORLD_TIME` and the part of the day from where each starts (the
@@ -692,7 +704,7 @@ and its order is in the roadmap's phase 2.
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,
-  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`). It feeds the mapper, saves one map per
+  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`). It feeds the mapper, saves one map per
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`

@@ -29,6 +29,7 @@ use crate::echo::{Echoed, Echoes};
 use crate::hidden::{Hidden, LongLook};
 use crate::hooks::{Fired, Hooks};
 use crate::mapper::{self, Map, Step};
+use crate::msp;
 use crate::ports::{self, Port, HOST, PORTS};
 use crate::senses::{Senses, Talk, Vitals};
 use crate::speech::{Kinds, LineKind};
@@ -100,6 +101,8 @@ pub struct Coupler {
     creation: Creation,
     /// The unfinished line last sent, kept while a hidden WHO is cut off mid-row.
     shown_partial: Option<Line>,
+    /// The tip about SOUNDS was given this connection.
+    told_sounds_off: bool,
     outgoing: Vec<u8>,
     events: Vec<Value>,
 }
@@ -138,6 +141,7 @@ impl Coupler {
             long_look: LongLook::default(),
             creation: Creation::default(),
             shown_partial: None,
+            told_sounds_off: false,
             outgoing: Vec::new(),
             events: Vec::new(),
         })
@@ -185,6 +189,7 @@ impl Coupler {
         self.long_look.clear();
         self.creation.clear();
         self.shown_partial = None;
+        self.told_sounds_off = false;
         self.outgoing.clear();
         Ok(ports::web_socket_url(port))
     }
@@ -282,6 +287,17 @@ impl Coupler {
             match event {
                 Event::Text(bytes) => {
                     let mut done = self.screen.push(&bytes);
+                    // The game's sounds come out of the text (msp.rs), each
+                    // setting off the mirror's trigger on it. The bank's
+                    // sounds aren't the default here: the mirror holds only
+                    // those a hook uses.
+                    done.retain_mut(|line| {
+                        let blank = line.is_empty();
+                        for sound in msp::take(line) {
+                            fired.extend(self.hooks.record(sound.key(), &ambient::json_text(&sound.name)));
+                        }
+                        blank || !line.is_empty()
+                    });
                     let now = Instant::now();
                     done.retain(|line| self.who.line(&line.iter().map(|span| span.text.as_str()).collect::<String>(), now) == Seen::Show);
                     let mut answer = Vec::new();
@@ -306,6 +322,11 @@ impl Coupler {
                 Event::ServerEcho(on) => {
                     self.who.echo(on);
                     self.emit("mud-echo", json!(on));
+                }
+                Event::Msp(on) => {
+                    if !on && !std::mem::replace(&mut self.told_sounds_off, true) {
+                        self.emit("sounds-off", json!(msp::SOUNDS_OFF));
+                    }
                 }
                 Event::Msdp(name, value) => {
                     if self.combat.msdp(&name, &value) {
@@ -368,7 +389,10 @@ impl Coupler {
         if !fired.is_empty() {
             self.emit("hook-fired", json!(fired));
         }
-        let mut partial = self.screen.partial();
+        let mut partial = self.screen.partial().and_then(|mut line| {
+            msp::tidy(&mut line);
+            (!line.is_empty()).then_some(line)
+        });
         let mut prompt = partial.as_ref().map(|line| line.iter().map(|span| span.text.as_str()).collect::<String>());
         let now = Instant::now();
         self.who.character(self.senses.name(), now);

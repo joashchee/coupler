@@ -41,9 +41,11 @@ use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
 use crate::daytime::{self, Daytime, Phase};
-use crate::hooks::{self, Hooks};
+use crate::hooks::{self, Hooks, Trigger};
+use crate::soundbank;
 use crate::journal::{self, Book, Journal};
 use crate::mapper::{self, Map, Step};
+use crate::msp;
 use crate::mssp::Probe;
 use crate::paint::{Looks, Scene};
 pub use crate::ports::{Port, HOST, PORTS};
@@ -1151,6 +1153,11 @@ impl Session {
                 if let Err(e) = hooks.add_own(daytime::TIME_KEY, &times) {
                     log::warn!("{e}");
                 }
+                // So are the game's sounds, every one CoffeeMUD sends.
+                let names: Vec<&str> = soundbank::slots().iter().flat_map(|s| s.msp.iter().copied()).collect();
+                if let Err(e) = hooks.add_own(msp::SOUND_KEY, &names) {
+                    log::warn!("{e}");
+                }
             }
         }
         store
@@ -1396,6 +1403,40 @@ impl Session {
         self.ambient.lock().unwrap().sent.clone()
     }
 
+    /// The game's sounds (`msp.rs`), for the hooks: each recorded as its
+    /// pair, setting off the player's trigger on it, and one the player
+    /// gave no sound plays the bank's for its name (`soundbank::msp_default`).
+    /// Returns whether a pair was new to the list, and what to play.
+    fn msp_sounds(&self, app: &AppHandle, sounds: &[msp::Sound]) -> (bool, Vec<hooks::Fired>) {
+        let bank = app.state::<soundbank::Sounds>().available();
+        let mut store = self.hook_store(app);
+        let mut added = false;
+        let mut fired = Vec::new();
+        for sound in sounds {
+            let value = ambient::json_text(&sound.name);
+            let mut set_off = match store.hooks.as_mut().map(|h| h.record(sound.key(), &value)) {
+                Some(Ok(r)) => {
+                    added |= r.added > 0;
+                    r.fired
+                }
+                Some(Err(e)) => {
+                    log::warn!("{e}");
+                    Vec::new()
+                }
+                None => Vec::new(),
+            };
+            let silent = set_off.iter().all(|f| f.trigger.sfx.is_none());
+            if let Some(path) = soundbank::msp_default(&sound.name).filter(|_| bank && silent && !sound.music) {
+                match set_off.first_mut() {
+                    Some(f) => f.trigger.sfx = Some(path),
+                    None => set_off.push(hooks::Fired { key: msp::SOUND_KEY.into(), value, trigger: Trigger { sfx: Some(path), ..Trigger::default() } }),
+                }
+            }
+            fired.extend(set_off);
+        }
+        (added, fired)
+    }
+
     /// One GMCP message, for the hooks. Returns whether it held a pair
     /// new to the list, and the triggers it set off.
     fn hooks_gmcp(&self, app: &AppHandle, package: &str, data: &str) -> (bool, Vec<hooks::Fired>) {
@@ -1431,6 +1472,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
     let mut kinds = Kinds::default();
     // The unfinished line last sent, kept while a hidden WHO is cut off mid-row.
     let mut shown_partial: Option<Line> = None;
+    // The tip about SOUNDS is given once a connection.
+    let mut told_sounds_off = false;
     let mut buf = vec![0u8; 16 * 1024];
     loop {
         let n = match stream.read(&mut buf) {
@@ -1462,11 +1505,20 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // Someone new was met: an open Characters' Voices list reads again.
         let mut met = false;
         let mut fired = Vec::new();
+        // The game's sounds, cut out of its text.
+        let mut sounds = Vec::new();
         let session = app.state::<Session>();
         for event in out.events {
             match event {
                 Event::Text(bytes) => {
                     let mut done = screen.push(&bytes);
+                    // The game's sounds come out of the text (msp.rs); a
+                    // line that held nothing else isn't shown.
+                    done.retain_mut(|line| {
+                        let blank = line.is_empty();
+                        sounds.extend(msp::take(line));
+                        blank || !line.is_empty()
+                    });
                     // Coupler's own WHO and the login announcements don't show.
                     {
                         let mut who = session.who.lock().unwrap();
@@ -1500,6 +1552,17 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 Event::ServerEcho(on) => {
                     session.who.lock().unwrap().echo(on);
                     let _ = app.emit("mud-echo", on);
+                }
+                // On: the bank's sounds are made ready. Off at login: the
+                // character's SOUNDS is off, which only the player turns on.
+                Event::Msp(true) => {
+                    let app = app.clone();
+                    std::thread::spawn(move || app.state::<soundbank::Sounds>().warm());
+                }
+                Event::Msp(false) => {
+                    if !std::mem::replace(&mut told_sounds_off, true) {
+                        let _ = app.emit("sounds-off", msp::SOUNDS_OFF);
+                    }
                 }
                 Event::Msdp(name, value) => {
                     if session.combat.lock().unwrap().combat.msdp(&name, &value) {
@@ -1568,6 +1631,11 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
             session.count_play(app);
             session.ask_where();
         }
+        if !sounds.is_empty() {
+            let (added, set_off) = session.msp_sounds(app, &sounds);
+            hooks_changed |= added;
+            fired.extend(set_off);
+        }
         if hooks_changed {
             session.hooks_changed(app);
         }
@@ -1584,7 +1652,10 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         if !fired.is_empty() {
             let _ = app.emit("hook-fired", fired);
         }
-        let mut partial = screen.partial();
+        let mut partial = screen.partial().and_then(|mut line| {
+            msp::tidy(&mut line);
+            (!line.is_empty()).then_some(line)
+        });
         let mut prompt = partial.as_ref().map(|line| line.iter().map(|span| span.text.as_str()).collect::<String>());
         {
             let mut who = session.who.lock().unwrap();

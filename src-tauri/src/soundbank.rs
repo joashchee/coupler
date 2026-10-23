@@ -20,6 +20,7 @@
 //! `Sounds`, and unit-tested.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use neumetik_midi::soundfont::{Link, Sample, SoundFont};
@@ -157,6 +158,19 @@ pub fn by_msp(name: &str) -> Option<&'static Slot> {
     slots().iter().find(|s| s.msp.iter().any(|m| m.eq_ignore_ascii_case(name)))
 }
 
+/// What an MSP sound plays when the player has set no sound on it: the
+/// bank's sound for that name, once. Not a weather loop (BGW loops the
+/// weather while it lasts, `ambient.rs`). A blow or a creature plays its
+/// middle sound, but a scream its pain.
+pub fn msp_default(name: &str) -> Option<String> {
+    let slot = by_msp(name).filter(|s| !s.looped)?;
+    let tier = match (slot.tiered, name.eq_ignore_ascii_case("scream.wav")) {
+        (true, false) => Tier::Normal,
+        _ => Tier::Severe,
+    };
+    Some(slot.asset_path(tier))
+}
+
 /// Whether an asset path is in the bank's folder (named one of its sounds
 /// or not).
 pub fn is_bank_path(path: &str) -> bool {
@@ -176,11 +190,23 @@ pub struct Sound {
     pub path: String,
     /// A loop (for BGN and BGW), rather than a sound played once (SFX).
     pub looped: bool,
+    /// The MSP sounds that play it when the player has set none
+    /// (`msp_default`).
+    pub msp: Vec<&'static str>,
 }
 
 /// Every sound in the bank, each tier its own, in the map's order.
 pub fn list() -> Vec<Sound> {
-    slots().iter().flat_map(|s| s.tiers().iter().map(|t| Sound { path: s.asset_path(*t), looped: s.looped })).collect()
+    slots()
+        .iter()
+        .flat_map(|s| {
+            s.tiers().iter().map(|t| {
+                let path = s.asset_path(*t);
+                let msp = s.msp.iter().copied().filter(|name| msp_default(name).as_deref() == Some(path.as_str())).collect();
+                Sound { path, looped: s.looped, msp }
+            })
+        })
+        .collect()
 }
 
 /// The bank's path, in the app's Resources folder.
@@ -271,6 +297,8 @@ pub fn loop_take(font: &SoundFont, slot: &Slot) -> Result<Vec<u8>, String> {
 #[derive(Default)]
 pub struct Sounds {
     inner: Mutex<Inner>,
+    /// The game's sounds have been made ready this run (`warm`).
+    warmed: AtomicBool,
 }
 
 #[derive(Default)]
@@ -333,6 +361,24 @@ impl Sounds {
         asked.map_or_else(|| loop_take(&font, slot), Ok)
     }
 
+    /// Makes every sound the game's MSP names play ready, once a run, so
+    /// the first fireball isn't late: each made now that isn't kept from
+    /// before. Slow (the bank's one-shots are rendered), so on a thread of
+    /// its own.
+    pub fn warm(&self) {
+        if !self.available() || self.warmed.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let mut paths: Vec<String> = slots().iter().flat_map(|s| s.msp.iter()).filter_map(|name| msp_default(name)).collect();
+        paths.sort();
+        paths.dedup();
+        for path in paths {
+            if let Err(e) = self.audio(&path) {
+                log::warn!("{e}");
+            }
+        }
+    }
+
     fn bank(&self, resources: &Path) -> Result<Arc<SoundBank>, String> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(bank) = &inner.bank {
@@ -388,6 +434,22 @@ mod tests {
         assert_eq!(by_msp("dooropen.wav").map(|s| s.name), Some("Door open"));
         assert_eq!(by_msp("rain.wav").map(|s| (s.program, s.key, s.looped)), Some((1, 85, true)));
         assert_eq!(by_msp("nothing.wav"), None);
+    }
+
+    #[test]
+    fn msp_defaults_are_one_shots() {
+        assert_eq!(msp_default("fireball.wav").as_deref(), Some("bank/Fire impact"));
+        assert_eq!(msp_default("bashed1.wav").as_deref(), Some("bank/Flesh hit"));
+        assert_eq!(msp_default("scream.wav").as_deref(), Some("bank/Humanoid (pain)"));
+        assert_eq!(msp_default("rain.wav"), None, "the weather loops on BGW");
+        assert_eq!(msp_default("nothing.wav"), None);
+        // Each names a sound the bank plays.
+        for name in slots().iter().flat_map(|s| s.msp.iter()) {
+            if let Some(path) = msp_default(name) {
+                let (slot, _) = find(&path).unwrap_or_else(|| panic!("{path} isn't a sound"));
+                assert!(!slot.looped);
+            }
+        }
         assert_eq!(slot(0, 29).map(|s| (s.name, s.tiered)), Some(("Flesh hit", true)));
         assert_eq!(slot(4, 12), None);
     }

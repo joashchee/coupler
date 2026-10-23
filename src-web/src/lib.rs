@@ -39,6 +39,8 @@ mod hidden;
 mod hooks;
 #[path = "../../src-tauri/src/mapper.rs"]
 mod mapper;
+#[path = "../../src-tauri/src/msp.rs"]
+mod msp;
 #[path = "../../src-tauri/src/paint.rs"]
 mod paint;
 #[path = "../../src-tauri/src/painter.rs"]
