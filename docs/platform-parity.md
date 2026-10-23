@@ -45,6 +45,20 @@ code as the Mac's; what differs:
 | Full screen, Quit, Keyboard, backups, the update check, arranging | Left out of the gear menu | An App Store app is never quit, updated or side-loaded from inside |
 | Signing and release | Xcode's Apple Distribution and the App Store (`npx tauri ios build`, team in `tauri.conf.json` `bundle.iOS`) | Not yet: running in the background, the screen reader's check (`screen_reader.rs`) |
 
+## The iPad (begun 2026-10-23)
+
+The tablet screen (`lib/formFactor.ts` `TABLET_SCREEN`, `tabletLayout`
+in `App.tsx`, `src/tablet.css`): upright only, played by touch, today in
+the web build (the iOS app is iPhone only). What differs:
+
+| Feature | iPad | Note |
+|---|---|---|
+| The screen | Two stages (`lib/stage.ts` `tabletFit`): Workshop's desk above, in whole cells of the player's text size (`lib/tablet.ts`, 8 by 16 to 16 by 32 points); the lower part 96 cells by 23 rows, scaled to the width | The ways to play's chooser is left out: the desk is Workshop's |
+| The keyboard | Coupler's own (`components/TabletKeyboard.tsx`, `lib/softKeys.ts`): every text field gets `inputmode="none"` (a MutationObserver), so the system's never shows; keys are synthetic keydowns, then the edit done by hand | A hardware keyboard still types as usual |
+| Zoom | `maximum-scale=1, user-scalable=no` set at launch, Safari's `gesturestart` and two-finger `touchmove` stopped, `touch-action: pan-x pan-y` | iOS ignores the viewport's `user-scalable` for a pinch, hence the gesture events |
+| Orientation | `screen.orientation.lock("portrait")` where a browser allows it (none on iOS); otherwise a notice covers the screen held sideways | An iPad app would set `UISupportedInterfaceOrientations~ipad` |
+| Full screen | Left out | |
+
 The connection itself (`std::net::TcpStream`, `flate2`) is the same on
 every platform. Planned, add a row when each lands: saved passwords
 (macOS Keychain; Windows Credential Manager; Linux Secret Service via

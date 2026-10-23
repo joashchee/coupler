@@ -51,10 +51,11 @@ html[data-form="phone"] .gear-menu .menu-item { min-height: 48px; padding-top: 1
 :root[data-theme="ansiapps"][data-form="phone"] .terminal { width: 384px; padding: 0 8px; }
 html[data-form="phone"] .terminal::-webkit-scrollbar { display: none; }
 
-/* The touch pad: eight buttons of six cells by three rows. */
+/* The keys (components/PhoneKeys.tsx): the touch pad's eight buttons of
+   six cells by three rows, or the section's own, as many cells as each
+   says; the label's left padding whole cells (--left). */
 .touch-pad { display: flex; width: 384px; height: 48px; }
-.touch-pad button { width: 48px; height: 48px; min-height: 48px; margin: 0; padding: 16px 0 0 16px; box-sizing: border-box; border-radius: 0; text-align: left; }
-.touch-pad button[data-testid="pad-look"] { padding-left: 8px; }
+.touch-pad button { width: 48px; height: 48px; min-height: 48px; margin: 0; padding: 16px 0 0 var(--left, 16px); box-sizing: border-box; border-radius: 0; text-align: left; white-space: pre; overflow: hidden; flex: none; }
 :root[data-theme="ansiapps"] .touch-pad button.exit { background: var(--dos-yellow); color: var(--dos-black); }
 :root:not([data-theme="ansiapps"]) .touch-pad { gap: 0; }
 :root:not([data-theme="ansiapps"]) .touch-pad button { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0; text-align: center; }
@@ -80,3 +81,43 @@ html[data-form="phone"] .input-row input { height: 48px; font-size: 16px; box-si
 :root[data-theme="ansiapps"][data-form="phone"] .dialog-box { padding: 32px 16px; }
 html[data-form="phone"] .dialog-body { overflow-x: auto; }
 html[data-form="phone"] .dialog-actions button { min-height: 48px; }
+
+/* The sections bar (components/PhoneBar.tsx): ◄, the section and the
+   connection, ►, ▼; each button six cells by three rows. */
+.phone-bar { display: flex; width: 336px; height: 48px; }
+.phone-bar .phone-turn { width: 48px; height: 48px; min-height: 48px; margin: 0; padding: 16px 0 0 16px; box-sizing: border-box; border-radius: 0; text-align: left; flex: none; }
+.phone-title > span { flex: none; white-space: pre; }
+.phone-online { color: var(--muted); }
+.phone-online.on { color: var(--good); }
+:root[data-theme="ansiapps"] .phone-online { color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .phone-online.on { color: var(--dos-black); }
+.phone-title { display: flex; width: 192px; height: 48px; margin: 0; padding: 16px 8px 0; box-sizing: border-box; font-size: inherit; line-height: 16px; font-weight: normal; justify-content: space-between; white-space: pre; }
+:root:not([data-theme="ansiapps"]) .phone-bar .phone-turn { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0; text-align: center; }
+
+/* A section slides in from the side it was turned towards: from the
+   right for the next, the left for the one before. Not with Reduce
+   motion on. */
+@keyframes phone-in-next { from { transform: translateX(384px); } to { transform: none; } }
+@keyframes phone-in-back { from { transform: translateX(-384px); } to { transform: none; } }
+html[data-form="phone"] .desk { overflow: hidden; }
+html[data-form="phone"] .desk[data-turned="next"] .movable.phone-middle { animation: phone-in-next 0.2s ease-out; }
+html[data-form="phone"] .desk[data-turned="back"] .movable.phone-middle { animation: phone-in-back 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-form="phone"] .desk .movable.phone-middle { animation: none; }
+}
+
+/* The sheet of options (components/PhoneSheet.tsx): dropped from under
+   the bar, each option a full-width row three rows tall. */
+@keyframes phone-sheet-down { from { transform: translateY(-100%); } to { transform: none; } }
+:root[data-form="phone"] .dialog-overlay.open .dialog-box.phone-sheet { animation: phone-sheet-down 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-form="phone"] .dialog-overlay.open .dialog-box.phone-sheet { animation: none; }
+}
+.phone-sheet h3 { margin: 16px 0 0; font-size: inherit; line-height: 16px; }
+.phone-sheet .phone-sheet-state { margin: 0; line-height: 16px; }
+.phone-sheet-list { list-style: none; margin: 0; padding: 0; }
+.phone-sheet-list button { display: block; width: 100%; min-height: 48px; margin: 0; padding: 16px 8px 0; box-sizing: border-box; text-align: left; border-radius: 0; }
+/* Over the theme's own button padding: the label on its cell. */
+:root[data-theme="ansiapps"] .touch-pad button { padding: 16px 0 0 var(--left, 16px); }
+:root[data-theme="ansiapps"] .phone-bar .phone-turn { padding: 16px 0 0 16px; }
+:root[data-theme="ansiapps"] .phone-sheet-list button { padding: 16px 8px 0; }

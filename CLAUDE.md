@@ -160,11 +160,38 @@ and its order is in the roadmap's phase 2.
   rows as show above the keyboard (`phoneFit`), upright only, iPhone
   only. One component tree: `phoneLayout` in `App.tsx` places the parts
   `PHONE_PARTS` lists, `src/phone.css` (under `html[data-form="phone"]`)
-  sizes them, anything touched at least 3 rows (48 px). The touch pad is
-  `components/TouchPad.tsx`. Anything new says whether the phone has it.
+  sizes them, anything touched at least 3 rows (48 px). Its screen is
+  a carousel of sections (`lib/phoneSections.ts`: Game, Map, Here,
+  Heard), one at a time in the middle (`PHONE_SECTION_PARTS`): a swipe
+  in from the right or left edge turns it, round past the last
+  (`lib/swipe.ts`), and the bar's ◄ ► do the same
+  (`components/PhoneBar.tsx`; VoiceOver takes the swipes). A swipe down
+  from the top, or ▼, pulls down the sheet of options, the general ones
+  then the section's own (`components/PhoneSheet.tsx`, `sheetGeneral`,
+  `sheetOwn`). The row above the command line is the section's keys
+  (`phoneKeys` in `App.tsx`, `components/PhoneKeys.tsx`; the touch pad,
+  `components/TouchPad.tsx`, for Game and Map). A tablet (an iPad)
+  can try the phone screen, phone-shaped, from the gear menu
+  (`TABLET`, `PHONE_EMULATED` in `lib/formFactor.ts`), as the dev build
+  can on the Mac. Anything new says whether the phone has it.
   The iOS project is `src-tauri/gen/apple` (`project.yml`; run
   `xcodegen generate` there after changing it). `coupler.phone` = `on`
-  shows it on the Mac in a dev build.
+  shows it on a tablet or the dev build on the Mac.
+- **The iPad** (begun 2026-10-23, `lib/formFactor.ts`
+  `TABLET_SCREEN`): every tablet, upright only, today in the web build.
+  Two stages (`lib/stage.ts` `tabletFit`): above, Workshop's desk
+  (`tabletLayout` in `App.tsx`, kept under the `tablet:` layout scope),
+  in whole cells of the player's text size (`lib/tablet.ts`,
+  `coupler.tabletText`, Cmd+Plus and Cmd+Minus); below,
+  `.tablet-lower`, 96 cells by 23 rows whatever the tablet: the command
+  line, then Coupler's keyboard while a text field has the focus
+  (`components/TabletKeyboard.tsx`, `lib/softKeys.ts`: synthetic
+  keydowns, the edit done after) or the touch controls while none does
+  (`components/TabletControls.tsx`, `tabletControls` in `App.tsx`),
+  then the messages. Every field gets `inputmode="none"`, the page
+  never zooms, sideways a notice covers it (`src/tablet.css`). Dialogs
+  stay on the desk. `coupler.tablet` = `on` tries it in the dev build
+  on the Mac. Anything new says whether the tablet has it.
 - **The ANSIapps grid is the rule**: every character sits in a cell of
   the 8 by 16 grid. Spacing in multiples of 8px across and 16px down,
   16px lines, no borders on anything holding text (frames are `::before`
@@ -833,8 +860,9 @@ and its order is in the roadmap's phase 2.
   `src/components/Movable.tsx`: **everything on the screen goes in a
   `Movable`** on the desk (`.desk`, the whole stage). In Workshop, with
   gear → Move and resize everything (`coupler.arrange`, off by default), its top left corner
-  moves it and its bottom right corner resizes it (not the game
-  output: 80 wide, and 25 tall but in Terminal); the corners are laid over it, never drawn,
+  moves it and its bottom right corner resizes it (the game output
+  too, telling the game its size by NAWS; elsewhere it's 80 wide, and
+  25 tall but in Terminal); the corners are laid over it, never drawn,
   and take no room. Its place, size and order are kept
   (`coupler.layout`). The default layout is `defaultLayout` in
   `App.tsx`, per theme, in stage pixels; anything new on the screen

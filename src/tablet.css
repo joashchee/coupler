@@ -1,0 +1,120 @@
+/* The tablet (src/lib/formFactor.ts, TABLET_SCREEN): Coupler on an iPad,
+   upright, played by touch. Only under html[data-form="tablet"] (and the
+   classes only it uses), so the desktop and the phone are untouched.
+   Two stages, one over the other (lib/stage.ts, tabletFit): the upper is
+   Workshop's desk, .app, in whole cells of the player's text size; the
+   lower, .tablet-lower, is 96 cells by 23 rows whatever the tablet: the
+   command line, the keyboard or the controls, the messages. Anything
+   touched in the lower part is three rows tall: 48 px. */
+
+/* The frame keeps clear of the rounded corners and the home indicator
+   (index.html's viewport-fit=cover). */
+html[data-form="tablet"] .stage-frame {
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+html[data-form="tablet"] .stage-frame,
+html[data-form="tablet"] body { background: var(--bg); }
+
+/* Touch: no zooming (lib/formFactor.ts stops the pinch), no long-press
+   callout or text selection on the controls (the game output stays
+   selectable, to copy from). */
+html[data-form="tablet"],
+html[data-form="tablet"] body { -webkit-text-size-adjust: 100%; touch-action: pan-x pan-y; overscroll-behavior: none; }
+html[data-form="tablet"] button { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+@media (hover: none) {
+  :root[data-theme="ansiapps"][data-form="tablet"] button:hover { background: var(--dos-lightgray); }
+  :root[data-theme="ansiapps"][data-form="tablet"] button.primary:hover { background: var(--dos-yellow); }
+}
+
+/* Coupler's name at the top of the menu bar's strip, however many rows it has. */
+html[data-form="tablet"] .movable.menu-bar[data-panel="menu"] { align-items: flex-start; }
+html[data-form="tablet"] .movable.menu-bar[data-panel="menu"] > h1 { height: auto; }
+
+/* Upright only: held sideways, this covers everything. */
+.tablet-sideways { position: fixed; inset: 0; z-index: 2000; background: var(--bg); color: var(--text); padding: 32px 16px; box-sizing: border-box; }
+.tablet-sideways p { margin: 0; line-height: 16px; }
+
+/* Arranging by finger: the corners are two cells by two rows. */
+html[data-form="tablet"] .movable .movable-handle,
+:root[data-theme="ansiapps"][data-form="tablet"] .movable .movable-handle,
+:root[data-theme="ansiapps"][data-form="tablet"] .movable .movable-handle:hover { width: 16px; height: 32px; }
+
+/* The gear menu fits the desk's width and scrolls in what's left of its height. */
+html[data-form="tablet"] .client .gear-menu {
+  max-width: calc(var(--tablet-columns, 96) * 8px - 16px);
+  max-height: calc(var(--tablet-rows, 40) * 16px - 32px);
+  overflow-y: auto;
+}
+html[data-form="tablet"] .client .gear-menu > * { flex-shrink: 0; }
+
+/* Dialogs: on the desk (the upper stage), never over the keyboard, from
+   column 2 and row 2, no wider or taller than it, their body scrolling. */
+html[data-form="tablet"] .client .dialog-box,
+html[data-form="tablet"] .client .dialog-box.dialog-wide,
+html[data-form="tablet"] .client .dialog-box.dialog-hooks {
+  max-width: calc(var(--tablet-columns, 96) * 8px - 16px);
+  max-height: calc(var(--tablet-rows, 40) * 16px - 32px);
+  box-sizing: border-box;
+}
+:root[data-theme="ansiapps"][data-form="tablet"] .dialog-overlay,
+:root[data-theme="ansiapps"][data-form="tablet"] .dialog-overlay:has(.dialog-wide),
+:root[data-theme="ansiapps"][data-form="tablet"] .dialog-overlay:has(.dialog-hooks) { padding: 16px 0 0 8px; }
+html[data-form="tablet"] .dialog-body { overflow-x: auto; }
+
+/* The lower stage, scaled to the frame's width (App.tsx sets the scale). */
+.tablet-lower { position: absolute; transform-origin: 0 0; overflow: hidden; background: var(--bg); }
+.tablet-input { position: absolute; left: 0; top: 48px; width: 768px; height: 288px; }
+
+/* The command line, three rows tall, its text on the middle one. */
+.tablet-lower .input-row { height: 48px; }
+.tablet-lower .input-row input,
+:root[data-theme="ansiapps"] .tablet-lower .input-row input { width: 100%; height: 48px; font-size: 16px; line-height: 16px; box-sizing: border-box; padding: 16px 8px; }
+
+/* The keys (components/TabletKeyboard.tsx, TabletControls.tsx): three
+   rows tall, as many cells as each says, the label on the middle row
+   and left by whole cells (--left). Each is drawn a pixel in from its
+   edges, so the keys stand apart with nothing drawn round the text. */
+.tablet-key-row { display: flex; height: 48px; }
+.tablet-controls { position: relative; width: 768px; height: 288px; }
+.tablet-controls .tablet-key { position: absolute; }
+.tablet-lower .tablet-key,
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key {
+  flex: none;
+  height: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 16px 0 0 var(--left, 0px);
+  box-sizing: border-box;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: left;
+  line-height: 16px;
+  white-space: pre;
+  overflow: hidden;
+  --key: var(--dos-lightgray);
+  background: linear-gradient(var(--key), var(--key)) 1px 1px / calc(100% - 2px) calc(100% - 2px) no-repeat;
+  color: var(--dos-black);
+}
+/* Named keys (Shift, Return, Esc…) white on dark gray; a held modifier
+   and an exit the map knows black on yellow. */
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key.named { --key: var(--dos-darkgray); color: var(--dos-white); }
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key.held,
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key.exit { --key: var(--dos-yellow); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key:active { --key: var(--dos-white); color: var(--dos-black); }
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key:disabled { --key: var(--dos-lightgray); color: var(--dos-darkgray); }
+:root[data-theme="ansiapps"] .tablet-lower .tablet-key:hover { background: linear-gradient(var(--key), var(--key)) 1px 1px / calc(100% - 2px) calc(100% - 2px) no-repeat; }
+
+/* The modern theme: the panel's keys with a line round them, centered labels. */
+:root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key {
+  padding: 0;
+  text-align: center;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+:root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key.named { background: var(--panel-2); }
+:root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key.held,
+:root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key.exit { background: var(--accent); color: #000000; }
+:root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key:disabled { opacity: 0.5; }

@@ -11,7 +11,7 @@
  * same size throughout, and screen readers aren't given it twice.
  */
 import * as keys from "../lib/keys";
-import { memo, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { GameColors } from "../lib/display";
 import { spanColors, type Line } from "../lib/mud";
 import { cutLine, playerPrompt } from "../lib/output";
@@ -20,7 +20,7 @@ export { playerPrompt };
 
 export interface TermLine {
   id: number;
-  /** "sent": a command the user typed, echoed locally. "note": Coupler's own message. */
+  /** "sent": a command the user typed, kept for the screen reader's feed but never written (`hiddenLine`). "note": Coupler's own message. */
   kind?: "sent" | "note";
   /** A line of talk (src-tauri/src/speech.rs): it's in the journal or the log. */
   talk?: boolean;
@@ -52,7 +52,7 @@ export const lineText = (line: Line) => line.map((span) => span.text).join("");
 
 /** Whether a line is left out of the game output. */
 export const hiddenLine = (l: TermLine, hide: Hidden) =>
-  (hide.talk && spokenAside(l)) || (hide.echo && !!l.echo) || (hide.exits && !!l.exits) || (hide.prompt && !!l.prompt && playerPrompt(lineText(l.line)));
+  l.kind === "sent" || (hide.talk && spokenAside(l)) || (hide.echo && !!l.echo) || (hide.exits && !!l.exits) || (hide.prompt && !!l.prompt && playerPrompt(lineText(l.line)));
 
 /** A line as shown: without the prompt the game wrote on after, when the prompt's left out. */
 export const shownLine = (l: TermLine, hide: Hidden): Line => (hide.prompt && l.promptCut ? cutLine(l.line, l.promptCut) : l.line);
@@ -111,6 +111,8 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
   const ref = useRef<HTMLDivElement>(null);
   const measure = useRef<HTMLSpanElement>(null);
   const atBottom = useRef(true);
+  // The rows it shows: `rows`, or what Workshop resized it to.
+  const [fits, setFits] = useState(rows);
 
   // Follow new output only while the user is at the bottom and not reviewing.
   useLayoutEffect(() => {
@@ -149,6 +151,7 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
       const key = `${columns}x${rows}`;
       if (key !== last) {
         last = key;
+        setFits(rows);
         onSize(columns, rows);
       }
     };
@@ -158,9 +161,9 @@ export function Terminal({ lines, partial, empty, onSize, rows = 25, hide = NOTH
     return () => observer.disconnect();
   }, [onSize]);
 
-  const shown = hide.talk || hide.prompt || hide.echo || hide.exits ? lines.filter((l) => !hiddenLine(l, hide)) : lines;
+  const shown = lines.filter((l) => !hiddenLine(l, hide));
   const unfinished = partial && hide.prompt && playerPrompt(lineText(partial)) ? null : partial;
-  const live = Math.max(1, Math.min(LIVE, Math.floor(rows / 3)));
+  const live = Math.max(1, Math.min(LIVE, Math.floor(fits / 3)));
 
   return (
     <div className="terminal-wrap">

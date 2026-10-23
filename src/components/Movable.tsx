@@ -56,7 +56,7 @@ interface MovableProps {
    * is the size of what's in it, until the user resizes it.
    */
   usual: { at: Point; size?: Partial<Size> };
-  /** False for the one thing that can't be resized: the game output, always 80 by 25. */
+  /** False for what can't be resized: the game output but in Workshop (the phone's, Terminal's, Immersive's). */
   resizable?: boolean;
   /** The smallest it can be made. */
   least?: Size;
@@ -264,6 +264,8 @@ export function Movable({ id: own, label, usual, resizable = true, least = LEAST
       ref={box}
       className={`movable${className ? ` ${className}` : ""}`}
       data-panel={own}
+      // Held to a size: what's in it fills it (App.css, the game output).
+      data-sized={wantedSize ? "" : undefined}
       style={{
         left: at.x,
         top: at.y,

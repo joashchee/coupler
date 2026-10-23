@@ -51,7 +51,8 @@ const MARK = "grid-off";
 export function checkGrid(stage: HTMLElement): GridReport {
   stage.querySelectorAll(`.${MARK}`).forEach((el) => el.classList.remove(MARK));
   const frame = stage.getBoundingClientRect();
-  const scale = frame.width / STAGE_WIDTH;
+  // The stage's own width, not the desktop's: the phone's and the tablet's are their own.
+  const scale = frame.width / (stage.offsetWidth || STAGE_WIDTH);
   const px = (v: number, origin: number) => (v - origin) / scale;
   const offBy = (v: number, cell: number) => {
     const r = ((v % cell) + cell) % cell;

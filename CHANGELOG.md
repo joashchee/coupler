@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- **The phone screen in sections** (2026-10-23): Game, Map, Here and
+  Heard, one at a time, as a carousel: swipe in from the right edge for
+  the next, from the left for the one before (or the bar's ◄ and ►),
+  and the screen says which. A swipe down from the top (or ▼) brings
+  the options, the general ones and the section's own; a swipe up puts
+  them away. The keys above the command line are the section's: the
+  touch pad in Game, the ways with Where and Stop in Map, Look, Score,
+  Inventory, Equipment, Time, health and who's online in Here, the
+  Journal, the Log, the Mixer and Quiet in Heard.
+- **The tablet screen** (2026-10-23): on an iPad, held upright, its own
+  screen. Above, Workshop's desk to arrange as you like, its text size
+  yours (gear → Larger Text and Smaller Text, or Cmd+Plus and
+  Cmd+Minus: bigger text, fewer columns and rows). Below, one fixed
+  part: the command line, the messages, and between them Coupler's own
+  keyboard while you type (function keys, Esc, Tab, Ctrl, Shift,
+  Option, Cmd and the arrows), or touch controls while you don't: the
+  ways and Look, what's typed most, Say… and Tell… begun for the
+  keyboard to finish, the Journal, the Log and the settings. The
+  system's keyboard never shows, the page never zooms, and held
+  sideways it asks to be turned upright.
+- **Try the phone screen on an iPad** (2026-10-23): gear → Phone
+  Screen, for Testing shows it phone-shaped, upright whichever way the
+  iPad is held; the options' Leave the Phone Screen goes back.
+
+- **Resize the game output in Workshop** (2026-10-23): with Move and
+  resize everything on, its bottom right corner resizes it like any
+  panel (20 columns by 5 rows at least), and the game is told its new
+  size. Home gives it back its 80 by 25.
+- **What you type isn't written in the game output** (2026-10-23): the
+  command line keeps it in its history, and gear → Speech… can still
+  have the screen reader say it.
+- **The phone screen in Safari on the iPhone** (2026-10-23): with
+  Request Desktop Website on, Safari passes for a Mac, and the web build
+  showed the desktop's wide screen. An iPhone is now told by its touch
+  screen and size too, as in Chrome and Brave.
+
 ## 0.33.1 (2026-10-23)
 
 - **No more blue screen on the iPhone** (2026-10-23): the map panel was

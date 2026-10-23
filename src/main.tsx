@@ -6,6 +6,7 @@ import { WebWelcome } from "./web/WebWelcome";
 import "./index.css";
 import "./ansiapps-theme.css";
 import "./phone.css";
+import "./tablet.css";
 import { applyFormFactor } from "./lib/formFactor";
 
 applyFormFactor();

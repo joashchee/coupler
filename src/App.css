@@ -616,9 +616,9 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .play-mode.combat { color: var(--warn); font-weight: 600; }
 
 /* The game output: CoffeeMUD's own colors on black, whatever the theme
-   (the ANSIapps theme never recolors it). Always 80 characters wide and
-   25 tall, the classic terminal, with its scroll bar beside the 80 and
-   always there. The sizes have a pixel to spare, so a rounded-down
+   (the ANSIapps theme never recolors it). 80 characters wide and 25
+   tall, the classic terminal, unless resized in Workshop, with its
+   scroll bar beside the 80 and always there. The sizes have a pixel to spare, so a rounded-down
    measurement still counts 80 and 25 for NAWS. */
 .terminal {
   width: calc(80ch + 35px);
@@ -653,6 +653,10 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .terminal-held { scroll-padding-bottom: calc(var(--live-rows) * 1.3em); }
 .terminal-spacer { height: calc(var(--live-rows) * 1.3em); }
 .terminal-live-rule { color: #ffff55; white-space: pre; overflow: hidden; }
+/* Resized in Workshop: it fills its box, and NAWS tells the game its new size. */
+.movable[data-sized] > .terminal-wrap { width: 100%; height: 100%; }
+.movable[data-sized] > .terminal-wrap > .terminal { width: 100%; box-sizing: border-box; }
+.movable[data-sized] > .terminal-wrap > .terminal:not(.terminal-live) { height: 100%; }
 
 /* The command line: a field as wide as its place on the desk. */
 .input-row { display: flex; }

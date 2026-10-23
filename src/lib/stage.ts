@@ -42,13 +42,63 @@ export interface PhoneFit {
   rows: number;
 }
 
+/** The phone screen tried on a tablet (lib/formFactor.ts, `PHONE_EMULATED`): this many rows tall, a phone's shape upright (19.5 by 9). */
+const PHONE_EMULATED_ROWS = 52;
+
 /**
  * The phone stage's scale and rows. The scale comes from the full
  * height (the keyboard showing never shrinks everything); the rows from
- * the height still showing, `visible`.
+ * the height still showing, `visible`. `emulated`, on a tablet, it's
+ * scaled to a phone's height, so it keeps a phone's shape.
  */
-export function phoneFit(width: number, height: number, visible: number): PhoneFit {
-  const scale = Math.min(width / PHONE_WIDTH, height / (PHONE_FIT_ROWS * CELL_HEIGHT));
+export function phoneFit(width: number, height: number, visible: number, emulated = false): PhoneFit {
+  const scale = emulated
+    ? Math.min(width / PHONE_WIDTH, height / (PHONE_EMULATED_ROWS * CELL_HEIGHT))
+    : Math.min(width / PHONE_WIDTH, height / (PHONE_FIT_ROWS * CELL_HEIGHT));
   const rows = Math.max(PHONE_LEAST_ROWS, Math.floor(visible / scale / CELL_HEIGHT));
   return { scale: Math.abs(scale - 1) < 0.005 ? 1 : scale, rows };
+}
+
+/**
+ * The tablet's screen (lib/formFactor.ts, `TABLET_SCREEN`), upright: two
+ * stages, one over the other. The lower is one fixed size whatever the
+ * tablet, 96 cells by 23 rows (the command line's 3, the keyboard's 18,
+ * the messages' 2), scaled to the screen's width; on a 768-point iPad
+ * that's a little over a third of the height. The upper is Workshop's
+ * desk in what's left, its cells the player's text size
+ * (`TABLET_TEXT_SIZES`): bigger text, fewer columns and rows.
+ */
+export const TABLET_LOWER_WIDTH = 768;
+export const TABLET_LOWER_ROWS = 23;
+export const TABLET_LOWER_HEIGHT = TABLET_LOWER_ROWS * CELL_HEIGHT;
+/** The fewest columns and rows the upper desk is made for, whatever the text size. */
+const TABLET_LEAST_COLUMNS = 40;
+const TABLET_LEAST_ROWS = 16;
+/** An iPad upright, in points: the tablet screen tried on a computer is this, fitted to the window. */
+export const TABLET_EMULATED_SIZE = { width: 768, height: 1024 };
+
+/** The text sizes the tablet's upper desk offers: how many times the theme's 8 by 16 cell each is. */
+export const TABLET_TEXT_SIZES = [1, 1.25, 1.5, 1.75, 2] as const;
+export type TabletTextSize = (typeof TABLET_TEXT_SIZES)[number];
+
+export interface TabletFit {
+  /** The upper desk's text size, its whole cells across and down, and where it starts across (centered on what's left over). */
+  text: TabletTextSize;
+  columns: number;
+  rows: number;
+  left: number;
+  /** The lower stage's scale and its top, in the frame's points. */
+  lowerScale: number;
+  lowerTop: number;
+  /** Held sideways: the tablet screen is upright only. */
+  sideways: boolean;
+}
+
+/** The tablet's two stages in a frame `width` by `height` points. */
+export function tabletFit(width: number, height: number, text: TabletTextSize): TabletFit {
+  const lowerScale = width / TABLET_LOWER_WIDTH;
+  const lowerTop = Math.max(0, height - TABLET_LOWER_HEIGHT * lowerScale);
+  const columns = Math.max(TABLET_LEAST_COLUMNS, Math.floor(width / (CELL_WIDTH * text)));
+  const rows = Math.max(TABLET_LEAST_ROWS, Math.floor(lowerTop / (CELL_HEIGHT * text)));
+  return { text, columns, rows, left: Math.max(0, (width - columns * CELL_WIDTH * text) / 2), lowerScale, lowerTop, sideways: width > height };
 }

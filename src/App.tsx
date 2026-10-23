@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ActivityStatus } from "./components/ActivityStatus";
 import { AppTesting } from "./components/AppTesting";
 import { Dialog } from "./components/Dialog";
@@ -57,9 +57,18 @@ import { checkGrid, installRowSnap } from "./lib/grid";
 import { loadDisplay, saveDisplay, type Display, type TextSize } from "./lib/display";
 import { loadSpoken, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
 import { forgetLayout, layoutText } from "./lib/layout";
-import { CELL_HEIGHT, PHONE_WIDTH, phoneFit, stageScale, type PhoneFit } from "./lib/stage";
-import { PHONE } from "./lib/formFactor";
+import { CELL_HEIGHT, CELL_WIDTH, PHONE_WIDTH, phoneFit, stageScale, TABLET_EMULATED_SIZE, TABLET_LOWER_HEIGHT, TABLET_LOWER_WIDTH, tabletFit, type PhoneFit, type TabletFit } from "./lib/stage";
+import { PHONE, PHONE_EMULATED, PHONE_TRYABLE, setPhoneScreen, setTabletScreen, TABLET_EMULATED, TABLET_SCREEN, TABLET_TRYABLE } from "./lib/formFactor";
+import { loadTabletText, stepTabletText, storeTabletText, tabletTextInWords } from "./lib/tablet";
+import { isField, type Field } from "./lib/softKeys";
+import { TabletKeyboard } from "./components/TabletKeyboard";
+import { TabletControls, type TabletControl } from "./components/TabletControls";
 import { TouchPad } from "./components/TouchPad";
+import { PhoneBar } from "./components/PhoneBar";
+import { PhoneKeys, type PhoneKey } from "./components/PhoneKeys";
+import { PhoneSheet, type SheetItem } from "./components/PhoneSheet";
+import { sectionInWords, sectionName, storedSection, storeSection, turnSection, type PhoneSection } from "./lib/phoneSections";
+import { useEdgeSwipes } from "./lib/swipe";
 import { applyTheme, loadTheme, type Theme } from "./lib/theme";
 import { loadLayers, loadShown, loadUx, storeLayers, storeShown, storeUx, UXES, type Layers, type Ux } from "./lib/ux";
 import * as keys from "./lib/keys";
@@ -216,12 +225,16 @@ function phoneLayout(rows: number): Record<string, Usual> {
   const foot = 2 * 16;
   const output = rows * 16 - bar - 2 * bar - foot - bar;
   const pad = bar + output;
+  // The section's part fills the middle (lib/phoneSections.ts): one at a time.
+  const middle = { at: { x: 0, y: bar }, size: { width: PHONE_WIDTH, height: output } };
   return {
-    state: { at: { x: 0, y: 0 }, size: { width: 216, height: bar } },
-    hangup: { at: { x: 224, y: 0 }, size: { width: 104, height: bar } },
+    phonebar: { at: { x: 0, y: 0 }, size: { width: 336, height: bar } },
     gear: { at: { x: 336, y: 0 }, size: { width: 48, height: bar } },
     terminal: { at: { x: 0, y: bar } },
-    ports: { at: { x: 0, y: bar }, size: { width: PHONE_WIDTH, height: output } },
+    ports: middle,
+    map: middle,
+    scene: middle,
+    heard: middle,
     pad: { at: { x: 0, y: pad }, size: { width: PHONE_WIDTH, height: bar } },
     command: { at: { x: 0, y: pad + bar }, size: { width: PHONE_WIDTH, height: bar } },
     messages: { at: { x: 0, y: pad + 2 * bar }, size: { width: PHONE_WIDTH, height: foot } },
@@ -232,10 +245,98 @@ function phoneTerminalRows(theme: Theme, rows: number): number {
   const output = rows * 16 - 4 * 48 - 2 * 16;
   return Math.max(4, Math.floor(output / (theme === "ansiapps" ? 16 : 14 * 1.3)));
 }
-/** What the phone shows, whichever the way to play. */
-const PHONE_PARTS = new Set(["state", "hangup", "gear", "terminal", "ports", "pad", "command", "messages"]);
+/** What the phone shows, whichever the way to play: the bar, the gear, the keys, the command line and the messages, and the section's own part. */
+const PHONE_PARTS = new Set(["phonebar", "gear", "pad", "command", "messages"]);
+const PHONE_SECTION_PARTS: Record<PhoneSection, string[]> = {
+  game: ["terminal", "ports"],
+  map: ["map"],
+  here: ["scene"],
+  heard: ["heard"],
+};
+/**
+ * The tablet's upper desk (lib/stage.ts, `tabletFit`): Workshop's
+ * layout in `columns` by `rows` of the player's text size, upright. The
+ * menu bar's things showing (`onBar`) in a row after Coupler's name,
+ * wrapping to more rows when they don't fit, the gear at the right end
+ * of the first; then, from
+ * the top: You (or, offline, the ways to play), the game output the
+ * desk's width, and the map under it; the Journal, Log and Hooks
+ * buttons on the last row. Here and the picture take the map's place,
+ * Heard You's, as on the desktop. The command line and the messages are
+ * the lower part's (`TABLET_LOWER`), the hint and the screen readout
+ * nowhere (`TABLET_HIDDEN`): the keyboard has the keys the hint names,
+ * and a finger has no pointer to read.
+ */
+function tabletLayout(theme: Theme, columns: number, rows: number, showing: Showing, onBar: (id: string) => boolean): Record<string, Usual> {
+  const ansi = theme === "ansiapps";
+  const width = columns * CELL_WIDTH;
+  const height = rows * CELL_HEIGHT;
+  const edge = ansi ? 0 : 8;
+  const line = ansi ? 16 : 40;
+  const snap = (v: number) => (ansi ? Math.floor(v / CELL_HEIGHT) * CELL_HEIGHT : Math.round(v));
+  // Each thing's room on the bar, its gap after it included.
+  const chips: [string, number][] = ansi
+    ? [["mode", 120], ["state", 240], ["hangup", 80], ["where", 112], ["mapToggle", 48], ["mixer", 64], ["bgm", 48], ["nowPlaying", 160]]
+    : [["mode", 124], ["state", 238], ["hangup", 83], ["where", 103], ["mapToggle", 56], ["mixer", 75], ["bgm", 56], ["nowPlaying", 160]];
+  const gear = ansi ? 40 : 41;
+  const layout: Record<string, Usual> = { gear: { at: { x: width - gear - edge, y: edge + (ansi ? 0 : 5) } } };
+  // Every row of the bar starts after Coupler's name.
+  const first = ansi ? 112 : 128;
+  let x = first;
+  let row = 0;
+  for (const [id, room] of chips) {
+    if (!onBar(id)) continue;
+    if (x + room > width - gear - edge && x > first) {
+      x = first;
+      row += 1;
+    }
+    const y = edge + row * line + (ansi ? 0 : id === "state" ? 9 : 5);
+    layout[id] = { at: { x, y }, size: id === "state" ? { width: room - 8, height: ansi ? 16 : undefined } : undefined };
+    x += room;
+  }
+  const top = edge + (row + 1) * line + (ansi ? 0 : 8);
+  layout.menu = { at: { x: edge, y: edge }, size: { width: width - 2 * edge, height: (row + 1) * line } };
+  const foot = ansi ? 16 : 36;
+  const bottom = height - foot - edge;
+  const body = bottom - top;
+  const inner = width - 2 * edge;
+  const gap = ansi ? 0 : 8;
+  const vitals = ansi ? 64 : 66;
+  const part = snap(body * 0.4);
+  const map = showing.map ? part : 0;
+  const ports = showing.output ? (ansi ? 192 : 160) : body;
+  const terminalTop = showing.connected ? top + vitals + gap : top + ports + (ansi ? 16 : gap);
+  const terminalBottom = bottom - (map ? map + gap : 0);
+  const lower = { at: { x: edge, y: bottom - part }, size: { width: inner, height: part } };
+  return {
+    ...layout,
+    vitals: { at: { x: edge, y: top }, size: { width: inner, height: vitals } },
+    ports: { at: { x: edge, y: top }, size: { width: inner, height: ports } },
+    heard: { at: { x: edge, y: top }, size: { width: inner, height: ansi ? 192 : 128 } },
+    terminal: { at: { x: edge, y: terminalTop }, size: { width: inner, height: Math.max(ansi ? 96 : 100, terminalBottom - terminalTop) } },
+    map: lower,
+    scene: lower,
+    picture: { at: lower.at, size: { width: inner, height: Math.min(part, 256) } },
+    journal: { at: { x: edge, y: bottom + (ansi ? 0 : 4) } },
+    log: { at: { x: edge + (ansi ? 136 : 148), y: bottom + (ansi ? 0 : 4) } },
+    hooks: { at: { x: edge + (ansi ? 272 : 296), y: bottom + (ansi ? 0 : 4) } },
+  };
+}
+/**
+ * The tablet's lower part (lib/stage.ts), 96 cells by 23 rows whatever
+ * the tablet: the command line with the keyboard's key at its right
+ * end, the keyboard or the controls under it, the messages at the foot.
+ */
+const TABLET_LOWER: Record<string, Usual> = {
+  command: { at: { x: 0, y: 0 }, size: { width: TABLET_LOWER_WIDTH - 48, height: 48 } },
+  keyboardKey: { at: { x: TABLET_LOWER_WIDTH - 48, y: 0 }, size: { width: 48, height: 48 } },
+  messages: { at: { x: 0, y: TABLET_LOWER_HEIGHT - 32 }, size: { width: TABLET_LOWER_WIDTH, height: 32 } },
+};
+/** What the tablet never shows on its desk. */
+const TABLET_HIDDEN = new Set(["hint", "readout"]);
+
 /** What only the phone has (no desktop layout places it): never in Workshop's "everything". */
-const PHONE_ONLY = new Set(["pad"]);
+const PHONE_ONLY = new Set(["pad", "phonebar"]);
 
 /** What each way to play has on its screen; Workshop has everything, less what the player hid. */
 const UX_PARTS: Record<Exclude<Ux, "workshop">, Set<string>> = {
@@ -341,6 +442,8 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
 }
 /** The smallest a framed panel can be made: room for its frame and a few lines. */
 const PANEL_LEAST = { width: 208, height: 128 };
+/** The game output made smallest in Workshop: 20 columns by 5 rows, the least NAWS sends (components/Terminal.tsx). */
+const TERMINAL_LEAST = { width: 208, height: 96 };
 /** You is two lines of gauges in its frame. */
 const VITALS_LEAST = { width: 208, height: 64 };
 /** Whether Workshop mode is on (things can be moved and resized): only "on" means it is. */
@@ -445,6 +548,11 @@ function App() {
   const [startupPending, setStartupPending] = useState<StartupStep[]>([...STARTUP_STEPS]);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [gearOpen, setGearOpen] = useState(false);
+  /** The phone's section (lib/phoneSections.ts), and its sheet of options pulled down. */
+  const [phoneSection, setPhoneSection] = useState<PhoneSection>(storedSection);
+  /** Which way the last turn went, so the new section slides in from that side. */
+  const [phoneTurned, setPhoneTurned] = useState<"next" | "back" | null>(null);
+  const [sheetDown, setSheetDown] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [licensesOpen, setLicensesOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -472,6 +580,8 @@ function App() {
   const [controls, setControls] = useState<Controls>(loadControls);
   const [terminalArranging, setTerminalArranging] = useState(loadArranging);
   const [snapshot, setSnapshot] = useState<mud.MapSnapshot | null>(null);
+  /** The music playing now (an asset path), for the menu bar and the Mixer. */
+  const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   /** The fight (src-tauri/src/combat.rs): Combat mode while there's one, Explore mode otherwise. */
   const [opponent, setOpponent] = useState<mud.Opponent | null>(null);
   const [walking, setWalking] = useState(false);
@@ -480,7 +590,9 @@ function App() {
   const [hooksOpen, setHooksOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   /** The way to play: Terminal, Immersive or Workshop (lib/ux.ts). */
-  const [ux, setUx] = useState<Ux>(loadUx);
+  const [uxChosen, setUx] = useState<Ux>(loadUx);
+  /** The tablet's screen is Workshop's desk: what the ways to play differ in is what's on the screen. */
+  const ux: Ux = TABLET_SCREEN ? "workshop" : uxChosen;
   /** Workshop's choices: what shows, and Immersive's layers there. */
   const [shown, setShown] = useState(loadShown);
   const [layers, setLayers] = useState<Layers>(loadLayers);
@@ -598,6 +710,12 @@ function App() {
   const [scale, setScale] = useState(stageScale);
   /** The phone's stage (lib/stage.ts): its scale and rows, set from the frame once it's measured. */
   const [phone, setPhone] = useState<PhoneFit & { left: number }>(() => ({ ...phoneFit(window.innerWidth, window.innerHeight, window.innerHeight), left: 0 }));
+  /** The tablet's two stages (lib/stage.ts), set from the frame once it's measured; the upper's text size the player's. */
+  const [tabletText, setTabletText] = useState(loadTabletText);
+  const [tablet, setTablet] = useState<TabletFit & { x: number; y: number }>(() => ({ ...tabletFit(window.innerWidth, window.innerHeight, tabletText), x: 0, y: 0 }));
+  /** A text field has the focus on the tablet: its keyboard shows, not the controls. The one typed in last is where the keys go. */
+  const [typing, setTyping] = useState(false);
+  const lastField = useRef<Field | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const history = useRef<string[]>([]);
@@ -681,7 +799,7 @@ function App() {
       const style = getComputedStyle(frame);
       const width = frame.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       const visible = frame.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      const next = phoneFit(width, window.innerHeight, visible);
+      const next = phoneFit(width, window.innerHeight, visible, PHONE_EMULATED);
       const left = parseFloat(style.paddingLeft) + Math.max(0, (width - PHONE_WIDTH * next.scale) / 2);
       setPhone((was) => (was.scale === next.scale && was.rows === next.rows && was.left === left ? was : { ...next, left }));
     };
@@ -695,6 +813,83 @@ function App() {
       view?.removeEventListener("scroll", fit);
     };
   }, []);
+
+  // The tablet: the upper desk in whole cells of the player's text size,
+  // the lower part the frame's width at the foot. Tried on a computer,
+  // the frame is an iPad's points, fitted to the window.
+  useEffect(() => {
+    if (!TABLET_SCREEN) return;
+    const fit = () => {
+      const frame = frameRef.current;
+      if (!frame) return;
+      if (TABLET_EMULATED) {
+        const { width, height } = TABLET_EMULATED_SIZE;
+        const k = Math.min(window.innerWidth / width, window.innerHeight / height);
+        Object.assign(frame.style, { inset: "auto", left: `${(window.innerWidth - width * k) / 2}px`, top: "0px", width: `${width}px`, height: `${height}px`, transform: `scale(${k})`, transformOrigin: "0 0" });
+      }
+      const style = getComputedStyle(frame);
+      const [x, y] = [parseFloat(style.paddingLeft), parseFloat(style.paddingTop)];
+      const width = frame.clientWidth - x - parseFloat(style.paddingRight);
+      const height = frame.clientHeight - y - parseFloat(style.paddingBottom);
+      const next = tabletFit(width, height, tabletText);
+      setTablet((was) =>
+        Object.entries(next).every(([k, v]) => was[k as keyof TabletFit] === v) && was.x === x && was.y === y ? was : { ...next, x, y },
+      );
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+    };
+  }, [tabletText]);
+
+  // The tablet's keyboard shows while a text field has the focus, and
+  // types into the one that had it last (lib/softKeys.ts).
+  const checkTyping = useCallback(() => {
+    const el = document.activeElement;
+    const field = isField(el);
+    if (field) lastField.current = el;
+    setTyping(field);
+  }, []);
+  useEffect(() => {
+    if (!TABLET_SCREEN) return;
+    // Focus leaving lands on the body for a moment before the next thing.
+    const out = () => window.setTimeout(checkTyping, 0);
+    document.addEventListener("focusin", checkTyping);
+    document.addEventListener("focusout", out);
+    return () => {
+      document.removeEventListener("focusin", checkTyping);
+      document.removeEventListener("focusout", out);
+    };
+  }, [checkTyping]);
+  /** The field the tablet's keys type into: the one typed in last, while it's still on the page and can be. */
+  const keysField = useCallback(() => {
+    const field = lastField.current;
+    return field && field.isConnected && isField(field) && !field.closest("[inert]") ? field : null;
+  }, []);
+  useEffect(() => {
+    if (TABLET_SCREEN) checkTyping();
+  }, [connected, secret, checkTyping]);
+  // A new text size says what it makes of the desk, once the desk is measured.
+  const tabletTextShown = useRef(tablet.text);
+  useEffect(() => {
+    if (!TABLET_SCREEN || tabletTextShown.current === tablet.text) return;
+    tabletTextShown.current = tablet.text;
+    setError(null);
+    setStatus(tabletTextInWords(tablet.text, tablet.columns, tablet.rows));
+  }, [tablet]);
+  const changeTabletText = useCallback(
+    (by: 1 | -1) => {
+      const next = stepTabletText(tabletText, by);
+      if (next === tabletText) return false;
+      storeTabletText(next);
+      setTabletText(next);
+      return true;
+    },
+    [tabletText],
+  );
 
   const append = useCallback((added: TermLine[]) => {
     setLines((list) => {
@@ -864,17 +1059,25 @@ function App() {
   const pictureOn = pictureShows(pictureSettings, pictureScene, pictureLandmark, pictureAskedFor);
   /** Big text is Terminal's: the other ways to play have too much on the screen for it. */
   const textSize: TextSize = ux === "terminal" ? display.textSize : 1;
-  const usual = PHONE ? phoneLayout(phone.rows) : uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
   /** Whether a thing is on this way to play's screen. */
   /** Terminal has its Control Panel beside the game output, but with big text (the game output the screen's width). */
   const controlPanel = !PHONE && ux === "terminal" && textSize === 1;
   const has = (id: string) =>
-    PHONE ? PHONE_PARTS.has(id) :
+    PHONE ? PHONE_PARTS.has(id) || PHONE_SECTION_PARTS[phoneSection].includes(id) :
     !PHONE_ONLY.has(id) &&
+    !(TABLET_SCREEN && TABLET_HIDDEN.has(id)) &&
     !(WEB && DESKTOP_ONLY.has(id)) &&
     (ux === "workshop"
       ? (shown[id] ?? true)
       : UX_PARTS[ux].has(id) || (controlPanel && (id === "control" || (controls as Record<string, boolean>)[id] === true)));
+  /** What's on the tablet's menu bar now, for its layout to pack (`tabletLayout`). */
+  const onBar = (id: string) =>
+    has(id) && (id === "mode" ? connected && !!(snapshot?.room || opponent) : id === "hangup" ? connected : id === "nowPlaying" ? !!nowPlaying : true);
+  const usual = PHONE
+    ? phoneLayout(phone.rows)
+    : TABLET_SCREEN
+      ? { ...tabletLayout(theme, tablet.columns, tablet.rows, { map: mapOpen, connected, output: showTerminal }, onBar), ...TABLET_LOWER }
+      : uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
   linesRef.current = lines;
   /** In Immersive, talk isn't in the game output (it's in the journal and the log, and the pop-up shows it while it's said), nor the time of day (the narrator says it). */
   /** Nor the player's prompt, once in the game: Immersive has no need of it to look at. Nor the exits: the cues play them. */
@@ -1404,8 +1607,6 @@ function App() {
    */
   const [pictures, setPictures] = useState<({ id: number; path: string; x: number; y: number; fade: number; shownAt: number } & sound.Shown)[]>([]);
   const nextPicture = useRef(0);
-  /** The music playing now (an asset path), for the menu bar and the Mixer. */
-  const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
   useEffect(() => sound.onMusic(setNowPlaying), []);
@@ -1752,7 +1953,197 @@ function App() {
     };
   }, [onFired]);
 
-  const anyDialogOpen = aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+
+  /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
+  const turnPhone = useCallback(
+    (by: 1 | -1) => {
+      const next = turnSection(phoneSection, by);
+      setPhoneSection(next);
+      setPhoneTurned(by === 1 ? "next" : "back");
+      storeSection(next);
+      sayNow(sectionInWords(next));
+    },
+    [phoneSection, sayNow],
+  );
+  // The edge swipes: from the right the next section, from the left the one before, from the top the options.
+  useEdgeSwipes(stageRef, PHONE, {
+    fromLeft: () => !anyDialogOpen && !gearOpen && turnPhone(-1),
+    fromRight: () => !anyDialogOpen && !gearOpen && turnPhone(1),
+    fromTop: () => !anyDialogOpen && !gearOpen && setSheetDown(true),
+    up: () => setSheetDown(false),
+    sheetDown,
+  });
+  /** The last command back on the command line, to change or send (Up on a keyboard). */
+  const recallLast = () => {
+    const h = history.current;
+    if (h.length === 0) return;
+    historyAt.current = Math.max(0, Math.min(h.length, historyAt.current) - 1);
+    setInput(h[historyAt.current]);
+    inputRef.current?.focus();
+  };
+  const sendKey = (line: string) => void handleSend(line);
+  const recallKey: PhoneKey = { id: "recall", label: "↑", name: "The last command, to send again", onPress: recallLast };
+  /** The keys above the command line: the section's own (lib/phoneSections.ts). */
+  const phoneKeys = (): ReactNode => {
+    const exits = snapshot?.room?.exits ?? [];
+    const off = !connected || secret;
+    switch (phoneSection) {
+      case "game":
+        return <TouchPad exits={exits} disabled={off} onCommand={sendKey} tail={[{ id: "look", label: "Look", name: "Look", onPress: () => sendKey("look") }, recallKey]} />;
+      case "map":
+        return (
+          <TouchPad
+            exits={exits}
+            disabled={off}
+            onCommand={sendKey}
+            tail={[
+              { id: "where", label: "Where", name: "Where am I?", onPress: whereAmI },
+              { id: "stop", label: "Stop", name: "Stop walking", disabled: !walking, onPress: () => runMap("Stopping…", () => mud.mapStop()) },
+            ]}
+          />
+        );
+      case "here":
+        return (
+          <PhoneKeys
+            label="Here's keys"
+            disabled={off}
+            keys={[
+              { id: "look", label: "Look", name: "Look", onPress: () => sendKey("look") },
+              { id: "score", label: "Score", name: "Score", onPress: () => sendKey("score") },
+              { id: "inventory", label: "Inv", name: "Inventory", onPress: () => sendKey("inventory") },
+              { id: "equipment", label: "Eq", name: "Equipment", onPress: () => sendKey("equipment") },
+              { id: "time", label: "Time", name: "Time", onPress: () => sendKey("time") },
+              { id: "health", label: "HP", name: "Say your health", onPress: sayVitals },
+              { id: "who", label: "Who", name: "Say who's online", onPress: sayWho },
+              recallKey,
+            ]}
+          />
+        );
+      case "heard": {
+        const count = (n: number) => (n === 0 ? "" : ` ${Math.min(n, 999)}`);
+        return (
+          <PhoneKeys
+            label="Heard's keys"
+            keys={[
+              { id: "journal", label: `Journal${count(journal.unheard.journal)}`, name: `Journal: ${journal.unheard.journal === 0 ? "all heard" : `${journal.unheard.journal} not heard yet`}`, cells: 16, onPress: () => setJournalOpen(true) },
+              { id: "log", label: `Log${count(journal.unheard.log)}`, name: `Log: ${journal.unheard.log === 0 ? "all heard" : `${journal.unheard.log} not heard yet`}`, cells: 12, onPress: () => setLogOpen(true) },
+              { id: "mixer", label: "Mixer", name: "Mixer", cells: 10, onPress: () => setMixerOpen(true) },
+              { id: "quiet", label: "Quiet", name: "Stop the sounds and the voice", cells: 10, onPress: stopEverything },
+            ]}
+          />
+        );
+      }
+    }
+  };
+  /** A command begun on the command line, for the player to finish with the keyboard: "say ". */
+  const begin = (words: string) => {
+    setInput(`${words} `);
+    window.requestAnimationFrame(() => {
+      const field = inputRef.current;
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(field.value.length, field.value.length);
+    });
+  };
+  /** The keyboard up for the field typed in last, or the command line. */
+  const raiseKeyboard = () => (keysField() ?? inputRef.current)?.focus();
+  /**
+   * The tablet's controls (components/TabletControls.tsx), while no field
+   * has the focus: the ways at the left, Look in their middle; the keyboard,
+   * the last command and Quiet under them; and rows of what's typed most.
+   * A command ending "…" is begun on the command line for the keyboard to
+   * finish.
+   */
+  const tabletControls = (): TabletControl[] => {
+    const exits = new Set((snapshot?.room?.exits ?? []).map((e) => e.dir.toUpperCase()));
+    const off = !connected || secret;
+    const way = (dir: string, name: string, column: number, row: number): TabletControl => ({
+      id: name.toLowerCase(),
+      label: dir,
+      name: exits.has(dir) ? `${name}, an exit` : name,
+      lit: exits.has(dir),
+      column,
+      row,
+      disabled: off,
+      onPress: () => sendKey(name.toLowerCase()),
+    });
+    const send = (label: string, command: string) => ({ label, name: label, disabled: off, onPress: () => sendKey(command) });
+    const started = (label: string) => ({ label: `${label}…`, name: `${label}, finished on the keyboard`, disabled: off, onPress: () => begin(label.toLowerCase()) });
+    const count = (n: number) => (n === 0 ? "" : ` ${Math.min(n, 99)}`);
+    const rows: Omit<TabletControl, "column" | "row" | "id">[][] = [
+      [send("Score", "score"), send("Inv", "inventory"), send("Eq", "equipment"), send("Time", "time"), { label: "Who", name: "Say who's online", onPress: sayWho }, { label: "HP", name: "Say your health", onPress: sayVitals }],
+      [
+        { label: "Where", name: "Where am I?", onPress: whereAmI },
+        { label: "Map", name: mapOpen ? "Hide the map" : "Show the map", onPress: toggleMap },
+        { label: "Stop", name: "Stop walking", disabled: !walking, onPress: () => runMap("Stopping…", () => mud.mapStop()) },
+        { label: "Paint", name: "Paint a new look of the room", onPress: paintRoom },
+        { label: "Fight", name: "Say the fight", onPress: sayOpponent },
+        { label: "Recent", name: "Say what the game said", onPress: sayRecent },
+      ],
+      [
+        { label: `Journal${count(journal.unheard.journal)}`, name: `Journal: ${journal.unheard.journal === 0 ? "all heard" : `${journal.unheard.journal} not heard yet`}`, onPress: () => setJournalOpen(true) },
+        { label: `Log${count(journal.unheard.log)}`, name: `Log: ${journal.unheard.log === 0 ? "all heard" : `${journal.unheard.log} not heard yet`}`, onPress: () => setLogOpen(true) },
+        { label: "Mixer", name: "Mixer", onPress: () => setMixerOpen(true) },
+        { label: "Hooks", name: "Hooks", onPress: () => setHooksOpen(true) },
+        { label: "Bestiary", name: "Bestiary", onPress: () => setBestiaryOpen(true) },
+        { label: "Artisan", name: "Artisan Skills", onPress: () => setArtisanOpen(true) },
+      ],
+      [started("Say"), started("Tell"), started("Get"), started("Drop"), started("Kill"), started("Cast")],
+      [send("Sit", "sit"), send("Stand", "stand"), send("Sleep", "sleep"), send("Wake", "wake"), send("Flee", "flee"), started("Consider")],
+      [
+        { label: "Speech…", name: "Speech settings", onPress: () => setSpeechOpen(true) },
+        { label: "Display…", name: "Display settings", onPress: () => setDisplayOpen(true) },
+        { label: "Pictures…", name: "Pictures settings", onPress: () => setPicturesOpen(true) },
+        { label: "Voices…", name: "Characters' voices", onPress: () => setCastOpen(true) },
+        { label: "Cues…", name: "Cues", onPress: () => setCuesOpen(true) },
+        send("Help", "help"),
+      ],
+    ];
+    return [
+      way("N", "North", 6, 0),
+      way("U", "Up", 12, 0),
+      way("W", "West", 0, 1),
+      { id: "look", label: "Look", name: "Look", column: 6, row: 1, disabled: off, onPress: () => sendKey("look") },
+      way("E", "East", 12, 1),
+      way("S", "South", 6, 2),
+      way("D", "Down", 12, 2),
+      ...rows.flatMap((row, r) => row.map((c, i) => ({ ...c, id: `${r}-${i}`, column: 24 + 12 * i, row: r, cells: 12 }))),
+      { id: "keyboard", label: "Keyboard", name: "Show the keyboard", column: 0, row: 3, cells: 18, disabled: !keysField() && !connected, onPress: raiseKeyboard },
+      { id: "recall", label: "Last ↑", name: "The last command, to send again", column: 0, row: 4, cells: 18, disabled: off, onPress: recallLast },
+      { id: "quiet", label: "Quiet", name: "Stop the sounds and the voice", column: 0, row: 5, cells: 18, onPress: stopEverything },
+    ];
+  };
+  /** The sheet's options: the general ones, then the section's own. */
+  const sheetGeneral: SheetItem[] = [
+    ...(connected ? [{ id: "hangup", label: "Hang Up", onPress: () => void handleDisconnect(), disabled: isBusy("connect") }] : []),
+    { id: "where", label: "Where Am I?", onPress: whereAmI },
+    { id: "mixer", label: "Mixer…", onPress: () => setMixerOpen(true) },
+    { id: "speech", label: "Speech…", onPress: () => setSpeechOpen(true) },
+    { id: "settings", label: "All Settings…", onPress: () => setGearOpen(true) },
+    ...(PHONE_TRYABLE ? [{ id: "leave-phone", label: "Leave the Phone Screen", onPress: () => setPhoneScreen(false) }] : []),
+  ];
+  const sheetOwn: Record<PhoneSection, SheetItem[]> = {
+    game: [
+      { id: "display", label: "Display…", onPress: () => setDisplayOpen(true) },
+      { id: "echoes", label: "Narrator's Answers…", onPress: () => setEchoesOpen(true) },
+      { id: "voices", label: "Characters' Voices…", onPress: () => setCastOpen(true) },
+    ],
+    map: [
+      { id: "map-stop", label: "Stop Walking", disabled: !walking, onPress: () => runMap("Stopping…", () => mud.mapStop()) },
+      { id: "map-clear", label: "Clear the Map…", onPress: () => setClearMapOpen(true) },
+    ],
+    here: [
+      { id: "paint", label: "Paint a New Look", onPress: paintRoom },
+      { id: "pictures", label: "Pictures…", onPress: () => setPicturesOpen(true) },
+      { id: "bestiary", label: "Bestiary…", onPress: () => setBestiaryOpen(true) },
+    ],
+    heard: [
+      { id: "journal", label: "Journal…", onPress: () => setJournalOpen(true) },
+      { id: "log", label: "Log…", onPress: () => setLogOpen(true) },
+      { id: "cues", label: "Cues…", onPress: () => setCuesOpen(true) },
+    ],
+  };
 
   // With Coupler's voice on, a problem is heard: a low buzz, then the words.
   useEffect(() => {
@@ -1841,7 +2232,10 @@ function App() {
       } else if (chord && key === "a") {
         e.preventDefault();
         setArtisanOpen(true);
-      } else if (keys.ctrlCmd(e) && key === "f" && !PHONE) {
+      } else if (TABLET_SCREEN && keys.primary(e) && !e.altKey && ["=", "+", "-"].includes(e.key)) {
+        e.preventDefault();
+        if (!changeTabletText(e.key === "-" ? -1 : 1)) showStatus(`The text is as ${e.key === "-" ? "small" : "large"} as it goes.`);
+      } else if (keys.ctrlCmd(e) && key === "f" && !PHONE && !TABLET_SCREEN) {
         e.preventDefault();
         toggleFullscreen();
       } else if (e.key === "Escape" && !gearOpen && connected) {
@@ -1858,7 +2252,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom]);
+  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom, changeTabletText]);
 
   useEffect(() => {
     if (!gearOpen) return;
@@ -1919,6 +2313,56 @@ function App() {
 
   const dialing = isBusy("connect");
   const host = server?.host ?? "CoffeeMUD";
+  /** The message bar: on the desk, or the tablet's lower part. */
+  const messageBar = (
+        <Movable fixed={controlPanel || TABLET_SCREEN} id="messages" tier={2} label="message bar" usual={usual.messages} announce={announcePanel}>
+          <div className="status-bar">
+        <div className="status-bar-message">
+          <ActivityStatus activities={activities} />
+          {error && (
+            <p className="error" role="alert" title={keys.keys(error)}>
+              {keys.keys(error)}
+            </p>
+          )}
+          {status && !error && (
+            <p
+              className="status-message"
+              role="status"
+              aria-live={screenReaderOn && voice.voiceVolume() > 0 && lastSaid === status.trim() ? "off" : "polite"}
+              data-testid="status-message"
+              title={keys.keys(status)}
+            >
+              {keys.keys(status)}
+            </p>
+          )}
+        </div>
+          </div>
+        </Movable>
+  );
+  /** The command line: on the desk, or the tablet's lower part. */
+  const commandLine = (
+        <Movable fixed={controlPanel || PHONE || TABLET_SCREEN} id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
+          <div className="input-row">
+            <input
+              ref={inputRef}
+              type={secret ? "password" : "text"}
+              data-testid="command-input"
+              aria-label={secret ? "Password" : "Command"}
+              aria-describedby="input-hint"
+              placeholder={connected ? (secret ? "Password (hidden, not kept)" : keys.keys("Type a command and press Return")) : "Choose a way to play to start"}
+              value={input}
+              disabled={!connected}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              enterKeyHint="send"
+              onChange={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={handleKey}
+            />
+          </div>
+        </Movable>
+  );
 
   return (
     <div className="stage-frame" ref={frameRef}>
@@ -1928,7 +2372,19 @@ function App() {
       style={
         PHONE
           ? ({ width: PHONE_WIDTH, height: phone.rows * CELL_HEIGHT, top: 0, left: phone.left, margin: 0, transformOrigin: "0 0", transform: `scale(${phone.scale})`, "--phone-rows": phone.rows } as CSSProperties)
-          : { transform: `scale(${scale})` }
+          : TABLET_SCREEN
+            ? ({
+                width: tablet.columns * CELL_WIDTH,
+                height: tablet.rows * CELL_HEIGHT,
+                top: tablet.y,
+                left: tablet.x + tablet.left,
+                margin: 0,
+                transformOrigin: "0 0",
+                transform: `scale(${tablet.text})`,
+                "--tablet-columns": tablet.columns,
+                "--tablet-rows": tablet.rows,
+              } as CSSProperties)
+            : { transform: `scale(${scale})` }
       }
     >
       <StartupScreen
@@ -1940,11 +2396,11 @@ function App() {
           in a Movable, where the user left it or in its default place
           (defaultLayout). The order here is the Tab and reading order,
           whatever the arrangement. */}
-      <LayoutScopeContext.Provider value={controlPanel ? "terminal:" : ""}>
+      <LayoutScopeContext.Provider value={controlPanel ? "terminal:" : TABLET_SCREEN ? "tablet:" : ""}>
       <KeptContext.Provider value={!PHONE && (ux === "workshop" || controlPanel)}>
       <ArrangeContext.Provider value={!PHONE && ((arranging && ux === "workshop") || (controlPanel && terminalArranging))}>
       {/* Built afresh for each way to play: each has its own layout. */}
-      <main className={`desk ux-${ux}${textSize > 1 ? ` text-${textSize}x` : ""}`} key={`${ux}-${textSize}`}>
+      <main className={`desk ux-${ux}${textSize > 1 ? ` text-${textSize}x` : ""}`} key={`${ux}-${textSize}`} data-turned={PHONE ? (phoneTurned ?? undefined) : undefined}>
         {/* The menu bar's strip, behind the things that sit on it. */}
         {has("menu") && (
         <Movable id="menu" label="menu bar" usual={usual.menu} className="menu-bar" backdrop announce={announcePanel}>
@@ -1965,6 +2421,18 @@ function App() {
             <span className={`play-mode${opponent ? " combat" : ""}`} data-testid="play-mode" role="status">
               {opponent ? "Combat mode" : "Explore mode"}
             </span>
+          </Movable>
+        )}
+        {has("phonebar") && (
+          <Movable fixed id="phonebar" label="sections bar" usual={usual.phonebar} className="menu-bar menu-chip" announce={announcePanel}>
+            <PhoneBar
+              section={phoneSection}
+              state={connected ? `Online: ${port?.name ?? host}` : "Offline"}
+              online={connected}
+              sheetDown={sheetDown}
+              onTurn={turnPhone}
+              onSheet={() => setSheetDown(true)}
+            />
           </Movable>
         )}
         {has("state") && (
@@ -2032,16 +2500,20 @@ function App() {
               <GearIcon width={16} height={16} aria-hidden="true" />
             </button>
             <div className={`gear-menu${gearOpen ? " open" : ""}`}>
-              {/* The three ways to play (lib/ux.ts). */}
-              <div role="radiogroup" aria-label="Way to play" className="menu-group">
-                {UXES.map((u) => (
-                  <label key={u.id} className="menu-item menu-item-checkbox">
-                    <input type="radio" name="ux" data-testid={`ux-${u.id}`} checked={ux === u.id} onChange={() => chooseUx(u.id)} />
-                    <span>{`${u.name} (${u.key})`}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="menu-sep" />
+              {/* The three ways to play (lib/ux.ts); the tablet's screen is Workshop's. */}
+              {!TABLET_SCREEN && (
+                <>
+                  <div role="radiogroup" aria-label="Way to play" className="menu-group">
+                    {UXES.map((u) => (
+                      <label key={u.id} className="menu-item menu-item-checkbox">
+                        <input type="radio" name="ux" data-testid={`ux-${u.id}`} checked={ux === u.id} onChange={() => chooseUx(u.id)} />
+                        <span>{`${u.name} (${u.key})`}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="menu-sep" />
+                </>
+              )}
               <label className="menu-item menu-item-checkbox">
                 <input
                   type="checkbox"
@@ -2051,7 +2523,30 @@ function App() {
                 />
                 <span>ANSIapps theme (old-school DOS look)</span>
               </label>
-              {!PHONE && (
+              {PHONE_TRYABLE && (
+                <label className="menu-item menu-item-checkbox">
+                  <input type="checkbox" data-testid="phone-screen-toggle" checked={PHONE} onChange={(e) => setPhoneScreen(e.currentTarget.checked)} />
+                  <span>Phone Screen, for Testing (starts again)</span>
+                </label>
+              )}
+              {TABLET_TRYABLE && (
+                <label className="menu-item menu-item-checkbox">
+                  <input type="checkbox" data-testid="tablet-screen-toggle" checked={TABLET_SCREEN} onChange={(e) => setTabletScreen(e.currentTarget.checked)} />
+                  <span>Tablet Screen, for Testing (starts again)</span>
+                </label>
+              )}
+              {/* The tablet's text size: the upper desk's cells (lib/tablet.ts). */}
+              {TABLET_SCREEN && (
+                <>
+                  <button type="button" className="menu-item" data-testid="tablet-text-larger" disabled={stepTabletText(tabletText, 1) === tabletText} onClick={() => changeTabletText(1)}>
+                    <span>{keys.keys("Larger Text (Cmd+Plus)")}</span>
+                  </button>
+                  <button type="button" className="menu-item" data-testid="tablet-text-smaller" disabled={stepTabletText(tabletText, -1) === tabletText} onClick={() => changeTabletText(-1)}>
+                    <span>{keys.keys("Smaller Text (Cmd+Minus)")}</span>
+                  </button>
+                </>
+              )}
+              {!PHONE && !TABLET_SCREEN && (
               <label className="menu-item menu-item-checkbox">
                 <input type="checkbox" data-testid="fullscreen-toggle" checked={fullscreen} onChange={toggleFullscreen} />
                 <span>{keys.keys("Full screen (Ctrl+Cmd+F)")}</span>
@@ -2448,8 +2943,8 @@ function App() {
 
         {/* The game output comes before the ways to play so they, which
             share its place until one is moved, are in front of it. */}
-        {showTerminal && (
-          <Movable fixed={controlPanel} id="terminal" label="game output" usual={usual.terminal} resizable={false} tier={1} announce={announcePanel}>
+        {showTerminal && (!PHONE || has("terminal")) && (
+          <Movable fixed={controlPanel} id="terminal" className={PHONE ? "phone-middle" : undefined} label="game output" usual={usual.terminal} resizable={ux === "workshop" && !PHONE} least={TERMINAL_LEAST} tier={1} announce={announcePanel}>
             <Terminal
               lines={lines}
               partial={partial}
@@ -2464,8 +2959,8 @@ function App() {
         )}
         {/* Back in front each time it comes back (after a disconnect), even
             if the game output was brought in front of it since. */}
-        {!connected && (
-          <Movable fixed={controlPanel} id="ports" label="ways to play" usual={usual.ports} least={PANEL_LEAST} tier={1} frontOnShow announce={announcePanel}>
+        {!connected && (!PHONE || has("ports")) && (
+          <Movable fixed={controlPanel} id="ports" className={PHONE ? "phone-middle" : undefined} label="ways to play" usual={usual.ports} least={PANEL_LEAST} tier={1} frontOnShow announce={announcePanel}>
             <section className="ports panel" aria-labelledby="ports-title" data-testid="ports">
               <h2 id="ports-title">Choose how to play</h2>
               {/* The frame doesn't scroll (its title sits in the top edge); this does. */}
@@ -2519,36 +3014,10 @@ function App() {
 
         {has("pad") && (
           <Movable fixed id="pad" tier={2} label="touch pad" usual={usual.pad} announce={announcePanel}>
-            <TouchPad exits={snapshot?.room?.exits ?? []} disabled={!connected || secret} onCommand={(line) => void handleSend(line)} onRecall={() => {
-              const h = history.current;
-              if (h.length === 0) return;
-              historyAt.current = Math.max(0, Math.min(h.length, historyAt.current) - 1);
-              setInput(h[historyAt.current]);
-              inputRef.current?.focus();
-            }} />
+            {phoneKeys()}
           </Movable>
         )}
-        <Movable fixed={controlPanel || PHONE} id="command" tier={2} label="command line" usual={usual.command} announce={announcePanel}>
-          <div className="input-row">
-            <input
-              ref={inputRef}
-              type={secret ? "password" : "text"}
-              data-testid="command-input"
-              aria-label={secret ? "Password" : "Command"}
-              aria-describedby="input-hint"
-              placeholder={connected ? (secret ? "Password (hidden, not kept)" : keys.keys("Type a command and press Return")) : "Choose a way to play to start"}
-              value={input}
-              disabled={!connected}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              enterKeyHint="send"
-              onChange={(e) => setInput(e.currentTarget.value)}
-              onKeyDown={handleKey}
-            />
-          </div>
-        </Movable>
+        {!TABLET_SCREEN && commandLine}
         {has("hint") && (
         <Movable id="hint" tier={2} label="command line's hint" usual={usual.hint} announce={announcePanel}>
           <div className="input-hint" id="input-hint">
@@ -2562,7 +3031,7 @@ function App() {
         )}
 
         {has("scene") && (ux !== "immersive" || connected) && (
-          <Movable id="scene" label="Here panel" usual={usual.scene} least={PANEL_LEAST} tier={1} announce={announcePanel}>
+          <Movable id="scene" className={PHONE ? "phone-middle" : undefined} label="Here panel" usual={usual.scene} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <ScenePanel
               snapshot={snapshot}
               vitals={vitals}
@@ -2570,7 +3039,7 @@ function App() {
               music={nowPlaying}
               cues={cues}
               voice={voiced}
-              picture={ux === "immersive" && pictureSettings.engine !== "none" && pictureScene ? { scene: pictureScene, settings: pictureSettings, shows: pictureOn } : null}
+              picture={(ux === "immersive" || PHONE) && pictureSettings.engine !== "none" && pictureScene ? { scene: pictureScene, settings: pictureSettings, shows: pictureOn } : null}
             />
           </Movable>
         )}
@@ -2589,7 +3058,7 @@ function App() {
           </Movable>
         )}
         {has("heard") && (
-          <Movable id="heard" label="Heard panel" usual={usual.heard} least={PANEL_LEAST} tier={1} announce={announcePanel}>
+          <Movable id="heard" className={PHONE ? "phone-middle" : undefined} label="Heard panel" usual={usual.heard} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <HeardPanel captions={display.captions} />
           </Movable>
         )}
@@ -2606,8 +3075,8 @@ function App() {
           </Movable>
         )}
 
-        {has("map") && ((ux === "workshop" && mapOpen) || controlPanel) && (
-          <Movable id="map" label="map" usual={usual.map} least={PANEL_LEAST} tier={1} announce={announcePanel}>
+        {has("map") && ((ux === "workshop" && mapOpen) || controlPanel || PHONE) && (
+          <Movable id="map" className={PHONE ? "phone-middle" : undefined} label="map" usual={usual.map} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <MapPanel snapshot={snapshot} connected={connected} walking={walking} run={runMap} onAskClear={() => setClearMapOpen(true)} blink={display.blink} />
           </Movable>
         )}
@@ -2635,29 +3104,7 @@ function App() {
           </div>
         )}
 
-        <Movable fixed={controlPanel} id="messages" tier={2} label="message bar" usual={usual.messages} announce={announcePanel}>
-          <div className="status-bar">
-        <div className="status-bar-message">
-          <ActivityStatus activities={activities} />
-          {error && (
-            <p className="error" role="alert" title={keys.keys(error)}>
-              {keys.keys(error)}
-            </p>
-          )}
-          {status && !error && (
-            <p
-              className="status-message"
-              role="status"
-              aria-live={screenReaderOn && voice.voiceVolume() > 0 && lastSaid === status.trim() ? "off" : "polite"}
-              data-testid="status-message"
-              title={keys.keys(status)}
-            >
-              {keys.keys(status)}
-            </p>
-          )}
-        </div>
-          </div>
-        </Movable>
+        {!TABLET_SCREEN && messageBar}
         {(["journal", "log"] as const).map((book) => {
           const n = book === "journal" ? journal.unheard.journal : journal.unheard.log;
           const name = book === "journal" ? "Journal" : "Log";
@@ -2822,7 +3269,7 @@ function App() {
               data-testid="usual-layout-confirm"
               onClick={() => {
                 setUsualLayoutOpen(false);
-                forgetLayout();
+                forgetLayout(TABLET_SCREEN ? "tablet:" : "");
                 showStatus("Everything is back in its default place and size.");
               }}
             >
@@ -2920,6 +3367,16 @@ function App() {
 
       <RestoreDialog offer={restoreOffer} busy={restoring} onCancel={() => !restoring && setRestoreOffer(null)} onRestore={() => void restoreBackup()} />
 
+      {PHONE && (
+        <PhoneSheet
+          open={sheetDown}
+          onClose={() => setSheetDown(false)}
+          state={connected ? `Online: ${port?.name ?? host}` : "Offline"}
+          general={sheetGeneral}
+          sectionName={sectionName(phoneSection)}
+          own={sheetOwn[phoneSection]}
+        />
+      )}
       <MixerDialog open={mixerOpen} onClose={() => setMixerOpen(false)} playing={nowPlaying} onStatus={showStatus} />
 
       {!WEB && (
@@ -2953,6 +3410,42 @@ function App() {
 
       {import.meta.env.DEV && <AppTesting open={appTestingOpen} onClose={() => setAppTestingOpen(false)} />}
     </div>
+    {/* The tablet's lower part (lib/stage.ts): one fixed size under the
+        desk, the frame's width. The keyboard while a text field has the
+        focus, the controls while none does. */}
+    {TABLET_SCREEN && (
+      <div
+        className="client tablet-lower"
+        data-testid="tablet-lower"
+        style={{ left: tablet.x, top: tablet.y + tablet.lowerTop, width: TABLET_LOWER_WIDTH, height: TABLET_LOWER_HEIGHT, transform: `scale(${tablet.lowerScale})` }}
+      >
+        {commandLine}
+        <Movable fixed id="keyboardKey" tier={2} label="keyboard key" usual={usual.keyboardKey} className="tablet-keyboard-key">
+          <button
+            type="button"
+            className="tablet-key named"
+            data-testid="keyboard-key"
+            style={{ width: 48, "--left": "16px" } as CSSProperties}
+            aria-label={typing ? "Hide the keyboard" : "Show the keyboard"}
+            disabled={!typing && !keysField() && !connected}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => (typing ? (document.activeElement as HTMLElement | null)?.blur() : raiseKeyboard())}
+          >
+            {typing ? "▼" : "▲"}
+          </button>
+        </Movable>
+        <div className="tablet-input">
+          {typing ? <TabletKeyboard field={keysField} onHide={() => (document.activeElement as HTMLElement | null)?.blur()} /> : <TabletControls controls={tabletControls()} />}
+        </div>
+        {messageBar}
+      </div>
+    )}
+    {/* Upright only: held sideways, the tablet screen waits under this. */}
+    {TABLET_SCREEN && tablet.sideways && (
+      <div className="tablet-sideways" role="alert" data-testid="tablet-sideways">
+        <p>Turn the tablet upright to play.</p>
+      </div>
+    )}
     </div>
   );
 }
