@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.32.1 (2026-10-23)
+
+- **No more blue screen in Workshop** (2026-10-23): Workshop shows
+  everything the player hasn't hidden, and that took in the iPhone's
+  touch pad, which no desktop layout places: the screen failed to draw
+  past the in-development notice, in the web build (Safari and Chrome)
+  and for anyone new to Workshop on the desktop. The phone's own parts
+  (`PHONE_ONLY` in `App.tsx`) are never on a desktop screen now.
+
 ## 0.32.0 (2026-10-23)
 
 - **The account menu lists your characters** (2026-10-23): CoffeeMUD

@@ -234,6 +234,8 @@ function phoneTerminalRows(theme: Theme, rows: number): number {
 }
 /** What the phone shows, whichever the way to play. */
 const PHONE_PARTS = new Set(["state", "hangup", "gear", "terminal", "ports", "pad", "command", "messages"]);
+/** What only the phone has (no desktop layout places it): never in Workshop's "everything". */
+const PHONE_ONLY = new Set(["pad"]);
 
 /** What each way to play has on its screen; Workshop has everything, less what the player hid. */
 const UX_PARTS: Record<Exclude<Ux, "workshop">, Set<string>> = {
@@ -868,6 +870,7 @@ function App() {
   const controlPanel = !PHONE && ux === "terminal" && textSize === 1;
   const has = (id: string) =>
     PHONE ? PHONE_PARTS.has(id) :
+    !PHONE_ONLY.has(id) &&
     !(WEB && DESKTOP_ONLY.has(id)) &&
     (ux === "workshop"
       ? (shown[id] ?? true)
