@@ -98,6 +98,8 @@ const STARTUP_LABELS: Record<StartupStep, string> = {
 const SCROLLBACK = 5000;
 /** Lines kept in the screen reader's hidden live region: it reads additions only, so a few will do. */
 const HEARD_KEPT = 50;
+/** All the narrator says when the connection ends, however it did. */
+const DISCONNECTED_WORDS = "CoffeeMUD disconnected.";
 /**
  * The default layout of each way to play (lib/ux.ts). Terminal and
  * Immersive always have theirs; Workshop's is where the player's
@@ -1017,11 +1019,11 @@ function App() {
         if (reason) {
           setStatus(reason);
           note(`*** ${reason}`);
-          // The narrator says it in every way to play but Terminal (the
-          // status reaches the screen reader there), without the system's
-          // own words for a dropped line.
-          if (narratedRef.current) voice.speak(reason.replace(/\s*\(.*\)$/, ""), true);
         }
+        // The narrator says only this, however it ended (the game's
+        // goodbye, a dropped line, Hang Up): what was still to say is cut.
+        // The status says why, for the screen reader.
+        if (narratedRef.current) voice.speak(DISCONNECTED_WORDS, true);
       }),
       // A logout or a switch: the old character's sounds fade out and their pictures close.
       mud.onCharacterLeft((message) => {
@@ -2709,7 +2711,7 @@ function App() {
         {has("nowPlaying") && nowPlaying && (
           <Movable id="nowPlaying" label="music playing" usual={usual.nowPlaying} className="menu-bar menu-chip" announce={announcePanel}>
             <button type="button" className="menu-title now-playing" data-testid="now-playing" title="The music playing. Click for the Mixer" onClick={() => setMixerOpen(true)}>
-              {`♪ ${mud.assetTitle(nowPlaying)}`}
+              {`♪ ${nowPlaying}`}
             </button>
           </Movable>
         )}

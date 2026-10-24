@@ -20,7 +20,7 @@ import { Dialog } from "./Dialog";
 interface MixerDialogProps {
   open: boolean;
   onClose: () => void;
-  /** The music playing now (an asset path), or null. */
+  /** The music playing now, by name, or null. */
   playing: string | null;
   onStatus: (message: string) => void;
 }
@@ -147,7 +147,7 @@ export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogPro
         </div>
       </div>
       <p className="mixer-playing" data-testid="mixer-playing">
-        {playing ? `Music: ${assetTitle(playing)}` : "No music playing."}
+        {playing ? `Music: ${playing}` : "No music playing."}
       </p>
       <p className="mixer-playing" data-testid="mixer-loops">
         {loops.bgn ? `Noise: ${assetTitle(loops.bgn)}` : "No background noise."} {loops.bgw ? `Weather: ${assetTitle(loops.bgw)}` : "No weather sound."}

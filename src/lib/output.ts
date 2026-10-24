@@ -46,17 +46,26 @@ export function cutLine(line: Line, n: number): Line {
 
 /** The start of the room's exits: `[Exits: north, east]` (AUTOEXITS) or `Obvious exits:` (EXITS). */
 const EXITS = /^\s*(\[\s*exits?\s*:|obvious\s+exits?\s*:|exits?\s*:)/i;
-/** A row of the long list under `Obvious exits:`: `North : The town square`, or `None.` */
-const EXIT_ROW = /^\s*([A-Za-z][A-Za-z -]{0,20}\s*:\s|none\.?\s*$)/i;
+/**
+ * A row of the long list under `Obvious exits:` (`lookAtExits`): a
+ * direction or a door's name, its colon, what it leads to (`North:
+ * The town square`, `a wooden portal: A dark hut`), or `None.`
+ */
+const EXIT_ROW = /^\s*([A-Za-z0-9][A-Za-z0-9 ',-]{0,40}?\s*:\s|none\.?\s*$)/i;
+/** A row this long was wrapped by the game: the next line is the rest of it. */
+const WRAPPED = 70;
 
 export const exitsLine = (text: string) => EXITS.test(text);
 
 /**
- * Tells the exits' lines, across lines: a bracketed list runs to its `]`
- * (wrapped at 80), the long list's rows follow its header.
+ * Tells the exits' lines, across lines and reads: a bracketed list runs
+ * to its `]` (wrapped at 80), the long list's rows follow its header,
+ * a row the game wrapped with the rest of it on the next line.
  */
 export class ExitsReader {
   private open: "bracket" | "rows" | null = null;
+  /** The last row ran to the wrap: the next line goes on with it. */
+  private wrapped = false;
 
   /** Whether this finished line is part of the exits. */
   line(text: string): boolean {
@@ -65,17 +74,21 @@ export class ExitsReader {
       return true;
     }
     if (this.open === "rows") {
-      if (text.trim() !== "" && EXIT_ROW.test(text)) return true;
+      const row = text.trim() !== "" && (this.wrapped || EXIT_ROW.test(text));
+      this.wrapped = row && text.trimEnd().length >= WRAPPED;
+      if (row) return true;
       this.open = null;
     }
     const m = EXITS.exec(text);
     if (!m) return false;
     if (m[1].startsWith("[")) this.open = text.includes("]") ? null : "bracket";
     else if (text.slice(m[0].length).trim() === "") this.open = "rows";
+    this.wrapped = false;
     return true;
   }
 
   reset() {
     this.open = null;
+    this.wrapped = false;
   }
 }

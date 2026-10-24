@@ -45,7 +45,7 @@ import * as earcons from "./earcons";
 import * as echoes from "./echoes";
 import { FightTalk } from "./fightTalk";
 import * as mud from "./mud";
-import { exitsLine, promptCut } from "./output";
+import { ExitsReader, promptCut } from "./output";
 import * as priority from "./priority";
 import * as voice from "./voice";
 
@@ -82,6 +82,9 @@ const spokenLook = ({ text, words, long }: mud.Hidden) =>
 const CONNECTING = /^\s*Connecting to CoffeeMUD/i;
 /** The game's welcome, which ends the quiet. */
 const WELCOME = /Welcome to CoffeeMUD/i;
+/** QUIT's question: "Quit -- are you sure (y/N)?" (`Quit.java`). */
+const QUIT_ASKED = /^quit\s*-+\s*are you sure\b/i;
+const QUIT_WORDS = "Ready to quit?";
 
 /** Where the player was, for the cues on coming into a room. */
 export interface Whereabouts {
@@ -199,6 +202,8 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
   /** A character's being made (src-tauri/src/creation.rs): known as its question comes, before that read's output. */
   const creating = useRef(false);
   const lastPrompt = useRef("");
+  /** QUIT's question, once said, so a read that leaves it showing doesn't say it again. */
+  const quitAsked = useRef("");
   /** The unfinished line after the last read, to leave the prompt out of a line the game wrote on after it. */
   const unfinished = useRef<string | null>(null);
   /** Between "Connecting to CoffeeMUD" and the game's welcome: the intro's art and words aren't said. */
@@ -207,6 +212,8 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
   const accountMenu = useRef(false);
   /** A hook went off for the read about to come (its `hook-fired` comes just before its `mud-output`). */
   const hooked = useRef(false);
+  /** The exits' lines, told across lines and reads as the output's are (App.tsx). */
+  const exits = useRef(new ExitsReader());
   useEffect(() => {
     const say = (text: string, first = false) => {
       if (on.current.voiced && voice.speakable(text)) voice.speak(text, false, null, { priority: first });
@@ -252,15 +259,21 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
         // The prompt (if the game wrote on after it) and the exits (the cues play them) aren't said.
         const before = unfinished.current;
         unfinished.current = e.partial ? e.partial.map((s) => s.text).join("") : null;
+        const lines = e.lines.map((line, i) => {
+          const full = line.map((s) => s.text).join("");
+          const text = i === 0 && e.kinds[i] !== "prompt" ? full.slice(promptCut(full, before)) : full;
+          return { text: text.trim(), kind: e.kinds[i], i, exits: exits.current.line(text) };
+        });
         if (inGame.current && !creating.current && !fired) {
-          const lone = e.lines
-            .map((line, i) => {
-              const text = line.map((s) => s.text).join("");
-              return { text: (i === 0 ? text.slice(promptCut(text, before)) : text).trim(), kind: e.kinds[i], i };
-            })
-            .filter((l) => l.text !== "" && l.kind === "game" && !exitsLine(l.text));
+          const lone = lines.filter((l) => l.text !== "" && l.kind === "game" && !l.exits);
           if (lone.length === 1 && e.echoes.length === 0 && !e.hidden && !urgent.has(lone[0].i)) say(lone[0].text);
         }
+        // QUIT's question (`Quit.java`), in the narrator's few words, once.
+        const asking = e.partial ? e.partial.map((s) => s.text).join("").trim() : "";
+        if (inGame.current && QUIT_ASKED.test(asking)) {
+          if (asking !== quitAsked.current) say(QUIT_WORDS, true);
+          quitAsked.current = asking;
+        } else quitAsked.current = "";
         // Making a character, the guide says the question, not the screens of text before it.
         if (inGame.current || (creating.current && !on.current.guideHidden)) return;
         // The account menu's dialog says the menu, in few words.
@@ -298,6 +311,7 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
       }),
       mud.onClosed(() => {
         talk.current?.stop();
+        exits.current.reset();
         inGame.current = false;
         creating.current = false;
         lastPrompt.current = "";

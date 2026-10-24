@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- **Where each race starts** (2026-10-24): the guide's facts about a
+  race begin with where it starts on coffeemud.net (Mud School, Cora
+  Isle, Magthere Wa`q or Tzbrakas Training Academy), shown beside the
+  list and said as the race is reached. From the game's wiki, since the
+  game's start rooms aren't in CoffeeMUD's source.
+- **The stats to spend points on show again** (2026-10-24): a read
+  that ended mid-line ("Enter a Stat to add or remove po") was taken
+  for the guide's question, and the table went with it, so the Stats
+  step showed nothing. A question now has to end as CoffeeMUD's do.
+- **The narrator no longer waits for ever after making a character**
+  (2026-10-24): the bundled voices rendered the journal's and the log's
+  lines ahead one after another, and a line wanted now waited behind
+  all of them ("Getting the answer ready…" on and on). A line wanted
+  now goes first.
+- **Coupler's own look at a creature is hidden from its first line**
+  (2026-10-24): the Bestiary's unobtrusive look showed and said its
+  first lines when the game's health line didn't start with the name
+  room.mobiles gives (a race's own words, a name in colors). Every line
+  to the prompt is hidden now, and a command typed meanwhile no longer
+  lets it through.
+- **Immersive leaves out all the exits' lines** (2026-10-24): a long
+  exit row the game wrapped, a door's row, and a wrapped `[Exits: …]`
+  no longer show or get said.
+- **`#play` plays as the music** (2026-10-24): on the BGM channel in
+  place of what was playing, which fades out; the game's music waits
+  till the song stops (the place's comes back then). The sound layers,
+  the menu bar and the Mixer call it "Music Editor - " and its name.
+- **QUIT and hanging up, said in few words** (2026-10-24): at QUIT's
+  question the narrator says "Ready to quit?"; when the connection
+  ends, however it did, "CoffeeMUD disconnected." and nothing else.
+
 ## 0.35.0 (2026-10-24)
 
 - **Music in the game's journals** (2026-10-24): the Music Editor's

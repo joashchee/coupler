@@ -52,6 +52,12 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 - If you touched `src-web/` or a module it shares: `cargo test` and
   `cargo clippy --all-targets` in `src-web/`, and `npm run build:web`.
 - Add a bullet to `CHANGELOG.md` under Unreleased.
+- **Check CoffeeMUD's wiki too** whenever a change relies on
+  CoffeeMUD's source: the wiki
+  (https://coffeemud.net:8443/wiki/) is the players' source of truth,
+  with coffeemud.net's own settings the source doesn't have. Where the
+  two differ, follow the live game and say so in a comment, with the
+  page.
 - **No game logs or captures** in a commit, an issue or a pull request
   unless you've removed other players' names and chat.
 - **Don't test against coffeemud.net with scripts.** It's a shared

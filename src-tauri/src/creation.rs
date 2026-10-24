@@ -402,6 +402,14 @@ fn problem(text: &str) -> bool {
     PROBLEMS.iter().any(|p| low.contains(p))
 }
 
+/// Whether an unfinished line can be a question: none, or ending as
+/// CoffeeMUD's do (`CharCreation.java`'s prompts: "Name: ", "(y/N)?",
+/// "Command or Name (?)", a list's "]", a sentence's ".", the game's own prompt's ">").
+/// Anything else is a line cut short by the read.
+fn asks(full: &str) -> bool {
+    full.trim_end().chars().last().is_none_or(|c| matches!(c, ':' | '?' | ')' | ']' | '>' | '.'))
+}
+
 /// A stats table's row: "Strength       : 10/18 +1 from Elf".
 fn stat_row(text: &str) -> Option<(String, u32, u32, i32)> {
     let (name, rest) = text.split_once(':')?;
@@ -500,6 +508,12 @@ impl Creation {
         }
         let raw = partial.map(text_of).unwrap_or_default();
         let full = squeeze(&raw);
+        // A read can end mid-line (the stats' screen is long): "Enter a
+        // Stat to add or remove po" isn't a question yet. The rest comes
+        // with the next read, the lines kept till then.
+        if !asks(&full) {
+            return None;
+        }
         if !added && full == self.last_prompt {
             return None;
         }
@@ -1179,7 +1193,7 @@ mod tests {
     #[test]
     fn a_theme_a_deity_and_the_rules() {
         let mut c = Creation::default();
-        let s = step(read(&mut c, &["Select from one of the following themes.", "", "Fantasy      : Battle the forces of good and evil.", "", "Heroic       : Play a superhero."], "Please select from the following: F/H"));
+        let s = step(read(&mut c, &["Select from one of the following themes.", "", "Fantasy      : Battle the forces of good and evil.", "", "Heroic       : Play a superhero.", "Please select from the following: F/H"], ": "));
         assert_eq!(s.kind, Theme);
         assert_eq!(names(&s), vec!["Fantasy", "Heroic"]);
         assert_eq!(s.choices[1].about.as_deref(), Some("Play a superhero."));
@@ -1246,6 +1260,20 @@ mod tests {
         // The answer isn't echoed: the game's next question goes on from the ": ".
         let s = step(read(&mut c, &[], ": Create a new character called 'Zed' (y/N)?"));
         assert_eq!((s.kind, s.subject.as_deref(), s.asked.as_str()), (ConfirmName, Some("Zed"), "Create a new character called 'Zed' (y/N)?"));
+    }
+
+    #[test]
+    fn the_stats_cut_by_a_read() {
+        let mut c = Creation::default();
+        step(read(&mut c, &["Please enter a name for your character, or '*'"], ": "));
+        c.typed("Zed");
+        // The read ends mid-line: no question yet.
+        assert!(read(&mut c, &[": Your current stats are: ", "Strength       : 9 /18 ", "Intelligence   : 4 /18 ", "STATS TOTAL    : 13/36", "", "You have 52 points remaining."], "Enter a Stat to add or remove po").is_none());
+        let s = step(read(&mut c, &["Enter a Stat to add or remove points, ? for help, or R for random roll."], ": "));
+        assert_eq!(s.kind, Stats);
+        let st = s.stats.unwrap();
+        assert_eq!(st.stats.len(), 2);
+        assert_eq!(st.points, Some(52));
     }
 
     #[test]

@@ -8,8 +8,11 @@
  *
  * And **its player**: the whole song rendered once (again after an
  * edit), played from where it was paused, rewound, looped or stopped,
- * on the BGM bus. One thing at a time with the editor's own Play Bar and
- * Play Song (lib/assets.ts's preview): either stops the other.
+ * as the music on the BGM channel (lib/assets.ts `playEditorSong`): what
+ * played fades out, the game's music waits till it stops, and the sound
+ * layers call it "Music Editor - <its name>". One thing at a time with
+ * the editor's own Play Bar and Play Song (lib/assets.ts's preview):
+ * either stops the other.
  */
 import { useSyncExternalStore } from "react";
 import * as sound from "./assets";
@@ -94,7 +97,14 @@ function halt() {
   if (!playing) return;
   playing.source.onended = null;
   playing.source.stop();
+  sound.releaseEditorSong(playing.source);
   playing = null;
+}
+
+/** What the sound layers call the song playing: "Music Editor", and its name if it has one. */
+function layerTitle(): string {
+  const name = loaded.path ? mud.assetTitle(loaded.path) : loaded.title;
+  return name ? `Music Editor - ${name}` : "Music Editor";
 }
 
 /** The song rendered whole, once a version. */
@@ -115,11 +125,20 @@ export async function play(): Promise<void> {
   sound.stopPreview();
   halt();
   const from = player.state === "stopped" || player.at >= b.duration ? 0 : player.at;
-  const handle = sound.playBuffer(b, player.looping, from);
-  const now = { source: handle.source, startedAt: sound.audioTime(), from };
+  let now: { source: AudioBufferSourceNode; startedAt: number; from: number } | null = null;
+  // Stopped by something else (the Mixer's Stop All, a logout): paused where it was.
+  const onTaken = () => {
+    if (!now || playing !== now) return;
+    const at = position();
+    playing = null;
+    changed({ state: "paused", at });
+  };
+  const handle = sound.playEditorSong(b, player.looping, from, layerTitle(), onTaken);
+  now = { source: handle.source, startedAt: sound.audioTime(), from };
   playing = now;
   handle.source.onended = () => {
     if (playing === now) {
+      sound.releaseEditorSong(handle.source);
       playing = null;
       changed({ state: "stopped", at: 0 });
     }

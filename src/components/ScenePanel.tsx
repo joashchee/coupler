@@ -20,7 +20,7 @@ interface ScenePanelProps {
   snapshot: mud.MapSnapshot | null;
   vitals: mud.Vitals | null;
   opponent: mud.Opponent | null;
-  /** The music playing, as an asset path. */
+  /** The music playing, by name (lib/assets.ts `onMusic`). */
   music: string | null;
   cues: boolean;
   voice: boolean;
@@ -52,10 +52,11 @@ export function ScenePanel({ snapshot, vitals, opponent, music, cues, voice, pic
   const room = snapshot?.room ?? null;
   const [loops, setLoops] = useState<Record<sound.AmbientBus, string | null>>({ bgn: null, bgw: null });
   useEffect(() => sound.onLoops(setLoops), []);
-  const layer = (name: string, playing: string | null | boolean) => (
+  /** `named`: `playing` is a name already, not an asset path. */
+  const layer = (name: string, playing: string | null | boolean, named = false) => (
     <li>
       <span className="scene-label">{name.padEnd(8)}</span>
-      {typeof playing === "boolean" ? (playing ? "on" : "off") : playing ? mud.assetTitle(playing) : "silent"}
+      {typeof playing === "boolean" ? (playing ? "on" : "off") : playing ? (named ? playing : mud.assetTitle(playing)) : "silent"}
     </li>
   );
 
@@ -106,7 +107,7 @@ export function ScenePanel({ snapshot, vitals, opponent, music, cues, voice, pic
         <ul className="scene-layers" data-testid="scene-layers">
           {layer("Place", loops.bgn)}
           {layer("Sky", loops.bgw)}
-          {layer("Music", music)}
+          {layer("Music", music, true)}
           {layer("Cues", cues)}
           {layer("Voice", voice)}
         </ul>

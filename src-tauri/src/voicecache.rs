@@ -300,6 +300,22 @@ struct Waiting {
     journal: VecDeque<Job>,
     log: VecDeque<Job>,
     busy: Option<Key>,
+    /// Lines wanted now (`live`), waiting or rendering: no prerender
+    /// starts while there are any. The engines are behind one lock each,
+    /// and a lock isn't fair (macOS's least of all): a backlog of the
+    /// log's lines rendered back to back kept the narrator waiting for
+    /// minutes, "Getting the answer ready…" on and on.
+    live: usize,
+}
+
+/// A line wanted now (`Queue::live`): the prerenders wait till it's dropped.
+pub struct Live<'a>(&'a Queue);
+
+impl Drop for Live<'_> {
+    fn drop(&mut self) {
+        self.0.waiting.lock().unwrap().live -= 1;
+        self.0.changed.notify_all();
+    }
 }
 
 /// The work for the prerender thread: the journal's lines first.
@@ -326,16 +342,26 @@ impl Queue {
         self.changed.notify_all();
     }
 
-    /// The next line to render, waiting for one; it's busy until `done`.
+    /// The next line to render, waiting for one, and for no line to be
+    /// wanted now (`live`); it's busy until `done`.
     pub fn next(&self) -> Job {
         let mut w = self.waiting.lock().unwrap();
         loop {
-            if let Some(job) = w.journal.pop_front().or_else(|| w.log.pop_front()) {
-                w.busy = Some(job.key.clone());
-                return job;
+            if w.live == 0 {
+                if let Some(job) = w.journal.pop_front().or_else(|| w.log.pop_front()) {
+                    w.busy = Some(job.key.clone());
+                    return job;
+                }
             }
             w = self.changed.wait(w).unwrap();
         }
+    }
+
+    /// A line is wanted now, from any book or none: held while it's
+    /// rendered, so the prerenders wait for it.
+    pub fn live(&self) -> Live<'_> {
+        self.waiting.lock().unwrap().live += 1;
+        Live(self)
     }
 
     /// The line being rendered is done (made or failed).
@@ -382,6 +408,21 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("coupler-voicecache-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn a_line_wanted_now_goes_before_the_prerenders() {
+        let queue = std::sync::Arc::new(Queue::default());
+        let live = queue.live();
+        queue.push(Job { key: key("later"), gender: crate::cast::Gender::Masculine, origin: Origin::Log });
+        let worker = {
+            let queue = queue.clone();
+            std::thread::spawn(move || queue.next())
+        };
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(!worker.is_finished());
+        drop(live);
+        assert_eq!(worker.join().unwrap().key, key("later"));
     }
 
     #[test]

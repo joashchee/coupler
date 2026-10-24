@@ -27,6 +27,15 @@ since): read it before guessing what the server sends. To update it,
 download the tarball of `bozimmerman/CoffeeMud`'s `master` (the sandbox
 can't write a `.git` there) and unpack it in its place. A new snapshot
 changes `BUILT_FOR` in `mssp.rs` when `MUD.HOST_VERSION` changed.
+**The wiki is the players' source of truth** (decided 2026-10-24):
+anything that reads CoffeeMUD's source is checked against the game's
+wiki too, `https://coffeemud.net:8443/wiki/index.php?title=<Page>`
+(`&action=raw` for the wikitext; `wiki.coffeemud.net` redirects
+there). It has what the source can't: coffeemud.net's own settings
+(each race's start area, its enabled races, its help) and what players
+are told. Where they differ, say so and follow the live game; cite the
+page and the date read in a comment. Coupler itself never fetches it
+(rule 2): what's read goes into the code or a script's table.
 
 **`CHANGELOG.md`**: add a bullet whenever a change lands.
 

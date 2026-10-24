@@ -9,7 +9,8 @@ pixels a cell (the upper half block), in the 16 VGA colors, a
 near-white background made black. Reads each player race's Java
 (`Races/*.java`, those a theme makes available) for its facts: stat
 changes, senses, height, weight, lifespan, what it knows and can do,
-and what sets it apart from the other player races; and the game's own
+and what sets it apart from the other player races; where it starts
+on coffeemud.net (`START_AREAS`, from the game's wiki); and the game's own
 help on each (`resources/help/misc_help.ini`'s `<RACE>` entries). The
 player races are those a theme makes available and every race with
 such help: a game turns the rest on by its `ENABLE` flag
@@ -63,6 +64,22 @@ STATS = {
     "STRENGTH": "Strength", "DEXTERITY": "Dexterity", "CONSTITUTION": "Constitution",
     "INTELLIGENCE": "Intelligence", "WISDOM": "Wisdom", "CHARISMA": "Charisma",
 }
+# Where each player race starts on coffeemud.net: its server's own
+# START_ rooms (coffeemud.ini), not in the source, so from each race's
+# page on the game's wiki (coffeemud.net:8443/wiki, "Start Area", read
+# 2026-10-24). Check them there when the game adds a race.
+START_AREAS = {
+    "aarakocran": "on Cora Isle", "beastkin": "on Cora Isle", "centaur": "on Cora Isle",
+    "lizardman": "on Cora Isle", "merfolk": "on Cora Isle", "pixie": "on Cora Isle",
+    "drow": "in Magthere Wa`q", "duergar": "in Magthere Wa`q", "githyanki": "in Magthere Wa`q",
+    "mindflayer": "in Magthere Wa`q", "svirfneblin": "in Magthere Wa`q",
+    "dwarf": "at Mud School", "elf": "at Mud School", "gnome": "at Mud School",
+    "halfelf": "at Mud School", "halfling": "at Mud School", "human": "at Mud School",
+    "gnoll": "at Tzbrakas Training Academy", "goblin": "at Tzbrakas Training Academy",
+    "ogre": "at Tzbrakas Training Academy", "orc": "at Tzbrakas Training Academy",
+    "tiefling": "at Tzbrakas Training Academy",
+}
+
 SAVES = {"MAGIC": "magic", "POISON": "poison", "DISEASE": "disease", "FIRE": "fire", "COLD": "cold", "ELECTRIC": "lightning", "ACID": "acid", "MIND": "mind attacks", "PARALYSIS": "paralysis", "TRAPS": "traps", "UNDEAD": "undead"}
 
 
@@ -253,6 +270,9 @@ def feet(inches: int) -> str:
 def describe(race: dict, all_races: list) -> dict:
     """Facts in few words, and what sets the race apart from the others."""
     facts = []
+    start = START_AREAS.get(key(race["name"]))
+    if start:
+        facts.append(f"Starts {start}.")
     if race["stats"]:
         facts.append(", ".join(f"{s} {n:+d}" for s, n in race["stats"].items()) + ".")
     else:

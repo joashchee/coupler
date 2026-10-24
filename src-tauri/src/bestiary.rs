@@ -51,8 +51,9 @@
 //!   what it carried ("the body of an orc contains:").
 //! - **Looking unobtrusively** (the player's choice, off at first):
 //!   Coupler looks at each creature it has never seen looked at, once,
-//!   with `LOOK <it> UNOBTRUSIVELY`, which the room isn't told of
-//!   (`Look.java`), and hides the answer (`auto_look`, `hidden`).
+//!   with `LOOK <it> UNOBTRUSIVELY` (at a creature, `Look.java` still
+//!   tells the room; only a look around is quiet), and hides the
+//!   answer, every line to the prompt (`auto_look`, `hidden`).
 //! - **Items**: EXAMINE at one says its level, its weight and what it's
 //!   made of ("A dagger is a level 3 item, and weighs 2 pounds.  It is
 //!   mostly made of iron.", `getExamineItemString`), and the lines
@@ -650,6 +651,11 @@ impl Reader {
 
     /// A line the player sent: a look or an examine at something.
     pub fn typed(&mut self, line: &str, now: Instant) {
+        // Coupler's own look still waiting: the game answers it first, so
+        // it stays hidden (the player's line is answered after its prompt).
+        if self.looking.as_ref().is_some_and(|l| l.hidden && now.duration_since(l.asked) <= WAITS) {
+            return;
+        }
         self.looking = None;
         self.examining = None;
         self.gag = None;
@@ -771,14 +777,17 @@ impl Reader {
         self.hidden.clear();
         for (i, text) in texts.iter().enumerate() {
             let line = squeeze(text);
-            let hiding = self.looking.as_ref().is_some_and(|l| l.hidden);
-            // The blank line the answer starts with.
-            let leading = hiding && self.gag.is_none() && line.is_empty();
-            let answer = self.line(&line, text, &mut facts);
-            if answer && hiding && self.gag.is_none() {
+            // Coupler's own look is sent only at the prompt with nothing
+            // going on (`Who::gentle`), so the game's next lines are its
+            // answer: all hidden from the first, read or not. Waiting for
+            // a line the reader knows let the first ones through: the
+            // health line is the race's (`healthText`), and its name
+            // `name(viewer)`, not always room.mobiles' `Name()`.
+            if self.looking.as_ref().is_some_and(|l| l.hidden) && self.gag.is_none() {
                 self.gag = Some(now);
             }
-            if self.gag.is_some() || leading || (answer && hiding) {
+            self.line(&line, text, &mut facts);
+            if self.gag.is_some() {
                 self.hidden.push(i);
             }
         }
@@ -1532,6 +1541,20 @@ mod tests {
         read(&mut reader, &["A rat arrives."], t);
         assert!(reader.hidden().is_empty());
         assert!(!reader.busy());
+    }
+
+    #[test]
+    fn coupler_s_own_look_is_hidden_from_its_first_line() {
+        let mut reader = Reader::default();
+        // GMCP's `Name()` in colors; the race's health line its own words.
+        reader.gmcp("room.mobiles", r#"{"npcs":[{"^ga green slime^?":"slime"}]}"#);
+        let t = Instant::now();
+        reader.auto_look("^ga green slime^?", t);
+        read(&mut reader, &["The slime quivers, unharmed.", "", "A puddle of goo."], t);
+        assert_eq!(reader.hidden(), [0, 1, 2]);
+        reader.prompted();
+        read(&mut reader, &["A rat arrives."], t);
+        assert!(reader.hidden().is_empty());
     }
 
     #[test]

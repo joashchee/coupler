@@ -173,25 +173,53 @@ export async function playEffect(path: string, percent = 100, place?: mud.Place)
 
 // ---- Music: one piece at a time ----
 
-/** The music playing: set off by a trigger, or the place's (`place`, `setPlaceMusic`). */
-let music: { path: string; looping: boolean; percent: number; playing: { source: AudioBufferSourceNode; gain: GainNode } | null; place?: boolean } | null = null;
+/**
+ * The music playing: set off by a trigger, the place's (`place`,
+ * `setPlaceMusic`), or the Music Editor's song (`editor`, `playEditorSong`:
+ * `#play`), which holds the BGM channel till it stops; `taken` tells it
+ * when something else stops it.
+ */
+let music: {
+  path: string;
+  /** What the layers and the menu bar call it. */
+  title: string;
+  looping: boolean;
+  percent: number;
+  playing: { source: AudioBufferSourceNode; gain: GainNode } | null;
+  /** The place's music: what Rust asked for. */
+  place?: mud.PlaceMusic;
+  editor?: boolean;
+  taken?: () => void;
+} | null = null;
 /** Bumped by every music request, so one that finishes loading late doesn't start. */
 let musicTurn = 0;
-const musicListeners = new Set<(path: string | null) => void>();
+/** The place's music Rust last asked for while the Music Editor's song played: it comes in once that stops. */
+let placeWaiting: mud.PlaceMusic | null = null;
+const musicListeners = new Set<(title: string | null) => void>();
 
 function musicChanged() {
-  const path = music?.playing ? music.path : null;
-  musicListeners.forEach((f) => f(path));
+  const title = music?.playing ? music.title : null;
+  musicListeners.forEach((f) => f(title));
 }
 
-/** Calls `f` with the music now playing (its asset path), or null, each time that changes. */
-export function onMusic(f: (path: string | null) => void): () => void {
+/** Calls `f` with the music now playing (its name), or null, each time that changes. */
+export function onMusic(f: (title: string | null) => void): () => void {
   musicListeners.add(f);
   return () => musicListeners.delete(f);
 }
 
+/** The Music Editor's song is playing: the game's music waits. */
+const editorPlaying = () => !!music?.editor && !!music.playing;
+
+/** Tells the Music Editor's player its song was stopped by something else. */
+function taken(was: typeof music) {
+  if (was?.editor) was.taken?.();
+}
+
 /** Plays music, once or in a loop, unless it's what's playing already (then only its volume changes). */
 export async function playMusic(path: string, looping: boolean, percent = 100) {
+  // The player's own song goes on: a trigger's music doesn't cut it.
+  if (editorPlaying()) return;
   if (music && music.path === path && music.looping === looping) {
     music.percent = percent;
     if (music.playing) music.playing.gain.gain.value = percent / 100;
@@ -199,7 +227,7 @@ export async function playMusic(path: string, looping: boolean, percent = 100) {
   }
   stopMusic();
   const turn = ++musicTurn;
-  music = { path, looping, percent, playing: null };
+  music = { path, title: mud.assetTitle(path), looping, percent, playing: null };
   let buffer: AudioBuffer;
   try {
     buffer = await load(path, looping);
@@ -223,6 +251,7 @@ export async function playMusic(path: string, looping: boolean, percent = 100) {
 
 export function stopMusic() {
   musicTurn++;
+  const before = music;
   const was = music?.playing;
   music = null;
   if (was) {
@@ -230,11 +259,13 @@ export function stopMusic() {
     was.source.stop();
     musicChanged();
   }
+  taken(before);
 }
 
 /** Fades the music out and forgets it, the way a loop goes (`FADE`). */
 function fadeMusic() {
   musicTurn++;
+  const before = music;
   const was = music?.playing;
   music = null;
   if (was) {
@@ -242,6 +273,7 @@ function fadeMusic() {
     fadeOut(was);
     musicChanged();
   }
+  taken(before);
 }
 
 /**
@@ -253,9 +285,14 @@ function fadeMusic() {
  * from the top.
  */
 export async function setPlaceMusic(want: mud.PlaceMusic | null) {
+  if (editorPlaying()) {
+    placeWaiting = want;
+    return;
+  }
+  placeWaiting = null;
   if (want && music && music.path === want.path) {
     music.percent = want.volume;
-    music.place = true;
+    music.place = want;
     if (music.playing) {
       const gain = music.playing.gain.gain;
       const t = audio().context.currentTime;
@@ -271,7 +308,7 @@ export async function setPlaceMusic(want: mud.PlaceMusic | null) {
   }
   fadeMusic();
   const turn = ++musicTurn;
-  music = { path: want.path, looping: want.looping, percent: want.volume, playing: null, place: true };
+  music = { path: want.path, title: mud.assetTitle(want.path), looping: want.looping, percent: want.volume, playing: null, place: want };
   let buffer: AudioBuffer;
   try {
     buffer = await load(want.path, want.looping);
@@ -298,16 +335,37 @@ export async function setPlaceMusic(want: mud.PlaceMusic | null) {
 
 // ---- Played from a buffer: the Music Editor's song (lib/musicEditor.ts) ----
 
-/** Plays a buffer on the BGM bus from `offset` seconds, once or over and over. */
-export function playBuffer(buffer: AudioBuffer, looping: boolean, offset: number): { source: AudioBufferSourceNode; gain: GainNode } {
+/**
+ * Plays the Music Editor's song as the music, on the BGM bus from
+ * `offset` seconds, once or over and over: what was playing fades out,
+ * and the game's music waits till the song stops (`releaseEditorSong`).
+ * `onTaken`: something else stopped it (the Mixer's Stop All, a logout).
+ */
+export function playEditorSong(buffer: AudioBuffer, looping: boolean, offset: number, title: string, onTaken: () => void): { source: AudioBufferSourceNode; gain: GainNode } {
   const { context, buses } = audio();
+  if (music?.place) placeWaiting = music.place;
+  fadeMusic();
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.loop = looping;
   const gain = context.createGain();
   source.connect(gain).connect(buses.bgm);
   source.start(0, Math.max(0, Math.min(offset, buffer.duration)));
-  return { source, gain };
+  const playing = { source, gain };
+  music = { path: "", title, looping, percent: 100, playing, editor: true, taken: onTaken };
+  caption(`♪ Music: ${title}`);
+  musicChanged();
+  return playing;
+}
+
+/** The Music Editor's song stopped (paused, ended, stopped): the channel's free, and the place's music comes back. */
+export function releaseEditorSong(source: AudioBufferSourceNode) {
+  if (!music?.editor || music.playing?.source !== source) return;
+  music = null;
+  musicChanged();
+  const want = placeWaiting;
+  placeWaiting = null;
+  if (want) setPlaceMusic(want).catch(() => {});
 }
 
 /** Decodes WAV bytes (rendered music) into a buffer to play. */
@@ -406,6 +464,7 @@ function stopLoops() {
 
 /** Stops the music, the background noise and weather, and every sound effect still playing. */
 export function stopAll() {
+  placeWaiting = null;
   stopMusic();
   stopPreview();
   stopLoops();
@@ -420,14 +479,8 @@ export function stopAll() {
  * Rust once there's a room to have it.
  */
 export function fadeAll() {
-  musicTurn++;
-  const was = music?.playing;
-  music = null;
-  if (was) {
-    was.source.onended = null;
-    fadeOut(was);
-    musicChanged();
-  }
+  placeWaiting = null;
+  fadeMusic();
   for (const bus of ["bgn", "bgw"] as const) {
     loopTurn[bus]++;
     const loop = loops[bus]?.playing;

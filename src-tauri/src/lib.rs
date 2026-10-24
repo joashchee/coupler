@@ -402,10 +402,12 @@ fn start_renders(app: &AppHandle, dir: PathBuf) {
 #[allow(clippy::too_many_arguments)]
 async fn voice_synth(app: AppHandle, engine: String, voice: String, text: String, gender: cast::Gender, pitch: u16, rate: u16, book: Option<String>) -> Result<tauri::ipc::Response, String> {
     let bytes = tauri::async_runtime::spawn_blocking(move || {
+        let renders = app.state::<Renders>();
+        // Before any prerender (voicecache.rs `live`).
+        let _live = renders.queue.live();
         let Some(origin) = book.as_deref().and_then(voicecache::Origin::parse) else {
             return app.state::<synth::Engines>().say(&engine, &voice, &text, gender, pitch, rate);
         };
-        let renders = app.state::<Renders>();
         let key = cache_key(&engine, &voice, &text, gender, pitch, rate);
         renders.queue.claim(&key);
         if let Some(bytes) = renders.cache.lock().unwrap().as_mut().and_then(|c| c.get(&key, true)) {
