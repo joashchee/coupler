@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.39.0 (2026-10-24)
+
+- **What's on you, and your group** (2026-10-24): Coupler now knows
+  the spells and other effects on your character, each with its time
+  left, and your group. In a fight, The Fight shows them under the
+  faces ("On you Shield spell 3:20", counting down), your face takes
+  their look (a halo for Sanctuary, poison's green), a row for each
+  ally gives their health, mana and moves, and ◄ marks whoever the foe
+  is hitting. Cmd+Shift+X (the phone: On you) says it all, with the
+  times in words; a spell wearing off is a soft falling shimmer, a
+  command the game made you wait for (You must wait…) two taps when
+  it's ready again, both in Gear → Cues…. Combat Summary has Effects:
+  what was on you at the start, and what came and wore off. The times
+  come from the game's own AFFECTS, asked now and then and never shown,
+  only after something changed and never while you're typing or away;
+  on the web too.
+- **Combat Summary** (2026-10-24): every fight is kept, blow by blow,
+  to study afterwards (Cmd+Shift+Y, gear → Combat Summary…, or the
+  button under The Fight's picture at its end). A fight's page says who
+  you fought, how it ended and how long it took, where, the experience
+  and what you took; the damage you dealt in all and by weapon (hits,
+  misses, the biggest, the average) and by the spells and skills you
+  used; the damage taken by attacker and by attack, what you dodged and
+  healed; mana and moves spent, by command; your allies' blows; both
+  healths over time, in figures and as charts; every moment by the
+  second; and how it compares with your fights with the same foe
+  before. Damage is the game's own figure when it shows one, otherwise
+  measured from the health that fell and shared among the blows by the
+  game's hit words ("cut" is 11 to 15), marked "about". The last 200
+  fights are kept whole per character, older ones in brief; Copy as
+  Text copies a page. Kept in Storage and backups; on the web too.
+
 ## 0.38.0 (2026-10-24)
 
 - **The Fight** (2026-10-24): in a fight, a panel of its own faces you

@@ -12,7 +12,7 @@
  *
  * What the desktop keeps in app data, the browser keeps for this site in
  * IndexedDB (`coupler` database, store `kept`), each under the path the
- * desktop gives its file (`maps/<world>.json`, `cast/`, `pictures/`,
+ * desktop gives its file (`maps/<world>.json`, `cast/`, `pictures/`, `fights/`,
  * `played.json`), but the journal and the Bestiary, the web's own JSON
  * (`web/journal.json`, `web/bestiary.json`); settings in localStorage as
  * on the desktop. A Coupler Backup is those files and the settings, in
@@ -214,8 +214,8 @@ async function connect(x: Exports, portId: string): Promise<void> {
   if (socket) return;
   const world = call<string | null>(x, "world_of", { portId });
   if (!world) throw "Coupler doesn't know that way to play.";
-  const [map, cast, looks] = await Promise.all([load(`maps/${world}.json`), load(`cast/${world}.json`), load(`pictures/${world}.json`)]);
-  const url = call<string>(x, "mud_connect", { portId, map, cast, looks });
+  const [map, cast, looks, fights] = await Promise.all([load(`maps/${world}.json`), load(`cast/${world}.json`), load(`pictures/${world}.json`), load(`fights/${world}.json`)]);
+  const url = call<string>(x, "mud_connect", { portId, map, cast, looks, fights });
   const ws = new WebSocket(url);
   ws.binaryType = "arraybuffer";
   socket = ws;
@@ -429,6 +429,8 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
     case "map_set_landmark":
     case "map_clear":
     case "cast_list":
+    case "fights_list":
+    case "fight_page":
     case "hooks_count":
     case "ambience_now":
     case "who_now":

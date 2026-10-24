@@ -81,7 +81,9 @@ const TERMINAL_TYPE: &str = "ANSI-TRUECOLOR";
 
 /// GMCP packages Coupler tells the server it understands. Grows as the
 /// UI learns to show them (Char.Vitals for gauges, Room.Info for the map).
-const GMCP_SUPPORTS: &[&str] = &["Core 1", "Char 1", "Room 1", "Comm 1"];
+/// `Char.Effects` for the pushes `Char` alone doesn't turn on, `Group`
+/// for the group, which no other key does (`effects.rs`).
+const GMCP_SUPPORTS: &[&str] = &["Core 1", "Char 1", "Char.Effects 1", "Room 1", "Comm 1", "Group 1"];
 
 /// Something the session should act on, in stream order.
 #[derive(Debug, PartialEq)]
@@ -717,7 +719,7 @@ mod tests {
         assert_eq!(&out.replies[..3], &[IAC, DO, OPT_GMCP]);
         let hello = String::from_utf8_lossy(&out.replies);
         assert!(hello.contains(r#"Core.Hello {"client":"Coupler","version":"0.1.0"}"#));
-        assert!(hello.contains(r#"Core.Supports.Set ["Core 1","Char 1","Room 1","Comm 1"]"#));
+        assert!(hello.contains(r#"Core.Supports.Set ["Core 1","Char 1","Char.Effects 1","Room 1","Comm 1","Group 1"]"#));
 
         let mut msg = vec![IAC, SB, OPT_GMCP];
         msg.extend(br#"Char.Vitals {"hp":10,"maxhp":20}"#);

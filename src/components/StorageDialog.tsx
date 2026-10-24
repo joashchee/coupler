@@ -38,7 +38,7 @@ interface StorageDialogProps {
   onError: (message: string) => void;
 }
 
-type Forget = "unusedAssets" | "beforeRestore" | "maps" | "looks" | "journal" | "bestiary";
+type Forget = "unusedAssets" | "beforeRestore" | "maps" | "looks" | "journal" | "bestiary" | "fights";
 
 /** Each kind's name, in the order shown, and what deletes it. */
 const ROWS: { id: string; name: string; cache?: true; forget?: Forget }[] = [
@@ -58,6 +58,7 @@ const ROWS: { id: string; name: string; cache?: true; forget?: Forget }[] = [
   { id: "hooks", name: "The hooks" },
   { id: "journal", name: "The journal and the log", forget: "journal" },
   { id: "bestiary", name: "The Bestiary and Items", forget: "bestiary" },
+  { id: "fights", name: "Fights kept", forget: "fights" },
   { id: "other", name: "Everything else" },
 ];
 
@@ -96,6 +97,12 @@ const WARNINGS: Record<Forget, { title: string; words: string; done: string; whi
     title: "Delete the Bestiary and the Items?",
     words: "Every creature and item you've come across, and all Coupler learned of them, is deleted, for good.",
     done: "Deleted the Bestiary and the Items",
+    whilePlaying: true,
+  },
+  fights: {
+    title: "Delete the Fights Kept?",
+    words: "Every fight's Combat Summary, in every world and by every character, is deleted, for good.",
+    done: "Deleted the fights kept",
     whilePlaying: true,
   },
 };

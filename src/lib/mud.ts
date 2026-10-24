@@ -260,6 +260,89 @@ export interface Vitals {
 /** Each change to the vitals; null once the player has left the game or their character. */
 export const onVitals = (f: (vitals: Vitals | null) => void): Promise<UnlistenFn> => listen<Vitals | null>("vitals", (e) => f(e.payload));
 
+// ---- What's on the player, their cooldowns and group (src-tauri/src/effects.rs) ----
+
+/** Something on the player: AFFECTS' words ("Shield spell"), else GMCP's name. */
+export interface Effect {
+  name: string;
+  /** When it wears off (Date.now() time), if the game said. */
+  endsAt: number | null;
+}
+/** A command the game says must wait. */
+export interface Cooldown {
+  name: string;
+  endsAt: number;
+  /** From the game's hours: about. */
+  about: boolean;
+}
+/** Someone else in the player's group (GMCP `group`). */
+export interface Ally {
+  name: string;
+  hp: number | null;
+  maxHp: number | null;
+  mana: number | null;
+  maxMana: number | null;
+  moves: number | null;
+  maxMoves: number | null;
+  level: number | null;
+}
+export interface Group {
+  leader: string;
+  /** Whom the foe is hitting, in a fight: "you" for the player. */
+  tank: string | null;
+  allies: Ally[];
+}
+export interface Status {
+  effects: Effect[];
+  cooldowns: Cooldown[];
+  /** AFFECTS' first lines, in the game's words: "You are hungry." */
+  states: string[];
+  group: Group | null;
+  /** AFFECTS has been read since the character came in. */
+  read: boolean;
+}
+/** What came and went: an effect, a cooldown over, the foe turning on someone. */
+export type StatusChange = { kind: "gained" | "lost" | "ready" | "tank"; name: string };
+/** Each change to what's on the player, their cooldowns or group. */
+export const onStatus = (f: (status: Status) => void): Promise<UnlistenFn> => listen<Status>("status", (e) => f(e.payload));
+export const onStatusChanges = (f: (changes: StatusChange[]) => void): Promise<UnlistenFn> => listen<StatusChange[]>("effects-changed", (e) => f(e.payload));
+
+/** Time left, short, for a row: "3:20", "1h 2m", "2d". */
+export function timeLeft(endsAt: number, now: number): string {
+  const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const hours = Math.floor(seconds / 3600);
+  return hours < 48 ? `${hours}h ${Math.floor((seconds % 3600) / 60)}m` : `${Math.floor(hours / 24)}d`;
+}
+
+/** Time left in words, for the voice: "3 minutes 20 seconds". */
+export function timeLeftWords(endsAt: number, now: number): string {
+  const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  const unit = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  if (seconds < 60) return unit(seconds, "second");
+  if (seconds < 3600) return [unit(Math.floor(seconds / 60), "minute"), seconds % 60 ? unit(seconds % 60, "second") : ""].filter(Boolean).join(" ");
+  const hours = Math.floor(seconds / 3600);
+  if (hours < 48) return [unit(hours, "hour"), Math.floor((seconds % 3600) / 60) ? unit(Math.floor((seconds % 3600) / 60), "minute") : ""].filter(Boolean).join(" ");
+  return unit(Math.floor(hours / 24), "day");
+}
+
+/** What's on the player, their cooldowns and group, in words for the say key. */
+export function describeStatus(s: Status | null, now: number): string {
+  if (!s) return "Nothing's known yet of what's on you.";
+  const parts: string[] = [];
+  if (s.effects.length === 0) parts.push(s.read ? "Nothing's on you." : "Nothing's known yet of what's on you.");
+  else parts.push(`On you: ${s.effects.map((e) => (e.endsAt === null ? e.name : `${e.name}, ${timeLeftWords(e.endsAt, now)}`)).join("; ")}.`);
+  if (s.cooldowns.length > 0) parts.push(`Waiting: ${s.cooldowns.map((c) => `${c.name}, ${c.about ? "about " : ""}${timeLeftWords(c.endsAt, now)}`).join("; ")}.`);
+  const states = s.states.filter((line) => line !== "You are standing.");
+  if (states.length > 0) parts.push(states.join(" "));
+  if (s.group) {
+    const ally = (a: Ally) => [a.name, a.hp === null ? null : a.maxHp === null ? `health ${a.hp}` : `health ${a.hp} of ${a.maxHp}`, a.mana === null ? null : `mana ${a.mana}`].filter(Boolean).join(", ");
+    parts.push(`Your group: ${s.group.allies.map(ally).join("; ")}.`);
+    if (s.group.tank) parts.push(s.group.tank === "you" ? "The foe is hitting you." : `The foe is hitting ${s.group.tank}.`);
+  }
+  return parts.join(" ");
+}
+
 /** One line of talk (src-tauri/src/senses.rs): a tell, the group, a say in the room, or a channel. */
 export interface Talk {
   kind: "tell" | "group" | "say" | "channel";
@@ -434,6 +517,54 @@ export const bestiaryItem = (key: string) => invoke<ItemEntry | null>("bestiary_
 export const bestiaryAutoLook = (on: boolean) => invoke<void>("bestiary_auto_look", { on });
 /** The Bestiary learned something. */
 export const onBestiaryChanged = (f: () => void): Promise<UnlistenFn> => listen("bestiary-changed", () => f());
+
+// ---- The fights kept, for Combat Summary (src-tauri/src/fight_log.rs) ----
+
+/** How a fight ended. */
+export type FightEnding = "killed" | "fled" | "youFled" | "youDied" | "over";
+
+/** A fight in brief. */
+export interface FightOverview {
+  id: number;
+  /** When it began, Unix milliseconds, and how long it lasted. */
+  started: number;
+  length: number;
+  foes: string[];
+  foeKey: string;
+  ending: FightEnding;
+  place: string | null;
+  xp: number;
+  dealt: number;
+  taken: number;
+  /** Some of the damage is estimated. */
+  about: boolean;
+  /** Its details are still kept. */
+  full: boolean;
+}
+
+/** A line of health over time, in rows of cells, top first. */
+export interface FightChart {
+  name: string;
+  rows: string[];
+}
+
+export interface FightSection {
+  heading: string;
+  lines: string[];
+  charts: FightChart[];
+}
+
+/** One fight's Combat Summary: a flat page of headings. */
+export interface FightPage {
+  overview: FightOverview;
+  sections: FightSection[];
+}
+
+/** The fights of the character last played, the latest first. */
+export const fightsList = () => invoke<FightOverview[]>("fights_list");
+export const fightPage = (id: number) => invoke<FightPage | null>("fight_page", { id });
+/** A fight was kept (its overview), or the fights were deleted (null). */
+export const onFightKept = (f: (o: FightOverview | null) => void): Promise<UnlistenFn> => listen<FightOverview | null>("fight-kept", (e) => f(e.payload));
 
 // ---- Triggers, gags, aliases and tickers (src-tauri/src/automation.rs) ----
 

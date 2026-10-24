@@ -33,7 +33,7 @@ pub const EXTENSION: &str = "coupler";
 /// What's backed up and restored, by name in app data. `web` is the web
 /// build's journal and Bestiary (its own JSON, not the desktop's
 /// databases), kept so a web backup restored here loses nothing.
-pub const KEPT: &[&str] = &["Assets", "maps", "pictures", "cast", "hooks.sqlite", "journal.sqlite", "bestiary.sqlite", "played.json", "web"];
+pub const KEPT: &[&str] = &["Assets", "maps", "pictures", "cast", "hooks.sqlite", "journal.sqlite", "bestiary.sqlite", "fights", "played.json", "web"];
 
 /// The settings' record in a backup.
 const SETTINGS_RECORD: &str = "@settings";

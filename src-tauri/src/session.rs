@@ -44,10 +44,12 @@ use crate::music;
 use crate::ansi::{Line, Screen};
 use crate::automation::{self, Automation};
 use crate::channels::Channels;
+use crate::effects::{self, Watch};
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
+use crate::fight_log::{self, Fight, Fights, Recorder};
 use crate::{face, item_art};
 use crate::daytime::{self, Daytime, Phase};
 use crate::foley::{self, Comings, Happening, Movement, Place};
@@ -251,6 +253,10 @@ fn unix_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
+fn unix_ms() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+}
+
 /// The room's picture: its name from `room.info` (the rest of the
 /// scene is the ambience's and the time's), and the scene last sent.
 #[derive(Default)]
@@ -289,6 +295,17 @@ struct MusicWritten {
     message: String,
 }
 
+/// Every fight, recorded for its Combat Summary (`fight_log.rs`), and
+/// the world's fights kept (`fights/<world>.json`): the world and
+/// character last played, so they can be read after hanging up.
+#[derive(Default)]
+struct FightStore {
+    recorder: Recorder,
+    book: Fights,
+    world: Option<&'static str>,
+    character: String,
+}
+
 /// The fight (`combat.rs`) and what was last sent.
 #[derive(Default)]
 struct CombatStore {
@@ -311,6 +328,8 @@ pub struct Session {
     character: Mutex<Character>,
     /// Who the player is fighting; new each connection.
     combat: Mutex<CombatStore>,
+    /// Every fight recorded and kept (`fight_log.rs`), the world's.
+    fights: Mutex<FightStore>,
     /// Music in the journals (`songbook.rs`); new each connection.
     songbook: Mutex<Songbook>,
     /// The vitals and talk (`senses.rs`); new each connection.
@@ -345,6 +364,8 @@ pub struct Session {
     ways: Mutex<Ways>,
     /// The game's channels, turned on and off by its own commands (`channels.rs`).
     channels: Mutex<Channels>,
+    /// What's on the player, their cooldowns and group (`effects.rs`).
+    effects: Mutex<Watch>,
 }
 
 /// Something Coupler held back of the player's rules: too much at once.
@@ -431,6 +452,11 @@ fn looks_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
     Ok(dir.join("pictures").join(format!("{world}.json")))
 }
 
+fn fights_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
+    Ok(dir.join("fights").join(format!("{world}.json")))
+}
+
 fn cast_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
     Ok(dir.join("cast").join(format!("{world}.json")))
@@ -498,6 +524,7 @@ impl Session {
         };
         self.load_map(app, port.world);
         self.load_cast(app, port.world);
+        self.load_fights(app, port.world);
         {
             let mut journal = self.journal.lock().unwrap();
             if journal.world != Some(port.world) {
@@ -525,6 +552,7 @@ impl Session {
         self.creation.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
         self.channels.lock().unwrap().closed();
+        self.effects.lock().unwrap().closed();
         self.automation.lock().unwrap().closed();
         *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
 
@@ -589,6 +617,8 @@ impl Session {
     /// Sends a command and tells everything that waits for its answer.
     fn send_command(&self, app: &AppHandle, line: &str) -> Result<(), String> {
         self.write(&telnet::encode_line(line))?;
+        self.fights.lock().unwrap().recorder.sent(line, unix_ms());
+        self.effects.lock().unwrap().sent(line, unix_ms());
         self.echoes.lock().unwrap().typed(line, Instant::now());
         self.long_look.lock().unwrap().typed(line, Instant::now());
         self.bestiary.lock().unwrap().reader.typed(line, Instant::now());
@@ -670,6 +700,11 @@ impl Session {
                 store.opened = false;
                 storage::remove(&root, what)
             }
+            "fights" => {
+                let mut store = self.fights.lock().unwrap();
+                store.book = Fights::default();
+                storage::remove(&root, what)
+            }
             "beforeRestore" => storage::remove(&root, what),
             _ => return Err("Coupler doesn't know that kind of data.".into()),
         };
@@ -678,6 +713,9 @@ impl Session {
             "journal" => self.journal_changed(app),
             "bestiary" => {
                 let _ = app.emit("bestiary-changed", ());
+            }
+            "fights" => {
+                let _ = app.emit("fight-kept", None::<fight_log::Overview>);
             }
             _ => {}
         }
@@ -765,6 +803,8 @@ impl Session {
     fn who_tick(&self, app: &AppHandle) {
         let now = Instant::now();
         self.keep_alive(now);
+        let kept = self.fights.lock().unwrap().recorder.tick(unix_ms());
+        self.fight_kept(app, kept);
         self.songbook_tick(app, now);
         // A WRITE under way takes the next lines as its answers: nothing
         // of Coupler's own (WHO, WEATHER, a look, a ticker) goes till it's done.
@@ -775,6 +815,12 @@ impl Session {
         if self.channels.lock().unwrap().awaiting(now) {
             return;
         }
+        // Nor AFFECTS' (effects.rs); the cooldowns count down meanwhile.
+        self.effects.lock().unwrap().tick(unix_ms());
+        self.update_effects(app);
+        if self.effects.lock().unwrap().awaiting(unix_ms()) {
+            return;
+        }
         self.automation_tick(app, now);
         if self.who.lock().unwrap().due(now) {
             if let Err(e) = self.write(&telnet::encode_line("who")) {
@@ -783,6 +829,14 @@ impl Session {
             return;
         }
         let gentle = self.who.lock().unwrap().gentle(now);
+        // What's on the player, when it changed and it's gentle to ask.
+        if gentle && self.effects.lock().unwrap().wants(unix_ms()) {
+            let ask = self.effects.lock().unwrap().ask(unix_ms());
+            if let Err(e) = self.write(&telnet::encode_line(ask)) {
+                log::warn!("{e}");
+            }
+            return;
+        }
         let mut ambient = self.ambient.lock().unwrap();
         if gentle && ambient.ambient.weather_wanted(now) {
             ambient.ambient.weather_asked(now);
@@ -885,6 +939,81 @@ impl Session {
             log::warn!("couldn't save the voices: {e}");
             self.cast.lock().unwrap().unsaved = true;
         }
+    }
+
+    // ---- The fights kept (fight_log.rs) ----
+
+    fn load_fights(&self, app: &AppHandle, world: &'static str) {
+        let mut store = self.fights.lock().unwrap();
+        if store.world == Some(world) {
+            return;
+        }
+        let book = match fights_path(app, world).and_then(|p| match std::fs::read_to_string(&p) {
+            Ok(json) => Fights::from_json(&json),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Fights::default()),
+            Err(e) => Err(format!("The fights kept couldn't be opened. ({e})")),
+        }) {
+            Ok(book) => book,
+            Err(e) => {
+                // As with the map: start afresh, the old file kept aside.
+                log::warn!("{e}");
+                if let Ok(p) = fights_path(app, world) {
+                    let _ = std::fs::rename(&p, p.with_extension("json.unreadable"));
+                }
+                Fights::default()
+            }
+        };
+        *store = FightStore { book, world: Some(world), ..FightStore::default() };
+    }
+
+    /// One read for the fight's record: the fight, the vitals, the lines.
+    fn fight_read(&self, app: &AppHandle, texts: &[String]) {
+        let opponent = self.combat.lock().unwrap().combat.opponent();
+        let (vitals, name) = {
+            let senses = self.senses.lock().unwrap();
+            (senses.senses.vitals(), senses.senses.name().to_string())
+        };
+        let place = self.atlas.lock().unwrap().map.here_name().map(str::to_string);
+        let on = self.effects.lock().unwrap().status().effects.clone();
+        let kept = {
+            let mut store = self.fights.lock().unwrap();
+            if !name.is_empty() {
+                store.character = name;
+            }
+            let reading = fight_log::Reading { opponent: opponent.as_ref(), vitals: vitals.as_ref(), lines: texts, place: place.as_deref(), effects: &on };
+            store.recorder.read(reading, unix_ms())
+        };
+        self.fight_kept(app, kept);
+    }
+
+    /// Keeps a fight that's over, saves the world's fights, and emits
+    /// `fight-kept` with its overview.
+    fn fight_kept(&self, app: &AppHandle, fight: Option<Fight>) {
+        let Some(fight) = fight else { return };
+        let (overview, json, world) = {
+            let mut store = self.fights.lock().unwrap();
+            let Some(world) = store.world else { return };
+            let character = store.character.clone();
+            let overview = store.book.keep(&character, fight);
+            store.book.take_changed();
+            (overview, store.book.to_json(), world)
+        };
+        if let Err(e) = fights_path(app, world).and_then(|path| write_replacing(&path, json)) {
+            log::warn!("couldn't save the fights: {e}");
+        }
+        let _ = app.emit("fight-kept", Some(overview));
+    }
+
+    /// The fights of the character last played, the latest first.
+    pub fn fights_list(&self) -> Vec<fight_log::Overview> {
+        let store = self.fights.lock().unwrap();
+        store.book.list(&store.character)
+    }
+
+    /// One fight's Combat Summary.
+    pub fn fight_page(&self, id: i64) -> Option<fight_log::Page> {
+        let store = self.fights.lock().unwrap();
+        store.book.page(&store.character, id)
     }
 
     /// A GMCP message for the cast. Returns whether anyone new was met.
@@ -1547,8 +1676,12 @@ impl Session {
         self.update_picture(app);
         self.combat.lock().unwrap().combat.leave();
         self.update_combat(app);
+        let kept = self.fights.lock().unwrap().recorder.leave(unix_ms());
+        self.fight_kept(app, kept);
         self.senses.lock().unwrap().senses.leave();
         self.update_vitals(app);
+        self.effects.lock().unwrap().closed();
+        self.update_effects(app);
         self.cast.lock().unwrap().cast.leave();
         self.save_cast(app, true);
         self.who.lock().unwrap().leave();
@@ -1584,6 +1717,33 @@ impl Session {
         }
     }
 
+    /// Emits `status` when what's on the player, their cooldowns or group
+    /// changed, and `effects-changed` with what came and went (for the
+    /// cues); a fight's record notes them (`effects.rs`).
+    fn update_effects(&self, app: &AppHandle) {
+        let (status, changes) = {
+            let mut watch = self.effects.lock().unwrap();
+            (watch.take_status(), watch.take_changes())
+        };
+        if !changes.is_empty() {
+            let now = unix_ms();
+            let mut store = self.fights.lock().unwrap();
+            for change in &changes {
+                match change {
+                    effects::Change::Gained(name) => store.recorder.effect(true, name, now),
+                    effects::Change::Lost(name) => store.recorder.effect(false, name, now),
+                    effects::Change::Tank(name) => store.recorder.tank(name, now),
+                    effects::Change::Ready(_) => {}
+                }
+            }
+            drop(store);
+            let _ = app.emit("effects-changed", &changes);
+        }
+        if let Some(status) = status {
+            let _ = app.emit("status", status);
+        }
+    }
+
     /// The player logged out or switched character, still connected.
     /// A logout is like leaving the game: nowhere, no walk, no ambience.
     /// A switch stops the walk and sends the ambience again once the
@@ -1596,6 +1756,8 @@ impl Session {
         self.long_look.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
         self.channels.lock().unwrap().closed();
+        self.effects.lock().unwrap().closed();
+        self.update_effects(app);
         self.bestiary.lock().unwrap().reader.clear();
         let message = match &left {
             Left::Logout => {
@@ -1606,6 +1768,8 @@ impl Session {
                 self.stop_walk(app, "Stopped walking: you switched character.");
                 self.combat.lock().unwrap().combat.leave();
                 self.update_combat(app);
+                let kept = self.fights.lock().unwrap().recorder.leave(unix_ms());
+                self.fight_kept(app, kept);
                 self.senses.lock().unwrap().senses.leave();
                 self.update_vitals(app);
                 self.who.lock().unwrap().leave();
@@ -2340,6 +2504,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         session.character_left(app, left);
                     }
                     session.combat.lock().unwrap().combat.gmcp(&package, &data);
+                    session.effects.lock().unwrap().gmcp(&package, &data);
                     session.ways.lock().unwrap().gmcp(&package, &data);
                     let moved = session.comings.lock().unwrap().gmcp(&package, &data, Instant::now());
                     let (learned, cry) = session.bestiary_gmcp(app, &package, &data);
@@ -2399,6 +2564,13 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 let _ = app.emit("channels", listing);
             }
         }
+        // Nor AFFECTS', asked for the effects' times (effects.rs).
+        {
+            let mut watch = session.effects.lock().unwrap();
+            let now = unix_ms();
+            watch.me(session.senses.lock().unwrap().senses.name());
+            hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| watch.line(text, now)).map(|(i, _)| i));
+        }
         hidden_lines.sort_unstable();
         hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
@@ -2420,6 +2592,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 !hidden_lines.contains(&(i - 1))
             });
         }
+        // The fight's record reads every line, gagged or not (fight_log.rs).
+        session.fight_read(app, &texts);
         // The player's gags, and what their triggers set off (automation.rs).
         let acting = session.who.lock().unwrap().acting();
         let (gagged, actions) = session.automation.lock().unwrap().lines(&texts, acting, Instant::now());
@@ -2497,6 +2671,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         session.update_picture(app);
         session.update_combat(app);
         session.update_vitals(app);
+        session.update_effects(app);
         // The frontend plays and shows them (src/lib/assets.ts); the
         // place's music plays as the ambience says.
         ambient::without_place_music(&mut fired);

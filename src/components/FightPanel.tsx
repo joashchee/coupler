@@ -11,24 +11,33 @@
  * motion); the player's mana and moves, and across from them the fight's
  * clock, the range and the result; then the picture, painted by Rust
  * (src-tauri/src/fight_art.rs): the room with the two of them in it, each
- * with their mood and hurt; and under it each one's hurt in words.
+ * with their mood and hurt, the player with what's on them; under it each
+ * one's hurt in words; then what's on the player and their cooldowns,
+ * each with its time left, and whom the foe is hitting; then a row for
+ * each ally in the group, their health a bar and figures, mana and moves
+ * (src-tauri/src/effects.rs).
  *
  * Words first (rule 10): one sentence says it all for a screen reader,
  * and the rows, the bars and the picture are hidden from it. No live
  * region: the fight talk (lib/fightTalk.ts) and the say key speak the
- * fight. It never takes the focus.
+ * fight. It never takes the focus. Once it's over, Combat Summary… opens
+ * the fight's page (components/CombatSummaryDialog.tsx).
  */
 import { useEffect, useRef, useState } from "react";
 import * as mud from "../lib/mud";
-import { clock, foeMoment, hurtWords, rangeWords, resultWords, yourMoment, type Bout } from "../lib/fight";
+import { clock, effectEntries, foeMoment, hurtWords, rangeWords, resultWords, yourMoment, type Bout } from "../lib/fight";
 import type { PictureSettings } from "../lib/pictures";
 
 interface FightPanelProps {
   bout: Bout;
   vitals: mud.Vitals | null;
+  /** What's on the player, their cooldowns and group. */
+  status: mud.Status | null;
   settings: PictureSettings;
   /** The room the fight is in, as its picture has it: painted again when it changes. */
   scene: mud.Scene | null;
+  /** Opens Combat Summary on this fight, once it's over. */
+  onSummary: () => void;
 }
 
 /** How long a lost strip of a health bar stays before it drains away. */
@@ -107,7 +116,23 @@ const fit = (text: string, width: number, align: "left" | "right" = "left") => {
 const yourFigures = (v: mud.Vitals | null) => (v?.hp == null ? "" : v.maxHp == null ? `${v.hp}` : `${v.hp} of ${v.maxHp}`);
 const foeFigures = (o: mud.Opponent) => (o.health !== null && o.healthMax !== null ? `${o.health} of ${o.healthMax}` : o.percent !== null ? `${o.percent}%` : "");
 
-export function FightPanel({ bout, vitals, settings, scene }: FightPanelProps) {
+/** An ally's row: "Bob ◄  ████░░ 37/90   M 30/40  V 80/90". */
+function AllyRow({ ally, tank, half, right }: { ally: mud.Ally; tank: boolean; half: number; right: number }) {
+  const name = fit(`${ally.name}${tank ? " ◄" : ""}`, 12);
+  const figures = ally.hp === null ? "" : ally.maxHp === null ? `${ally.hp}` : `${ally.hp}/${ally.maxHp}`;
+  const bar = Math.max(4, half - 12 - figures.length - 2);
+  const pair = (letter: string, now: number | null, most: number | null) => (now === null ? "" : most === null ? `${letter} ${now}` : `${letter} ${now}/${most}`);
+  return (
+    <p className="fight-row">
+      {name}
+      <HealthBar percent={mud.percentOf(ally.hp, ally.maxHp)} width={bar} from="left" />
+      {fit(` ${figures}`, half - 12 - bar)}
+      {fit([pair("M", ally.mana, ally.maxMana), pair("V", ally.moves, ally.maxMoves)].filter(Boolean).join("  "), right, "right")}
+    </p>
+  );
+}
+
+export function FightPanel({ bout, vitals, status, settings, scene, onSummary }: FightPanelProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(0);
   const [art, setArt] = useState<mud.AnsiArt | null>(null);
@@ -134,7 +159,8 @@ export function FightPanel({ bout, vitals, settings, scene }: FightPanelProps) {
   const o = bout.opponent;
   const foe = o.name ?? "someone";
   const mine = mud.percentOf(vitals?.hp ?? null, vitals?.maxHp ?? null);
-  const you = yourMoment(bout, mine);
+  const on = status?.effects.map((e) => e.name) ?? [];
+  const you = yourMoment(bout, mine, on);
   const theirs = foeMoment(bout);
   const painting = settings.engine !== "none";
   const sceneKey = scene ? `${scene.world}/${scene.room}/${scene.time}/${scene.weather}/${scene.look}` : "";
@@ -152,7 +178,7 @@ export function FightPanel({ bout, vitals, settings, scene }: FightPanelProps) {
     };
     // The moments by their parts, so a new object with the same look doesn't paint again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [painting, foe, you.mood, you.hurt, theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
+  }, [painting, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
 
   const half = Math.floor(columns / 2);
   const right = columns - half;
@@ -162,10 +188,15 @@ export function FightPanel({ bout, vitals, settings, scene }: FightPanelProps) {
   const result = resultWords(bout);
   const yourHurt = hurtWords(you.hurt);
   const theirHurt = theirs.mood === "dead" ? "dead" : hurtWords(theirs.hurt);
+  const entries = effectEntries(status, now);
+  const group = status?.group ?? null;
+  const tank = group?.tank ? (group.tank === "you" ? "hitting you" : `hitting ${group.tank}`) : "";
   const words =
     `You, ${yourFigures(vitals) ? `${yourFigures(vitals)} health, ` : ""}${yourHurt}. ` +
-    `${foeName}, ${foeFigures(o) ? `${foeFigures(o)}, ` : ""}${theirHurt}. ` +
-    `${elapsed}${range ? `, ${range}` : ""}.${result ? ` ${result}` : ""}`;
+    `${foeName}, ${foeFigures(o) ? `${foeFigures(o)}, ` : ""}${theirHurt}${tank ? `, ${tank}` : ""}. ` +
+    `${elapsed}${range ? `, ${range}` : ""}.${result ? ` ${result}` : ""}` +
+    (entries.length > 0 ? ` On you: ${entries.join(", ").replace(/~/g, "about ")}.` : "") +
+    (group ? ` Your group: ${group.allies.map((a) => `${a.name}${a.hp !== null && a.maxHp !== null ? ` ${a.hp} of ${a.maxHp}` : ""}`).join(", ")}.` : "");
 
   return (
     <section className="fight-panel panel" aria-labelledby="fight-title" data-testid="fight-panel">
@@ -212,9 +243,22 @@ export function FightPanel({ bout, vitals, settings, scene }: FightPanelProps) {
               {fit(`You, ${yourHurt}`, half)}
               {fit(`${foeName}, ${theirHurt}`, right, "right")}
             </p>
+            <p className="fight-row" data-testid="fight-effects">
+              <span className="fight-muted">{entries.length > 0 ? "On you " : ""}</span>
+              {fit(entries.join("  "), half - (entries.length > 0 ? 7 : 0))}
+              {fit(tank, right, "right")}
+            </p>
+            {group?.allies.map((ally) => (
+              <AllyRow key={ally.name} ally={ally} tank={group.tank !== null && group.tank.toLowerCase() === ally.name.toLowerCase()} half={half} right={right} />
+            ))}
           </>
         )}
       </div>
+      {bout.ended && (
+        <button type="button" className="fight-summary" data-testid="fight-summary" onClick={onSummary}>
+          Combat Summary…
+        </button>
+      )}
     </section>
   );
 }

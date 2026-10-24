@@ -42,10 +42,14 @@ mod creation;
 mod daytime;
 #[path = "../../src-tauri/src/echo.rs"]
 mod echo;
+#[path = "../../src-tauri/src/effects.rs"]
+mod effects;
 #[path = "../../src-tauri/src/face.rs"]
 mod face;
 #[path = "../../src-tauri/src/fight_art.rs"]
 mod fight_art;
+#[path = "../../src-tauri/src/fight_log.rs"]
+mod fight_log;
 mod ffi;
 #[path = "../../src-tauri/src/figure.rs"]
 mod figure;

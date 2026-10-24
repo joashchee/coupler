@@ -22,6 +22,8 @@
  * - **The fight**: a low rising call when it starts, a resolving chord
  *   when it ends, and a plucked note each time the opponent's health
  *   crosses a quarter, lower as they weaken.
+ * - **What's on you** (src-tauri/src/effects.rs): a soft falling shimmer
+ *   when an effect wears off, two quick taps when a cooldown is over.
  * - **Talk**: a two-note ping before a tell or the group is spoken.
  * - **Making a character** (components/CreationDialog.tsx): a soft page
  *   turn for each new question, and a rising fanfare when the new
@@ -55,7 +57,7 @@ import * as voice from "./voice";
 
 export type CueId =
   | "exits" | "footstep" | "discovery" | "threshold" | "landmark" | "arrived"
-  | "heartbeat" | "hurt" | "healed" | "lowMana" | "lowMoves"
+  | "heartbeat" | "hurt" | "healed" | "lowMana" | "lowMoves" | "effectEnds" | "cooldownReady"
   | "fightStarts" | "fightEnds" | "opponentAt"
   | "tell" | "loggedOn" | "loggedOff" | "logLine" | "logReminder" | "journalWaiting"
   | "problem" | "modeChanged" | "priorityBell" | "thinking"
@@ -87,6 +89,8 @@ export const CUES: CueInfo[] = [
   { id: "healed", group: "Body", name: "Healing", words: "Healing", summary: "A shimmer when you gain a tenth of your health or more at once." },
   { id: "lowMana", group: "Body", name: "Mana low", words: "Mana low", summary: "A glassy tone when mana falls to a fifth." },
   { id: "lowMoves", group: "Body", name: "Movement low", words: "Movement low", summary: "A breath when movement falls to a fifth." },
+  { id: "effectEnds", group: "Body", name: "An effect wears off", words: "Wore off", summary: "A soft falling shimmer when a spell or other effect on you ends." },
+  { id: "cooldownReady", group: "Body", name: "Ready again", words: "Ready again", summary: "Two quick taps when a command the game made you wait for can be used again." },
   { id: "fightStarts", group: "Fight", name: "A fight starts", words: "A fight starts", summary: "A low rising call." },
   { id: "fightEnds", group: "Fight", name: "The fight ends", words: "The fight ends", summary: "A resolving chord." },
   { id: "opponentAt", group: "Fight", name: "The opponent weakens", words: "Your opponent's health", summary: "A plucked note each time their health crosses a quarter, lower as they weaken." },
@@ -471,6 +475,22 @@ export function lowMana() {
 
 export function lowMoves() {
   play("lowMoves", [{ freq: 900, at: 0, dur: 0.45, wave: "noise", gain: 0.12, lowpass: 900 }], 0);
+}
+
+/** An effect on the player ended: its name in the caption. */
+export function effectEnds(name: string) {
+  play("effectEnds", [
+    { freq: 1320, to: 660, at: 0, dur: 0.4, gain: 0.06 },
+    { freq: 1980, to: 990, at: 0.05, dur: 0.35, gain: 0.04 },
+  ], 0, name);
+}
+
+/** A cooldown is over: the command in the caption. */
+export function cooldownReady(name: string) {
+  play("cooldownReady", [
+    { freq: 1047, at: 0, dur: 0.06, wave: "triangle", gain: 0.12 },
+    { freq: 1047, at: 0.1, dur: 0.06, wave: "triangle", gain: 0.12 },
+  ], 0, name);
 }
 
 // ---- The fight ----

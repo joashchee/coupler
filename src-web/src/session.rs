@@ -24,11 +24,13 @@ use crate::ambient::{self, Ambience, Ambient};
 use crate::ansi::{Line, Screen};
 use crate::automation::{self, Automation};
 use crate::channels::Channels;
+use crate::effects::{self, Watch};
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::clock::{unix_ms, unix_now, Instant};
 use crate::combat::{Combat, Opponent};
+use crate::fight_log::{self, Fight, Fights, Recorder};
 use crate::daytime::{self, Daytime, Phase};
 use crate::creation::{self, Creation};
 use crate::echo::{Echoed, Echoes};
@@ -154,6 +156,11 @@ pub struct Coupler {
     character: Character,
     combat: Combat,
     combat_sent: Option<Opponent>,
+    /// Every fight recorded (`fight_log.rs`), the world's fights kept, and
+    /// the character last played.
+    fight_recorder: Recorder,
+    fights: Fights,
+    fight_character: String,
     senses: Senses,
     vitals_sent: Option<Vitals>,
     who: Who,
@@ -165,6 +172,8 @@ pub struct Coupler {
     ways: Ways,
     /// The game's channels, turned on and off by its own commands (`channels.rs`).
     channels: Channels,
+    /// What's on the player, their cooldowns and group (`effects.rs`).
+    effects: Watch,
     /// The unfinished line last sent, kept while a hidden WHO is cut off mid-row.
     shown_partial: Option<Line>,
     /// The tip about SOUNDS was given this connection.
@@ -220,6 +229,9 @@ impl Coupler {
             character: Character::default(),
             combat: Combat::default(),
             combat_sent: None,
+            fight_recorder: Recorder::default(),
+            fights: Fights::default(),
+            fight_character: String::new(),
             senses: Senses::default(),
             vitals_sent: None,
             who: Who::default(),
@@ -229,6 +241,7 @@ impl Coupler {
             creation: Creation::default(),
             ways: Ways::default(),
             channels: Channels::default(),
+            effects: Watch::default(),
             shown_partial: None,
             told_sounds_off: false,
             comings: Comings::default(),
@@ -250,7 +263,7 @@ impl Coupler {
 
     /// Gets ready to play on a port and returns the WebSocket to open.
     /// `map`, `cast` and `looks` are the world's saved JSON, or empty.
-    pub fn connect(&mut self, port_id: &str, map: &str, cast: &str, looks: &str) -> Result<String, String> {
+    pub fn connect(&mut self, port_id: &str, map: &str, cast: &str, looks: &str, fights: &str) -> Result<String, String> {
         let port = PORTS.iter().find(|p| p.id == port_id).ok_or("Coupler doesn't know that way to play.")?;
         let mut telnet = Telnet::new(&self.version);
         if self.size.0 > 0 {
@@ -260,6 +273,7 @@ impl Coupler {
             self.map = if map.is_empty() { Map::default() } else { Map::from_json(map).unwrap_or_default() };
             self.cast = if cast.is_empty() { Cast::default() } else { Cast::from_json(cast).unwrap_or_default() };
             self.looks = if looks.is_empty() { Looks::default() } else { Looks::from_json(looks).unwrap_or_default() };
+            self.fights = if fights.is_empty() { Fights::default() } else { Fights::from_json(fights).unwrap_or_default() };
             self.map_saved = Saved::default();
             self.cast_saved = Saved::default();
             self.walk.clear();
@@ -289,6 +303,7 @@ impl Coupler {
         self.long_look.clear();
         self.creation.clear();
         self.ways.clear();
+        self.effects.closed();
         self.shown_partial = None;
         self.told_sounds_off = false;
         self.automation.closed();
@@ -329,6 +344,8 @@ impl Coupler {
     /// a trigger's or a ticker's isn't the player typing (`Who::typed`).
     fn send_command(&mut self, line: &str) {
         self.outgoing.extend(telnet::encode_line(line));
+        self.fight_recorder.sent(line, unix_ms());
+        self.effects.sent(line, unix_ms());
         self.echoes.typed(line, Instant::now());
         self.long_look.typed(line, Instant::now());
         self.beasts.reader.typed(line, Instant::now());
@@ -392,9 +409,17 @@ impl Coupler {
         if self.telnet.is_none() {
             return;
         }
+        let kept = self.fight_recorder.tick(unix_ms());
+        self.fight_kept(kept);
         let now = Instant::now();
         // Nothing of Coupler's own while a channel command's answer is coming (channels.rs).
         if self.channels.awaiting(now) {
+            return;
+        }
+        // Nor AFFECTS' (effects.rs); the cooldowns count down meanwhile.
+        self.effects.tick(unix_ms());
+        self.update_effects();
+        if self.effects.awaiting(unix_ms()) {
             return;
         }
         let due = self.automation.tick(now, self.who.present(now), self.who.awaiting());
@@ -404,6 +429,9 @@ impl Coupler {
         self.automation_held();
         if self.who.due(now) {
             self.outgoing.extend(telnet::encode_line("who"));
+        } else if self.who.gentle(now) && self.effects.wants(unix_ms()) {
+            let ask = self.effects.ask(unix_ms());
+            self.outgoing.extend(telnet::encode_line(ask));
         } else if self.who.gentle(now) && self.ambient.weather_wanted(now) {
             self.ambient.weather_asked(now);
             self.outgoing.extend(telnet::encode_line("weather"));
@@ -510,6 +538,7 @@ impl Coupler {
                         self.character_left(left);
                     }
                     self.combat.gmcp(&package, &data);
+                    self.effects.gmcp(&package, &data);
                     self.ways.gmcp(&package, &data);
                     let moved = self.comings.gmcp(&package, &data, Instant::now());
                     let (learned, cry) = self.bestiary_gmcp(&package, &data);
@@ -560,6 +589,10 @@ impl Coupler {
         if let Some(listing) = self.channels.take_listing() {
             self.emit("channels", json!(listing));
         }
+        // Nor AFFECTS', asked for the effects' times (effects.rs).
+        let at = unix_ms();
+        self.effects.me(self.senses.name());
+        hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| self.effects.line(text, at)).map(|(i, _)| i));
         hidden_lines.sort_unstable();
         hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
@@ -581,6 +614,8 @@ impl Coupler {
                 !hidden_lines.contains(&(i - 1))
             });
         }
+        // The fight's record reads every line, gagged or not (fight_log.rs).
+        self.fight_read(&texts);
         // The player's gags, and what their triggers set off (automation.rs).
         let (gagged, actions) = self.automation.lines(&texts, self.who.acting(), Instant::now());
         if !gagged.is_empty() {
@@ -647,6 +682,7 @@ impl Coupler {
         self.update_picture();
         self.update_combat();
         self.update_vitals();
+        self.update_effects();
         ambient::without_place_music(&mut fired);
         if !fired.is_empty() {
             self.emit("hook-fired", json!(fired));
@@ -874,8 +910,12 @@ impl Coupler {
         self.update_picture();
         self.combat.leave();
         self.update_combat();
+        let kept = self.fight_recorder.leave(unix_ms());
+        self.fight_kept(kept);
         self.senses.leave();
         self.update_vitals();
+        self.effects.closed();
+        self.update_effects();
         self.cast.leave();
         self.cast_saved.unsaved = true;
         self.save_cast(true);
@@ -884,11 +924,65 @@ impl Coupler {
         self.who.leave();
     }
 
+    /// One read for the fight's record, as the desktop's.
+    fn fight_read(&mut self, texts: &[String]) {
+        if !self.senses.name().is_empty() {
+            self.fight_character = self.senses.name().to_string();
+        }
+        let opponent = self.combat.opponent();
+        let vitals = self.senses.vitals();
+        let place = self.map.here_name().map(str::to_string);
+        let on = self.effects.status().effects.clone();
+        let reading = fight_log::Reading { opponent: opponent.as_ref(), vitals: vitals.as_ref(), lines: texts, place: place.as_deref(), effects: &on };
+        let kept = self.fight_recorder.read(reading, unix_ms());
+        self.fight_kept(kept);
+    }
+
+    /// Keeps a fight that's over, has the page keep the world's fights,
+    /// and emits `fight-kept`.
+    fn fight_kept(&mut self, fight: Option<Fight>) {
+        let (Some(fight), Some(world)) = (fight, self.world) else { return };
+        let overview = self.fights.keep(&self.fight_character, fight);
+        self.fights.take_changed();
+        let json = self.fights.to_json();
+        self.emit("coupler-save", json!({ "key": format!("fights/{world}.json"), "json": json }));
+        self.emit("fight-kept", json!(overview));
+    }
+
+    pub fn fights_list(&self) -> Vec<fight_log::Overview> {
+        self.fights.list(&self.fight_character)
+    }
+
+    pub fn fight_page(&self, id: i64) -> Option<fight_log::Page> {
+        self.fights.page(&self.fight_character, id)
+    }
+
     fn update_vitals(&mut self) {
         let now = self.senses.vitals();
         if now != self.vitals_sent {
             self.vitals_sent = now.clone();
             self.emit("vitals", json!(now));
+        }
+    }
+
+    /// As the desktop's: `status` when it changed, `effects-changed` with
+    /// what came and went, each noted in a fight's record.
+    fn update_effects(&mut self) {
+        let changes = self.effects.take_changes();
+        if !changes.is_empty() {
+            let now = unix_ms();
+            for change in &changes {
+                match change {
+                    effects::Change::Gained(name) => self.fight_recorder.effect(true, name, now),
+                    effects::Change::Lost(name) => self.fight_recorder.effect(false, name, now),
+                    effects::Change::Tank(name) => self.fight_recorder.tank(name, now),
+                    effects::Change::Ready(_) => {}
+                }
+            }
+            self.emit("effects-changed", json!(changes));
+        }
+        if let Some(status) = self.effects.take_status() {
+            self.emit("status", json!(status));
         }
     }
 
@@ -906,6 +1000,8 @@ impl Coupler {
         self.long_look.clear();
         self.ways.clear();
         self.channels.closed();
+        self.effects.closed();
+        self.update_effects();
         self.beasts.reader.clear();
         let message = match &left {
             Left::Logout => {
@@ -916,6 +1012,8 @@ impl Coupler {
                 self.stop_walk("Stopped walking: you switched character.");
                 self.combat.leave();
                 self.update_combat();
+                let kept = self.fight_recorder.leave(unix_ms());
+                self.fight_kept(kept);
                 self.senses.leave();
                 self.update_vitals();
                 self.who.leave();

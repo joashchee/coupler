@@ -664,6 +664,19 @@
 :root[data-theme="ansiapps"] .bestiary-entry .bestiary-facts { height: 400px; }
 :root[data-theme="ansiapps"] .bestiary-picture { margin-top: 16px; }
 :root[data-theme="ansiapps"] .bestiary-look { margin: 16px 0 0; }
+/* Combat Summary: a row is Show... (7 cells), against whom (35), the
+   result (20) and when (the rest), two cells between. The page is 25
+   rows scrolling inside the frame, headings in blue (rank 23 on light
+   gray) a row each; the charts light gray, light green and light
+   magenta on black (ranks 9, 4 and 10), a row between. */
+:root[data-theme="ansiapps"] .hooks-head.fights-row,
+:root[data-theme="ansiapps"] .hooks-list.fights-list li { grid-template-columns: 56px 280px 160px minmax(0, 1fr); gap: 0 16px; }
+:root[data-theme="ansiapps"] .summary-page { margin: 16px 0 0; height: 400px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .summary-heading { margin: 16px 0 0; font-size: 16px; line-height: 16px; font-weight: normal; color: var(--dos-blue); }
+:root[data-theme="ansiapps"] .summary-page section:first-child .summary-heading { margin-top: 0; }
+:root[data-theme="ansiapps"] .summary-chart { margin: 16px 0 0; background: var(--dos-black); color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .summary-chart-you { color: var(--dos-lightgreen); }
+:root[data-theme="ansiapps"] .summary-chart-foe { color: var(--dos-lightmagenta); }
 :root[data-theme="ansiapps"] .dialog-box select:focus { outline: 2px dashed var(--dos-black) !important; }
 /* The Mixer: a row is the bus's name (3 cells), a cell, the slider, a
    cell, and its value (4). The slider is a black track with a light-gray
@@ -687,6 +700,7 @@
 :root[data-theme="ansiapps"] .dialog-box:focus-visible,
 :root[data-theme="ansiapps"] .hooks-list:focus-visible,
 :root[data-theme="ansiapps"] .bestiary-facts:focus-visible,
+:root[data-theme="ansiapps"] .summary-page:focus-visible,
 :root[data-theme="ansiapps"] .dialog-box button:focus-visible,
 :root[data-theme="ansiapps"] .dialog-box input:focus,
 :root[data-theme="ansiapps"] .dialog-box textarea:focus { outline: 2px dashed var(--dos-black) !important; }

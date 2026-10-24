@@ -4,7 +4,8 @@
 //! What's kept (`KEPT`, the app-data items by name): the Assets folder
 //! (but the smaller copies waiting for an answer), the maps, the rooms'
 //! looks, the casts and their voices, the hooks database, the journal and
-//! the log, the Bestiary and the Items, and the times played; with the
+//! the log, the Bestiary and the Items, the fights kept, and the times
+//! played; with the
 //! settings the frontend keeps (every `coupler.` key in its storage, as
 //! JSON). Not the voice cache
 //! (made again as lines come) nor the first-run warning's answer. A new

@@ -200,7 +200,7 @@ roadmap's phase 2.
 
 Most Rust modules are pure and unit-tested; read a module's header for
 the why. Game data (`hooks.sqlite`, `journal.sqlite`,
-`bestiary.sqlite`, maps, cast) stays local. **New data in app data
+`bestiary.sqlite`, maps, cast, fights) stays local. **New data in app data
 joins `KEPT` (`backup.rs`) and `KINDS` (`storage.rs`).** **Anything new
 on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
 (`lib/web.ts`), with a row in the web build's table (private notes).
@@ -235,7 +235,17 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
 - `hidden.rs`: hidden details found by a long look's HIGHLIGHT color.
 - `combat.rs`: Combat or Explore mode and the opponent; MSDP's exact
   figures preferred over GMCP's `enemypct`.
+- `fight_log.rs`: every fight recorded for **Combat Summary**: blows
+  read from CoffeeMUD's hit and miss strings, damage exact (`(N)`) or
+  measured from the health that fell, shared by the hit words' ranges;
+  the page in words; kept in `fights/<world>.json` (200 whole per
+  character). `CombatSummaryDialog.tsx`, Cmd+Shift+Y. Both builds.
 - `senses.rs`: vitals and talk addressed to the player.
+- `effects.rs`: what's on the player (GMCP `char.effects.add`/`remove`,
+  times from a hidden AFFECTS, gentle as WHO), cooldowns from the game's
+  "You must wait", the group (GMCP `group`). The Fight's rows,
+  Cmd+Shift+X, the `effectEnds` and `cooldownReady` cues, Combat
+  Summary's Effects. Both builds.
 - `daytime.rs`: the time of day (no time GMCP: MSDP `WORLD_TIME` plus
   the game's dawn/dusk lines), Coupler's pair `coupler.time`.
 - `ambient.rs`: BGN and BGW loops, room type, weather from the text

@@ -33,6 +33,7 @@ mod create;
 mod daytime;
 mod creation;
 mod echo;
+mod effects;
 // The in-development warning: desktop only. An App Store app is a
 // finished release; App Review turns down one calling itself unfinished.
 #[cfg(desktop)]
@@ -55,6 +56,7 @@ mod painter;
 mod portrait;
 mod face;
 mod fight_art;
+mod fight_log;
 mod figure;
 mod item_art;
 mod screen_reader;
@@ -244,6 +246,18 @@ fn map_clear(app: AppHandle, session: State<'_, Session>) {
 #[tauri::command]
 fn bestiary_mobs(app: AppHandle, query: String, session: State<'_, Session>) -> Result<Vec<bestiary::MobRow>, String> {
     session.bestiary_mobs(&app, &query)
+}
+
+/// The fights kept of the character last played, the latest first (fight_log.rs).
+#[tauri::command]
+fn fights_list(session: State<'_, Session>) -> Vec<fight_log::Overview> {
+    session.fights_list()
+}
+
+/// One fight's Combat Summary, in words.
+#[tauri::command]
+fn fight_page(id: i64, session: State<'_, Session>) -> Option<fight_log::Page> {
+    session.fight_page(id)
 }
 
 /// Everything the Bestiary knows of a creature.
@@ -1079,6 +1093,8 @@ pub fn run() {
             cast_forget,
             bestiary_mobs,
             bestiary_mob,
+            fights_list,
+            fight_page,
             bestiary_items,
             bestiary_item,
             bestiary_auto_look,

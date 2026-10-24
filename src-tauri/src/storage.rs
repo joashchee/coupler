@@ -4,7 +4,8 @@
 //!
 //! `report` sizes each kind (`KINDS`): the player's assets by type, the
 //! caches, the copy from before the last restore, the maps, the rooms'
-//! looks, the voices, the hooks, the journal, the Bestiary, and the
+//! looks, the voices, the hooks, the journal, the Bestiary, the fights
+//! kept, and the
 //! rest. The caches (`CACHES`: the voice cache, CoffeeMUD's sounds as
 //! rendered, the smaller copies waiting for an answer, a backup's
 //! leftover copies) are made again as they're wanted, so clearing them
@@ -39,6 +40,7 @@ pub const KINDS: &[(&str, &[&str])] = &[
     ("hooks", &["hooks.sqlite*"]),
     ("journal", &["journal.sqlite*"]),
     ("bestiary", &["bestiary.sqlite*"]),
+    ("fights", &["fights/"]),
 ];
 
 /// The kinds made again as they're wanted.

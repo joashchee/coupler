@@ -35,6 +35,7 @@ import { VitalsPanel } from "./components/VitalsPanel";
 import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
 import { BestiaryDialog } from "./components/BestiaryDialog";
+import { CombatSummaryDialog } from "./components/CombatSummaryDialog";
 import { CastDialog } from "./components/CastDialog";
 import { StorageDialog } from "./components/StorageDialog";
 import { JournalDialog } from "./components/JournalDialog";
@@ -136,7 +137,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
           vitals: { at: { x: 680, y: 288 }, size: { width: 600, height: 64 } },
           map: { at: { x: 680, y: 352 }, size: { width: 600, height: 336 } },
           picture: { at: { x: 680, y: 352 }, size: { width: 600, height: 256 } },
-          fight: { at: { x: 680, y: 16 }, size: { width: 600, height: 304 } },
+          fight: { at: { x: 680, y: 16 }, size: { width: 600, height: 336 } },
           heard: { at: { x: 680, y: 528 }, size: { width: 600, height: 160 } },
           journal: { at: { x: 680, y: 688 } },
           log: { at: { x: 680, y: 704 } },
@@ -166,7 +167,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
     ? {
         ...bar,
         scene: { at: { x: 0, y: 16 }, size: { width: 600, height: 640 } },
-        fight: { at: { x: 0, y: 16 }, size: { width: 600, height: 304 } },
+        fight: { at: { x: 0, y: 16 }, size: { width: 600, height: 336 } },
         ports: { at: { x: 0, y: 16 }, size: { width: 600, height: 640 } },
         terminal: { at: { x: 608, y: 16 } },
         heard: { at: { x: 608, y: 432 }, size: { width: 672, height: 224 } },
@@ -179,7 +180,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
     : {
         ...bar,
         scene: { at: { x: 12, y: 62 }, size: { width: 541, height: 545 } },
-        fight: { at: { x: 12, y: 62 }, size: { width: 541, height: 340 } },
+        fight: { at: { x: 12, y: 62 }, size: { width: 541, height: 372 } },
         ports: { at: { x: 12, y: 62 }, size: { width: 541, height: 545 } },
         terminal: { at: { x: 561, y: 62 } },
         heard: { at: { x: 561, y: 544 }, size: { width: 707, height: 63 } },
@@ -424,7 +425,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
       scene: { at: { x: 864, y: 16 }, size: { width: 416, height: 672 } },
       heard: { at: { x: 0, y: 16 }, size: { width: main, height: 192 } },
       picture: { at: { x: 864, y: 16 }, size: { width: 416, height: 256 } },
-      fight: { at: { x: 864, y: 16 }, size: { width: 416, height: 304 } },
+      fight: { at: { x: 864, y: 16 }, size: { width: 416, height: 336 } },
       vitals: { at: { x: 0, y: 16 }, size: { width: 704, height: 64 } },
     };
   }
@@ -453,7 +454,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
     scene: { at: { x: 868, y: 62 }, size: { width: 400, height: 610 } },
     heard: { at: { x: 12, y: 62 }, size: { width: main, height: 128 } },
     picture: { at: { x: 868, y: 62 }, size: { width: 400, height: 260 } },
-    fight: { at: { x: 868, y: 62 }, size: { width: 400, height: 340 } },
+    fight: { at: { x: 868, y: 62 }, size: { width: 400, height: 372 } },
     vitals: { at: { x: 12, y: 62 }, size: { width: 720, height: 66 } },
   };
 }
@@ -461,7 +462,11 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
 const PANEL_LEAST = { width: 208, height: 128 };
 /** The game output made smallest in Workshop: 20 columns by 5 rows, the least NAWS sends (components/Terminal.tsx). */
 const TERMINAL_LEAST = { width: 208, height: 96 };
-/** The Fight: its rows and its picture, in a frame at least 40 cells across (fight_art.rs). */
+/**
+ * The Fight: its rows and its picture, in a frame at least 40 cells across
+ * (fight_art.rs). Its usual size has two rows more, for what's on the
+ * player and one ally; Terminal's modern layout has no room for them.
+ */
 const FIGHT_LEAST = { width: 352, height: 304 };
 /** You is two lines of gauges in its frame. */
 const VITALS_LEAST = { width: 208, height: 64 };
@@ -489,6 +494,7 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Say where you are and the exits", "Cmd+Shift+L"],
   ["Say your health, mana and movement", "Cmd+Shift+V"],
   ["Say who you're fighting", "Cmd+Shift+E"],
+  ["Say what's on you, your cooldowns and your group", "Cmd+Shift+X"],
   ["Show or hide The Fight, the face-off in a fight", "Cmd+Shift+F"],
   ["Say who's online", "Cmd+Shift+W"],
   ["Say what the game said since your last command", "Cmd+Shift+O"],
@@ -498,6 +504,7 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Show the journal: what's said in the game", "Cmd+Shift+J"],
   ["Show the log: OOC, INFO and the other channels", "Cmd+Shift+K"],
   ["Show the Bestiary: the creatures and items you've come across", "Cmd+Shift+B"],
+  ["Show Combat Summary: every fight, blow by blow", "Cmd+Shift+Y"],
   ["Review the output: the line before, the line after", "Option+Up, Option+Down"],
   ["Review from the oldest line", "Option+Home"],
   ["Back to live output", "Option+End"],
@@ -642,6 +649,9 @@ function App() {
   /** Storage: what Coupler keeps and making room (components/StorageDialog.tsx). */
   const [storageOpen, setStorageOpen] = useState(false);
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
+  /** Combat Summary, and the fight to show at once ("next": the one being kept now). */
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryFirst, setSummaryFirst] = useState<number | "next" | null>(null);
   const [automationOpen, setAutomationOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -649,6 +659,8 @@ function App() {
   const [heard, setHeard] = useState<{ id: number; text: string }[]>([]);
   /** The character's health, mana and movement (src-tauri/src/senses.rs). */
   const [vitals, setVitals] = useState<mud.Vitals | null>(null);
+  /** What's on the player, their cooldowns and group (src-tauri/src/effects.rs). */
+  const [playerStatus, setPlayerStatus] = useState<mud.Status | null>(null);
   /** The question the game's asking while a character is made (src-tauri/src/creation.rs), and whether the player hid the guide to type instead. */
   const [creationStep, setCreationStep] = useState<mud.CreationStep | null>(null);
   /** Coupler's guide or CoffeeMUD's own way (lib/creation.ts): the guide starts hidden in the standard mode. */
@@ -1013,10 +1025,20 @@ function App() {
       }),
       mud.onCombat(setOpponent),
       mud.onVitals(setVitals),
+      mud.onStatus(setPlayerStatus),
+      // An effect wearing off and a cooldown over are cues, captioned with their names: the game's own line says it in words.
+      mud.onStatusChanges((changes) => {
+        if (!cuesRef.current) return;
+        for (const c of changes) {
+          if (c.kind === "lost") earcons.effectEnds(c.name);
+          else if (c.kind === "ready") earcons.cooldownReady(c.name);
+        }
+      }),
       mud.onClosed((reason) => {
         setConnected(false);
         setOpponent(null);
         setVitals(null);
+        setPlayerStatus(null);
         setServerEchoes(false);
         setPartial(null);
         unfinished.current = null;
@@ -1633,6 +1655,7 @@ function App() {
   const whereAmI = useCallback(() => sayTold(mud.describeRoom(snapshot?.room ?? null)), [sayTold, snapshot]);
   const sayVitals = useCallback(() => sayTold(mud.describeVitals(vitals)), [sayTold, vitals]);
   const sayOpponent = useCallback(() => sayTold(mud.describeOpponent(opponent)), [sayTold, opponent]);
+  const sayEffects = useCallback(() => sayTold(mud.describeStatus(playerStatus, Date.now())), [sayTold, playerStatus]);
   /**
    * Who's online. Before any WHO was read, it's asked now (its reply
    * hidden, as Coupler's own) and said once it's in, which also starts
@@ -1789,6 +1812,21 @@ function App() {
     setTerminalArranging(on);
     setError(null);
     setStatus(on ? "Arranging: drag or Tab to a corner, then the arrow keys. Untick Arrange when done." : "Arranging done.");
+  }, []);
+
+  // A fight kept (src-tauri/src/fight_log.rs): the first time, where to find it.
+  useEffect(() => {
+    const unlisten = mud.onFightKept((o) => {
+      if (!o || stored("coupler.fightSummaryTold")) return;
+      store("coupler.fightSummaryTold", "1");
+      setStatus("The fight is kept: Cmd+Shift+Y shows its Combat Summary, blow by blow.");
+    });
+    return () => void unlisten.then((f) => f());
+  }, []);
+
+  const openSummary = useCallback((first: number | "next" | null) => {
+    setSummaryFirst(first);
+    setSummaryOpen(true);
   }, []);
 
   const toggleFight = useCallback(() => {
@@ -2253,7 +2291,7 @@ function App() {
     };
   }, [hear]);
 
-  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || summaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
   const turnPhone = useCallback(
@@ -2315,6 +2353,7 @@ function App() {
               { id: "equipment", label: "Eq", name: "Equipment", onPress: () => sendKey("equipment") },
               { id: "time", label: "Time", name: "Time", onPress: () => sendKey("time") },
               { id: "health", label: "HP", name: "Say your health", onPress: sayVitals },
+              { id: "effects", label: "On you", name: "Say what's on you, your cooldowns and your group", onPress: sayEffects },
               { id: "who", label: "Who", name: "Say who's online", onPress: sayWho },
               recallKey,
             ]}
@@ -2437,6 +2476,7 @@ function App() {
       { id: "paint", label: "Paint a New Look", onPress: paintRoom },
       { id: "pictures", label: "Pictures…", onPress: () => setPicturesOpen(true) },
       { id: "bestiary", label: "Bestiary…", onPress: () => setBestiaryOpen(true) },
+      { id: "fights", label: "Combat Summary…", onPress: () => openSummary(null) },
     ],
     heard: [
       { id: "journal", label: "Journal…", onPress: () => setJournalOpen(true) },
@@ -2488,6 +2528,9 @@ function App() {
       } else if (chord && key === "e") {
         e.preventDefault();
         sayOpponent();
+      } else if (chord && key === "x") {
+        e.preventDefault();
+        sayEffects();
       } else if (chord && key === "w") {
         e.preventDefault();
         sayWho();
@@ -2509,6 +2552,9 @@ function App() {
       } else if (chord && key === "b") {
         e.preventDefault();
         setBestiaryOpen(true);
+      } else if (chord && key === "y") {
+        e.preventDefault();
+        openSummary(null);
       } else if (chord && key === "l") {
         e.preventDefault();
         whereAmI();
@@ -2555,7 +2601,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFight, toggleFullscreen, stopEverything, paintRoom, changeTabletText]);
+  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayEffects, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFight, toggleFullscreen, stopEverything, paintRoom, changeTabletText, openSummary]);
 
   useEffect(() => {
     if (!gearOpen) return;
@@ -3097,6 +3143,18 @@ function App() {
               <button
                 type="button"
                 className="menu-item"
+                data-testid="combat-summary-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  openSummary(null);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>{keys.keys("Combat Summary… (Cmd+Shift+Y)")}</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
                 data-testid="cast-button"
                 onClick={() => {
                   setGearOpen(false);
@@ -3355,7 +3413,7 @@ function App() {
             {!connected || secret
               ? ""
               : ux === "immersive"
-                ? keys.keys("Cmd+Shift+L where you are. Cmd+Shift+V health. Cmd+Shift+E the fight. Cmd+Shift+O what the game said. Cmd+Period quiet.")
+                ? keys.keys("Cmd+Shift+L where you are. Cmd+Shift+V health. Cmd+Shift+E the fight. Cmd+Shift+X what's on you. Cmd+Shift+O what the game said. Cmd+Period quiet.")
                 : "Up and Down go through what you've typed. Esc comes back here from anywhere."}
           </div>
         </Movable>
@@ -3403,7 +3461,7 @@ function App() {
         {/* The Fight: over the picture in every way to play, the phone's strip still to come. */}
         {bout && pictureSettings.fight && !PHONE && usual.fight && (
           <Movable id="fight" label="The Fight panel" usual={usual.fight} least={FIGHT_LEAST} tier={1} frontOnShow announce={announcePanel}>
-            <FightPanel bout={bout} vitals={vitals} settings={pictureSettings} scene={pictureScene} />
+            <FightPanel bout={bout} vitals={vitals} status={playerStatus} settings={pictureSettings} scene={pictureScene} onSummary={() => openSummary("next")} />
           </Movable>
         )}
         {ux !== "immersive" && has("picture") && (
@@ -3710,6 +3768,7 @@ function App() {
         />
       )}
       <BestiaryDialog open={bestiaryOpen} onClose={() => setBestiaryOpen(false)} onStatus={showStatus} onError={showError} />
+      <CombatSummaryDialog open={summaryOpen} showFirst={summaryFirst} onClose={() => setSummaryOpen(false)} onStatus={showStatus} onError={showError} />
 
       {!WEB && (
       <ShrinkDialog offers={shrinkOffer} onKeep={keepWavs} onShrink={() => void makeSmaller()} />

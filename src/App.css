@@ -581,6 +581,19 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .bestiary-picture { flex: 0 0 auto; margin-top: 10px; }
 .bestiary-look { margin: 10px 0 0; }
 .bestiary-facts:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Combat Summary (CombatSummaryDialog.tsx): Show, against whom, the
+   result, when. One fight's page is headings and lines, scrolling inside
+   the frame; its health charts in cells, on black as the game output is. */
+.hooks-head.fights-row,
+.hooks-list.fights-list li { display: grid; grid-template-columns: 64px 280px 160px minmax(0, 1fr); gap: 0 12px; align-items: start; }
+.summary-page { height: 400px; overflow-y: auto; margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); user-select: text; }
+.summary-page:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.summary-heading { font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+.summary-page section:first-child .summary-heading { margin-top: 0; }
+.summary-lines { list-style: none; margin: 0; padding: 0; }
+.summary-chart { margin: 8px 0 0; width: fit-content; font-family: "ansiapps VGA", monospace; font-size: 16px; line-height: 16px; white-space: pre; background: #000000; color: #aaaaaa; }
+.summary-chart-you { color: #55ff55; }
+.summary-chart-foe { color: #ff55ff; }
 /* Their buttons by the message bar: the count keeps its width, the bullet its cell. */
 .journal-button { flex: 0 0 auto; font-family: var(--font-mono); white-space: pre; }
 .journal-button .asset-dot { display: inline-block; width: 1ch; }
@@ -722,6 +735,8 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .gauge-ghost { color: var(--text); }
 .gauge-thin { color: var(--accent); }
 .fight-ko { color: var(--accent); }
+/* Once it's over: the fight's Combat Summary, a row under the picture. */
+.fight-summary { flex: 0 0 auto; align-self: flex-start; margin: 0; }
 .fight-picture { background: #000000; overflow: hidden; user-select: none; }
 .fight-picture-row { height: 16px; }
 /* You: two columns, Health and Mana over Moves and the fight, to fit above the game output. */

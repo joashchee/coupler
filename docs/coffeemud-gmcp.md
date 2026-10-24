@@ -59,9 +59,10 @@ its own key test, listed below.
 | `char.login` | The server answers `Char.Login.Default {"type":["password-credentials"]}` |
 | `siplet.input` (or `siplet`) | The server may send `Siplet.Input` to open a text editor |
 
-Coupler sends `["Core 1","Char 1","Room 1","Comm 1"]`. To do when the
-features land: add `Group 1` (group panel), `Char.Login 1` (saved
-logins), `Siplet 1` (the composer).
+Coupler sends `["Core 1","Char 1","Char.Effects 1","Room 1","Comm 1","Group 1"]`
+(`Char.Effects` for the pushes of 4.4, `Group` for 4.5; both read by
+`effects.rs`, added 2026-10-24). To do when the features land: add
+`Char.Login 1` (saved logins), `Siplet 1` (the composer).
 
 ## 3. Client to server
 
@@ -197,7 +198,12 @@ help text). Pushed without asking: `char.effects.add` and
 `char.effects.remove` `{"name","group"}` from `Abilities/StdAbility.java`
 for "the most common" cases only, so they hint at a change rather than
 account for every one. `pingGmcp` also re-sends the effects list when
-the count changes.
+the count changes; with no `group` asked, that's `char.effects.groups`,
+the groups' names only (`processGmcpStr` with no JSON), so it says
+something changed, not what. None of them gives an effect's time left:
+`effects.rs` reads that from a hidden AFFECTS (`Commands/Affect.java`).
+`mob.effects()` holds every effect, the hidden ones too; AFFECTS lists
+only those with a display text.
 
 Gating quirk: the `add`/`remove` pushes pass `isInlineAllowed` only with
 `char.effects` or `char.effects.add` in the supports map (2), while the

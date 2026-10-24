@@ -30,6 +30,8 @@ export interface FaceMoment {
   mood: Mood;
   /** 0 unhurt to 5 near death. */
   hurt: number;
+  /** What's on them, by name: a halo for Sanctuary, poison's green (face.rs `effect`). */
+  effects?: string[];
 }
 
 /** Health left, out of 100, in the painter's five steps of hurt. */
@@ -64,19 +66,32 @@ export function foeMoment(bout: Bout): FaceMoment {
   }
 }
 
-/** The player now, from their health out of 100. */
-export function yourMoment(bout: Bout, percent: number | null): FaceMoment {
+/** The player now, from their health out of 100 and what's on them. */
+export function yourMoment(bout: Bout, percent: number | null, effects: string[] = []): FaceMoment {
   const hurt = hurtStep(percent);
   switch (bout.ended?.ending) {
     case "youDied":
       return { mood: "dead", hurt: 5 };
     case "youFled":
-      return { mood: "afraid", hurt };
+      return { mood: "afraid", hurt, effects };
     case undefined:
-      return { mood: percent !== null && percent < PAIN_BELOW ? "pain" : "angry", hurt };
+      return { mood: percent !== null && percent < PAIN_BELOW ? "pain" : "angry", hurt, effects };
     default:
-      return { mood: "calm", hurt };
+      return { mood: "calm", hurt, effects };
   }
+}
+
+/**
+ * The effects row's entries, soonest to end first: "Shield spell 3:20",
+ * a cooldown "wait majesty ~1h 2m". Forever ones last.
+ */
+export function effectEntries(status: mud.Status | null, now: number): string[] {
+  if (!status) return [];
+  const effects = [...status.effects].sort((a, b) => (a.endsAt ?? Infinity) - (b.endsAt ?? Infinity));
+  return [
+    ...effects.map((e) => (e.endsAt === null ? e.name : `${e.name} ${mud.timeLeft(e.endsAt, now)}`)),
+    ...status.cooldowns.map((c) => `wait ${c.name} ${c.about ? "~" : ""}${mud.timeLeft(c.endsAt, now)}`),
+  ];
 }
 
 /** The result in a few words, once it's over: "KO" at a death. */
