@@ -48,6 +48,7 @@ use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
+use crate::{face, item_art};
 use crate::daytime::{self, Daytime, Phase};
 use crate::foley::{self, Comings, Happening, Movement, Place};
 use crate::hooks::{self, Hooks, Trigger};
@@ -1229,6 +1230,26 @@ impl Session {
 
     pub fn bestiary_mob(&self, app: &AppHandle, key: &str) -> Result<Option<bestiary::MobEntry>, String> {
         self.with_bestiary(app, |b, world| b.mob_entry(world, key).map(|e| e.map(bestiary::MobEntry::shown)))
+    }
+
+    /// A creature as its face is painted: all the Bestiary knows, and the
+    /// terrain of the area it's been seen in most, from the map.
+    pub fn bestiary_sitter(&self, app: &AppHandle, key: &str) -> Result<Option<face::Sitter>, String> {
+        let Some(mob) = self.bestiary_mob(app, key)? else { return Ok(None) };
+        let mut sitter = face::Sitter::from(&mob);
+        let area = mob.areas.iter().max_by_key(|a| a.seen).map(|a| a.area.clone());
+        sitter.terrain = area.and_then(|a| self.atlas.lock().unwrap().map.terrain_of(&a));
+        Ok(Some(sitter))
+    }
+
+    /// An item as its picture is painted, and the terrain of the area it's
+    /// been found in most.
+    pub fn bestiary_thing(&self, app: &AppHandle, key: &str) -> Result<Option<item_art::Thing>, String> {
+        let Some(item) = self.bestiary_item(app, key)? else { return Ok(None) };
+        let mut thing = item_art::Thing::from(&item);
+        let area = item.areas.iter().max_by_key(|a| a.count).map(|a| a.name.clone());
+        thing.terrain = area.and_then(|a| self.atlas.lock().unwrap().map.terrain_of(&a));
+        Ok(Some(thing))
     }
 
     pub fn bestiary_items(&self, app: &AppHandle, query: &str) -> Result<Vec<bestiary::ItemRow>, String> {

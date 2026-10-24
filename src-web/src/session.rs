@@ -1307,6 +1307,24 @@ impl Coupler {
         self.with_bestiary(|b, world| b.item_entry(world, key).map(|e| e.map(bestiary::ItemEntry::shown)))
     }
 
+    /// A creature as its face is painted, standing in the terrain of the
+    /// area it's been seen in most (the map's).
+    pub fn bestiary_sitter(&self, key: &str) -> Result<Option<crate::face::Sitter>, String> {
+        let Some(mob) = self.bestiary_mob(key)? else { return Ok(None) };
+        let mut sitter = crate::face::Sitter::from(&mob);
+        sitter.terrain = mob.areas.iter().max_by_key(|a| a.seen).and_then(|a| self.map.terrain_of(&a.area));
+        Ok(Some(sitter))
+    }
+
+    /// An item as its picture is painted, in the terrain of the area it's
+    /// been found in most.
+    pub fn bestiary_thing(&self, key: &str) -> Result<Option<crate::item_art::Thing>, String> {
+        let Some(item) = self.bestiary_item(key)? else { return Ok(None) };
+        let mut thing = crate::item_art::Thing::from(&item);
+        thing.terrain = item.areas.iter().max_by_key(|a| a.count).and_then(|a| self.map.terrain_of(&a.name));
+        Ok(Some(thing))
+    }
+
     // ---- The game's sounds, Coupler's own and the creatures' (soundbank.rs) ----
 
     fn msp_sounds(&self, sounds: &[msp::Sound]) -> Vec<Fired> {

@@ -26,10 +26,35 @@
 //! **Its slot**, in words on the bottom row, centered: where it was seen
 //! worn ("Worn on head", "Wielded"), else where its kind goes, else
 //! "Carried".
+//!
+//! **In layers** (`figure.rs`), as the faces are:
+//!
+//! - **Its shape from numbers**: a sword's length, breadth, curve and
+//!   guard, a dagger's, an axe's head, a helmet's dome and visor, a
+//!   shield's outline and device, a potion's bottle; set by the words of
+//!   its name ("scimitar": curved; "rapier": thin, a basket guard;
+//!   "claymore": long and broad), the rest by its name's seed.
+//! - **Its material as a texture**, not only a color: what EXAMINE says
+//!   it's made of, else a material in its name, else its kind's own, by
+//!   class (`materials.tsv`, from CoffeeMUD's `RawMaterial` by
+//!   `scripts/painter-tables.py`): cloth woven, leather stitched, wood
+//!   grained, metal with a band of light, mithril and gems sparkling,
+//!   glass the backdrop through it, stone speckled. A handle keeps its
+//!   wood and a blade its metal.
+//! - **Its wear**, from the words of its name and description: worn,
+//!   then damaged (dents in metal, a crack in wood or stone, a frayed
+//!   edge of cloth), battered (notches out of its edge, holes), broken
+//!   (split in two); rust on iron; crude (a rough outline) or fine (gilt
+//!   trim and a gem). **To confirm**: what LOOK or EXAMINE says of an
+//!   item's condition, which would say it outright.
+//! - **The place behind**: where it's been found the most (its area's
+//!   commonest terrain on the map), a shade darker; else a backdrop of
+//!   one color over a table. Its shadow under it.
 
 use crate::ansi_art::Art;
 use crate::bestiary::ItemEntry;
-use crate::face::{backdrop, both, cap, color_word, key, lighter, line, peak, shade, within, words, CX, H, SIZE, W};
+use crate::face::{both, cap, color_word, key, lighter, line, peak, shade, within, words, CX, H, SIZE, W};
+use crate::figure::{self, CLEAR};
 use crate::paint::seed;
 use crate::painter::*;
 
@@ -44,12 +69,14 @@ pub struct Thing {
     pub auras: Vec<String>,
     /// Where it was seen worn, the most often: "worn on head", "wielded".
     pub worn: Option<String>,
+    /// The terrain where it's been found the most, from the map.
+    pub terrain: Option<String>,
 }
 
 impl From<&ItemEntry> for Thing {
     fn from(i: &ItemEntry) -> Thing {
         let worn = i.worn_by.iter().filter_map(|c| c.what.as_ref().map(|w| (w, c.count))).max_by_key(|(_, n)| *n).map(|(w, _)| w.clone());
-        Thing { name: i.name.clone(), material: i.material.clone(), description: i.description.clone(), container: i.container, auras: i.auras.clone(), worn }
+        Thing { name: i.name.clone(), material: i.material.clone(), description: i.description.clone(), container: i.container, auras: i.auras.clone(), worn, terrain: None }
     }
 }
 
@@ -256,7 +283,9 @@ struct Colors {
 
 fn colors(thing: &Thing, kind: Kind, rng: &mut Rng) -> Colors {
     let named = words(&thing.name);
-    let said_plain = named.iter().find_map(|w| color_word(w)).or_else(|| words(thing.description.as_deref().unwrap_or("")).iter().find_map(|w| color_word(w)));
+    // "Rusty" is its wear (`wear`), not its color: the steel stays steel under the rust.
+    let colored = |w: &String| if ["rust", "rusty", "rusted"].contains(&w.as_str()) { None } else { color_word(w) };
+    let said_plain = named.iter().find_map(colored).or_else(|| words(thing.description.as_deref().unwrap_or("")).iter().find_map(colored));
     let named_metal = named.iter().find_map(|w| material_color(w));
     let made = thing.material.as_deref().and_then(material_color).or(named_metal);
     let metal = match made {
@@ -264,7 +293,9 @@ fn colors(thing: &Thing, kind: Kind, rng: &mut Rng) -> Colors {
         _ => LIGHTGRAY,
     };
     let fabric = [BLUE, RED, GREEN, BROWN, MAGENTA, CYAN, DARKGRAY][rng.below(7) as usize];
+    let armored = named.iter().any(|w| ["mail", "chainmail", "chain", "ringmail", "scale", "hauberk", "plate", "platemail", "breastplate", "cuirass", "greaves"].contains(&w.as_str()));
     let own = match kind {
+        Kind::Armor | Kind::Legs if armored => made.unwrap_or(metal),
         Kind::Sword | Kind::Dagger | Kind::Axe | Kind::Spear | Kind::Helmet | Kind::Shield | Kind::Key | Kind::Hammer | Kind::Pick | Kind::Shovel | Kind::Mace => metal,
         Kind::Crown | Kind::Ring | Kind::Amulet | Kind::Bracelet | Kind::Coins => made.unwrap_or(YELLOW),
         Kind::Staff | Kind::Bow | Kind::Arrow | Kind::Chest | Kind::Barrel | Kind::Torch | Kind::Lute | Kind::Drum | Kind::Flute | Kind::Belt | Kind::Boots | Kind::Gloves | Kind::Bag => made.unwrap_or(BROWN),
@@ -336,6 +367,23 @@ fn glint(c: &mut Canvas, x: i32, y: i32) {
     c.light(x, y, WHITE);
 }
 
+/// A blade from its hilt to its tip, up to the right: `width` pixels
+/// across, its last one the lit edge, narrowing to a point; bowed
+/// `bend` pixels at its middle (a sabre's curve).
+fn blade(c: &mut Canvas, from: (i32, i32), tip: (i32, i32), bend: i32, width: i32, color: u8, edge: u8) {
+    let steps = (tip.0 - from.0).abs().max((tip.1 - from.1).abs()).max(1);
+    for i in 0..=steps {
+        let t = f64::from(i) / f64::from(steps);
+        let bow = (f64::from(bend) * (std::f64::consts::PI * t).sin()).round() as i32;
+        let (x, y) = (from.0 + (tip.0 - from.0) * i / steps + bow, from.1 + (tip.1 - from.1) * i / steps + bow);
+        let w = if steps - i < 2 { 1 } else { width };
+        for j in 0..w {
+            c.set(x + j, y, if j == w - 1 && w > 1 { edge } else { color });
+        }
+    }
+    c.set(tip.0 + 1, tip.1 - 1, edge);
+}
+
 fn paint(c: &mut Canvas, kind: Kind, k: &Colors, thing: &Thing, rng: &mut Rng) {
     let main = k.main;
     let dark = shade(main);
@@ -344,36 +392,61 @@ fn paint(c: &mut Canvas, kind: Kind, k: &Colors, thing: &Thing, rng: &mut Rng) {
     let has = |any: &[&str]| ws.iter().any(|w| any.contains(&w.as_str()));
     match kind {
         Kind::Sword => {
-            // The blade up to the top right, a guard across, the grip and pommel.
-            bar(c, (7, 17), (20, 4), main);
-            line(c, (8, 17), (21, 4), light);
-            c.set(22, 2, light);
-            c.set(21, 3, main);
-            line(c, (3, 15), (9, 21), if k.metal == YELLOW { LIGHTGRAY } else { YELLOW });
-            line(c, (4, 15), (10, 21), BROWN);
+            // The blade up to the top right, a guard across, the grip and
+            // pommel: how long, broad and curved, and the guard, from the name.
+            let long = has(&["long", "longsword", "claymore", "greatsword", "bastard", "great", "zweihander", "flamberge", "broadsword", "twohanded"]);
+            let short = has(&["short", "shortsword", "gladius", "falchion"]);
+            let thin = has(&["rapier", "estoc", "foil", "epee", "smallsword"]);
+            let broad = has(&["broad", "broadsword", "claymore", "greatsword", "great", "falchion"]);
+            let curved = has(&["scimitar", "sabre", "saber", "cutlass", "katana", "tulwar", "shamshir", "falchion", "curved"]);
+            let reach = if long { 15 } else if short { 9 } else { 11 + rng.between(0, 2) };
+            blade(c, (7, 17), (7 + reach, 17 - reach), if curved { 2 } else { 0 }, if thin { 1 } else if broad { 3 } else { 2 }, main, light);
+            let gilt = if k.metal == YELLOW { LIGHTGRAY } else { YELLOW };
+            if thin {
+                // A basket about the hand.
+                hoop(c, (6, 18, 3, 3), (6, 18, 2, 2), gilt);
+            } else if has(&["katana"]) {
+                c.oval(7, 17, 2, 2, DARKGRAY);
+                c.set(7, 17, gilt);
+            } else {
+                line(c, (3, 15), (9, 21), gilt);
+                line(c, (4, 15), (10, 21), BROWN);
+                if rng.chance(50) {
+                    // Quillons curled toward the blade.
+                    c.set(3, 14, gilt);
+                    c.set(10, 22, gilt);
+                }
+            }
             bar(c, (3, 22), (6, 19), k.wood);
             c.light(2, 23, YELLOW);
             if has(&["glowing", "flaming", "magic", "enchanted", "holy", "rune", "runed"]) {
-                for (x, y) in [(13, 9), (16, 7), (19, 4)] {
-                    c.light(x, y, LIGHTCYAN);
+                for i in [6, 9, 12] {
+                    let at = i.min(reach - 1);
+                    c.light(7 + at, 17 - at, LIGHTCYAN);
                 }
             }
         }
         Kind::Dagger => {
-            bar(c, (10, 15), (18, 7), main);
-            line(c, (11, 15), (19, 7), light);
-            c.set(19, 6, light);
+            let thin = has(&["stiletto", "dirk"]);
+            let curved = has(&["kukri", "sickle", "kris"]);
+            let reach = 7 + rng.between(0, 2);
+            blade(c, (10, 15), (10 + reach, 15 - reach), if curved { 2 } else { 0 }, if thin { 1 } else { 2 }, main, light);
             line(c, (6, 13), (11, 18), YELLOW);
             bar(c, (6, 19), (9, 16), k.wood);
             c.light(5, 20, YELLOW);
         }
         Kind::Axe => {
             bar(c, (6, 23), (16, 3), k.wood);
-            // The head: a broad crescent off the haft near the top.
-            c.oval(19, 7, 4, 5, main);
+            // The head: a broad crescent off the haft near the top, its size
+            // and whether it's bearded (hanging lower) from the seed.
+            let (rx, ry) = (3 + rng.between(0, 1), 4 + rng.between(0, 2));
+            c.oval(19, 7, rx, ry, main);
+            if rng.chance(35) {
+                c.oval(20, 10, rx - 1, ry, main);
+            }
             c.rect(14, 5, 18, 9, dark);
-            for y in 2..13 {
-                c.set(23, y, light);
+            for y in 7 - ry + 1..7 + ry {
+                c.set(19 + rx, y, light);
             }
             bar(c, (12, 11), (16, 3), k.wood);
             if has(&["battleaxe", "great", "double"]) {
@@ -498,35 +571,130 @@ fn paint(c: &mut Canvas, kind: Kind, k: &Colors, thing: &Thing, rng: &mut Rng) {
             }
         }
         Kind::Shield => {
-            if has(&["buckler", "targe", "round"]) {
+            // Round, a heater, a kite or a tower: by the name, else the seed.
+            let outline = if has(&["buckler", "targe", "round"]) {
+                0
+            } else if has(&["kite"]) {
+                2
+            } else if has(&["tower", "pavise"]) {
+                3
+            } else {
+                rng.below(3)
+            };
+            if outline == 0 {
                 c.oval(CX, 12, 10, 10, main);
                 hoop(c, (CX, 12, 10, 10), (CX, 12, 9, 9), dark);
                 c.oval(CX, 12, 2, 2, k.metal);
                 glint(c, CX - 1, 11);
             } else {
-                // A heater: square at the top, to a point.
-                c.rect(4, 2, 21, 12, main);
-                for y in 12..24 {
-                    let half = 8 - (y - 12) * 8 / 12;
-                    c.rect(CX - half, y, CX + half + 1, y + 1, main);
+                match outline {
+                    // A kite: rounded on top, long to its point.
+                    2 => {
+                        cap(c, (CX, 7, 8, 6), 1, 8, main);
+                        for y in 8..24 {
+                            let half = 8 - (y - 8) * 8 / 16;
+                            c.rect(CX - half, y, CX + half + 1, y + 1, main);
+                        }
+                    }
+                    // A tower: tall and straight, its top rounded.
+                    3 => {
+                        cap(c, (CX, 4, 8, 3), 1, 4, main);
+                        c.rect(4, 4, 21, 24, main);
+                    }
+                    // A heater: square at the top, to a point.
+                    _ => {
+                        c.rect(4, 2, 21, 12, main);
+                        for y in 12..24 {
+                            let half = 8 - (y - 12) * 8 / 12;
+                            c.rect(CX - half, y, CX + half + 1, y + 1, main);
+                        }
+                    }
                 }
-                c.rect(4, 2, 21, 3, dark);
-                c.rect(4, 2, 5, 12, dark);
-                // Its device: a cross in a second color.
+                // Its device in a second color, on the face only.
                 let device = if main == YELLOW || main == WHITE { RED } else { YELLOW };
-                c.rect(CX - 1, 5, CX + 2, 18, device);
-                c.rect(7, 9, 18, 11, device);
+                let mut charge = Canvas::new(SIZE.0, SIZE.1);
+                charge.rect(0, 0, W, H, CLEAR);
+                match rng.below(5) {
+                    0 => {
+                        charge.rect(CX - 1, 4, CX + 2, 19, device);
+                        charge.rect(6, 9, 19, 11, device);
+                    }
+                    1 => {
+                        for t in 0..2 {
+                            line(&mut charge, (4, 17 + t), (CX, 9 + t), device);
+                            line(&mut charge, (CX, 9 + t), (21, 17 + t), device);
+                        }
+                    }
+                    2 => {
+                        for t in 0..3 {
+                            line(&mut charge, (4 + t, 2), (21, 19 - t), device);
+                        }
+                    }
+                    3 => {
+                        for y in 0..H {
+                            for x in 0..W {
+                                if (x < CX) == (y < 11) {
+                                    charge.set(x, y, device);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        for t in 0..2 {
+                            line(&mut charge, (4 + t, 2), (21, 19 - t), device);
+                            line(&mut charge, (21 - t, 2), (4, 19 - t), device);
+                        }
+                    }
+                }
+                for y in 0..H {
+                    for x in 0..W {
+                        if c.get(x, y) == main && charge.get(x, y) != CLEAR {
+                            c.set(x, y, device);
+                        }
+                    }
+                }
+                // The rim: lit along the top, dark down the left.
+                for y in 0..H {
+                    for x in 0..W {
+                        if c.get(x, y) != CLEAR && (c.get(x, y - 1) == CLEAR || y == 0 || c.get(x - 1, y) == CLEAR) {
+                            c.set(x, y, dark);
+                        }
+                    }
+                }
             }
         }
         Kind::Helmet => {
-            cap(c, (CX, 14, 9, 11), 3, 15, main);
+            // A full helm with its face plate, a nasal over an open face, or
+            // a cap: by the name, else the seed; the dome's height from it too.
+            let style = if has(&["great", "greathelm", "full", "closed", "barbute", "bascinet", "basinet", "visored", "sallet"]) {
+                0
+            } else if has(&["nasal", "norman", "spangenhelm"]) {
+                1
+            } else if has(&["cap", "coif", "skullcap", "open"]) {
+                2
+            } else {
+                rng.below(3)
+            };
+            let top = 2 + rng.between(0, 3);
+            cap(c, (CX, 14, 9, 14 - top), top, 15, main);
             c.rect(3, 14, 22, 16, dark);
-            c.rect(CX, 14, CX + 1, 21, main);
-            c.rect(5, 15, 9, 21, main);
-            c.rect(16, 15, 20, 21, main);
-            c.rect(7, 11, 11, 13, BLACK);
-            c.rect(14, 11, 18, 13, BLACK);
-            glint(c, 8, 5);
+            match style {
+                0 => {
+                    c.rect(5, 15, 20, 22, main);
+                    c.rect(6, 17, 19, 18, BLACK);
+                    c.rect(CX, 15, CX + 1, 22, dark);
+                    for x in [8, 10, 15, 17] {
+                        c.set(x, 20, BLACK);
+                    }
+                }
+                1 => {
+                    c.rect(CX, 14, CX + 1, 21, main);
+                    c.rect(5, 15, 8, 20, main);
+                    c.rect(17, 15, 20, 20, main);
+                }
+                _ => {}
+            }
+            glint(c, 8, top + 2);
             if has(&["horned", "viking"]) {
                 for i in 0..5 {
                     both(c, 4 - i / 2, 8 - i, WHITE);
@@ -729,15 +897,46 @@ fn paint(c: &mut Canvas, kind: Kind, k: &Colors, thing: &Thing, rng: &mut Rng) {
         }
         Kind::Potion => {
             let glass = LIGHTCYAN;
-            // A round bottle, its liquid, a neck and a cork.
-            c.oval(CX, 16, 7, 7, glass);
-            c.oval(CX, 16, 6, 6, BLACK);
-            cap(c, (CX, 16, 6, 6), 14, 23, main);
-            c.rect(CX - 2, 4, CX + 3, 10, glass);
-            c.rect(CX - 1, 4, CX + 2, 10, BLACK);
-            c.rect(CX - 2, 2, CX + 3, 5, BROWN);
-            glint(c, CX - 3, 12);
-            glint(c, CX - 4, 14);
+            // A round flask, a tall vial or a square bottle: by the name,
+            // else the seed. Its liquid, a neck and a cork.
+            let bottle = if has(&["vial", "phial", "tube"]) {
+                1
+            } else if has(&["bottle", "decanter", "jar", "jug"]) {
+                2
+            } else if has(&["flask"]) {
+                0
+            } else {
+                rng.below(3)
+            };
+            match bottle {
+                1 => {
+                    c.rect(CX - 3, 6, CX + 4, 24, glass);
+                    c.rect(CX - 2, 7, CX + 3, 23, BLACK);
+                    c.rect(CX - 2, 13, CX + 3, 23, main);
+                    c.rect(CX - 3, 3, CX + 4, 6, BROWN);
+                    glint(c, CX - 2, 9);
+                }
+                2 => {
+                    c.rect(6, 11, 19, 24, glass);
+                    c.rect(7, 12, 18, 23, BLACK);
+                    c.rect(7, 16, 18, 23, main);
+                    c.rect(CX - 2, 5, CX + 3, 11, glass);
+                    c.rect(CX - 1, 5, CX + 2, 12, BLACK);
+                    c.rect(CX - 2, 2, CX + 3, 5, BROWN);
+                    glint(c, 8, 13);
+                    glint(c, 8, 15);
+                }
+                _ => {
+                    c.oval(CX, 16, 7, 7, glass);
+                    c.oval(CX, 16, 6, 6, BLACK);
+                    cap(c, (CX, 16, 6, 6), 14, 23, main);
+                    c.rect(CX - 2, 4, CX + 3, 10, glass);
+                    c.rect(CX - 1, 4, CX + 2, 10, BLACK);
+                    c.rect(CX - 2, 2, CX + 3, 5, BROWN);
+                    glint(c, CX - 3, 12);
+                    glint(c, CX - 4, 14);
+                }
+            }
             if has(&["glowing", "bubbling", "magic", "magical"]) || k.bright.is_some() {
                 for _ in 0..4 {
                     let (x, y) = (rng.between(CX - 4, CX + 4), rng.between(16, 21));
@@ -1045,8 +1244,341 @@ fn paint(c: &mut Canvas, kind: Kind, k: &Colors, thing: &Thing, rng: &mut Rng) {
     }
 }
 
-/// No paint: what the item's own canvas starts as, so its shape is known.
-const CLEAR: u8 = 255;
+/// A material's class, as CoffeeMUD sorts its resources
+/// (`RawMaterial.Material`): what its texture is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Class {
+    Cloth,
+    Leather,
+    Metal,
+    Mithril,
+    Wooden,
+    Glass,
+    Rock,
+    Precious,
+    /// Vegetation, flesh, paper, liquid, energy, gas, plastic: smooth.
+    Plain,
+}
+
+/// The class of a material by its name as EXAMINE says it ("oak",
+/// "white gold"; "a kind of wood" to a dull character): `materials.tsv`.
+fn class(material: &str) -> Option<Class> {
+    let m = material.trim().to_lowercase();
+    let m = m.strip_prefix("a kind of ").unwrap_or(&m);
+    let found = include_str!("materials.tsv").lines().skip(1).find_map(|l| l.split_once('\t').filter(|(n, _)| *n == m).map(|(_, c)| c))?;
+    Some(match found {
+        "cloth" => Class::Cloth,
+        "leather" => Class::Leather,
+        "metal" => Class::Metal,
+        "mithril" => Class::Mithril,
+        "wooden" => Class::Wooden,
+        "glass" => Class::Glass,
+        "rock" => Class::Rock,
+        "precious" => Class::Precious,
+        _ => Class::Plain,
+    })
+}
+
+/// What the item's main part is made of: what EXAMINE said, else a
+/// material its name gives before any "of" ("a steel helmet", not "a bag
+/// of gold"), else what its kind is mostly made of.
+fn class_of(thing: &Thing, kind: Kind) -> Class {
+    if let Some(c) = thing.material.as_deref().and_then(|m| class(m).or_else(|| words(m).iter().find_map(|w| class(w)))) {
+        return c;
+    }
+    let named: Vec<String> = words(&thing.name).into_iter().take_while(|w| w != "of").collect();
+    let pairs = named.windows(2).map(|p| format!("{} {}", p[0], p[1]));
+    if let Some(c) = pairs.chain(named.iter().cloned()).find_map(|w| class(&w)) {
+        return c;
+    }
+    let has = |any: &[&str]| named.iter().any(|w| any.contains(&w.as_str()));
+    match kind {
+        Kind::Sword | Kind::Dagger | Kind::Axe | Kind::Spear | Kind::Helmet | Kind::Key | Kind::Hammer | Kind::Pick | Kind::Shovel | Kind::Lantern | Kind::Horn | Kind::Cup | Kind::Goblet => Class::Metal,
+        Kind::Mace if !has(&["club", "cudgel", "baton", "truncheon", "sap"]) => Class::Metal,
+        Kind::Crown | Kind::Ring | Kind::Amulet | Kind::Bracelet | Kind::Coins => Class::Metal,
+        Kind::Armor if has(&["mail", "chainmail", "chain", "ringmail", "scale", "hauberk", "plate", "platemail", "breastplate", "cuirass"]) => Class::Metal,
+        Kind::Armor if has(&["jerkin", "jacket", "vest", "brigandine"]) => Class::Leather,
+        Kind::Mace | Kind::Staff | Kind::Wand | Kind::Bow | Kind::Arrow | Kind::Shield | Kind::Chest | Kind::Barrel | Kind::Torch | Kind::Lute | Kind::Drum | Kind::Flute => Class::Wooden,
+        Kind::Boots | Kind::Gloves | Kind::Belt | Kind::Book => Class::Leather,
+        Kind::Armor | Kind::Robe | Kind::Legs | Kind::Cloak | Kind::Hood | Kind::Hat | Kind::Bag | Kind::Bundle => Class::Cloth,
+        Kind::Gem => Class::Precious,
+        Kind::Rock => Class::Rock,
+        _ => Class::Plain,
+    }
+}
+
+/// Every pixel of a canvas, row by row.
+fn pixels(c: &Canvas) -> impl Iterator<Item = (i32, i32)> + '_ {
+    (0..c.h).flat_map(move |y| (0..c.w).map(move |x| (x, y)))
+}
+
+/// Whether a pixel of the item is on its outline: next to the clear.
+fn edge(c: &Canvas, x: i32, y: i32) -> bool {
+    c.get(x, y) != CLEAR && [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)].iter().any(|&(nx, ny)| !c.inside(nx, ny) || c.get(nx, ny) == CLEAR)
+}
+
+/// A material's texture on the pixels of one color: cloth woven,
+/// leather stitched, wood grained, metal with a band of light (mithril
+/// and gems sparkling too), glass showing the backdrop through, stone
+/// speckled.
+fn texture(c: &mut Canvas, color: u8, class: Class, rng: &mut Rng) {
+    let px: Vec<(i32, i32)> = pixels(c).filter(|&(x, y)| c.get(x, y) == color && !c.is_lit(x, y)).collect();
+    if px.len() < 6 {
+        return;
+    }
+    let (dark, light) = (shade(color), lighter(color));
+    match class {
+        Class::Cloth => {
+            for &(x, y) in &px {
+                if (x + 2 * y) % 4 == 0 {
+                    c.set(x, y, dark);
+                }
+            }
+        }
+        Class::Leather => {
+            // Stitches a pixel in from the edge, and the grain of the hide.
+            let inner: Vec<(i32, i32)> = px.iter().copied().filter(|&(x, y)| !edge(c, x, y) && [(x - 2, y), (x + 2, y), (x, y - 2), (x, y + 2)].iter().any(|&(nx, ny)| c.get(nx, ny) == CLEAR)).collect();
+            for &(x, y) in &px {
+                if (x * 7 + y * 3) % 13 == 0 {
+                    c.set(x, y, dark);
+                }
+            }
+            for (x, y) in inner {
+                if (x + y) % 3 == 0 {
+                    c.set(x, y, light);
+                }
+            }
+        }
+        Class::Wooden if px.len() >= 30 => {
+            let wave = rng.between(0, 2);
+            for &(x, y) in &px {
+                if (y + (x / 5 + wave) % 2) % 3 == 0 && (x + y) % 5 != 0 {
+                    c.set(x, y, dark);
+                }
+            }
+        }
+        Class::Metal | Class::Mithril | Class::Precious => {
+            let sums: Vec<i32> = px.iter().map(|&(x, y)| x + y).collect();
+            let (low, high) = (*sums.iter().min().unwrap_or(&0), *sums.iter().max().unwrap_or(&0));
+            let band = low + (high - low) / 3;
+            for &(x, y) in &px {
+                if (x + y == band || x + y == band + 1) && light != color {
+                    c.set(x, y, light);
+                } else if [(x + 1, y), (x, y + 1)].iter().any(|&(nx, ny)| c.get(nx, ny) == CLEAR) {
+                    c.set(x, y, dark);
+                }
+            }
+            let sparkle = match class {
+                Class::Mithril => Some((LIGHTCYAN, 3)),
+                Class::Precious => Some((WHITE, 2)),
+                _ => None,
+            };
+            if let Some((spark, n)) = sparkle {
+                for _ in 0..n {
+                    let (x, y) = px[rng.below(px.len() as i32) as usize];
+                    c.light(x, y, spark);
+                }
+            }
+        }
+        Class::Glass => {
+            for &(x, y) in &px {
+                if !edge(c, x, y) && (x + y) % 2 == 0 {
+                    c.set(x, y, CLEAR);
+                }
+            }
+        }
+        Class::Rock => {
+            for &(x, y) in &px {
+                match rng.below(10) {
+                    0 | 1 => c.set(x, y, dark),
+                    2 => c.set(x, y, light),
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// How worn it is, from the words of its name and description.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Wear {
+    /// 0 sound, 1 worn, 2 damaged, 3 battered, 4 broken.
+    step: u8,
+    rust: bool,
+    crude: bool,
+    fine: bool,
+}
+
+fn wear(thing: &Thing) -> Wear {
+    let mut text = thing.name.clone();
+    text.push(' ');
+    text.push_str(thing.description.as_deref().unwrap_or(""));
+    let ws = words(&text);
+    let has = |any: &[&str]| ws.iter().any(|w| any.contains(&w.as_str()));
+    let step = if has(&["broken", "shattered", "ruined", "splintered", "destroyed", "snapped", "smashed", "busted", "sundered"]) {
+        4
+    } else if has(&["battered", "notched", "tattered", "torn", "ragged", "pitted", "shoddy", "mangled", "holed"]) {
+        3
+    } else if has(&["dented", "chipped", "cracked", "frayed", "damaged", "nicked", "scratched", "bent", "scarred"]) {
+        2
+    } else if has(&["old", "worn", "used", "faded", "scuffed", "weathered", "dull", "tarnished", "threadbare", "aged"]) {
+        1
+    } else {
+        0
+    };
+    Wear {
+        step,
+        rust: has(&["rusty", "rusted", "rust", "corroded", "rusting"]),
+        crude: has(&["crude", "crudely", "rough", "makeshift", "primitive", "shoddy"]),
+        fine: has(&["fine", "masterwork", "masterful", "exquisite", "ornate", "superb", "elegant", "gilded", "jeweled", "jewelled", "engraved", "filigreed"]),
+    }
+}
+
+/// Its wear on the item's canvas, by what it's made of.
+fn damage(c: &mut Canvas, w: Wear, class: Class, k: &Colors, rng: &mut Rng) {
+    let shape: Vec<(i32, i32)> = pixels(c).filter(|&(x, y)| c.get(x, y) != CLEAR && !c.is_lit(x, y)).collect();
+    if shape.is_empty() {
+        return;
+    }
+    let pick = |rng: &mut Rng, from: &[(i32, i32)]| from[rng.below(from.len() as i32) as usize];
+    let hard = matches!(class, Class::Metal | Class::Mithril | Class::Precious);
+    let soft = matches!(class, Class::Cloth | Class::Leather | Class::Plain);
+    if w.crude {
+        for &(x, y) in &shape {
+            if edge(c, x, y) && (x * 3 + y) % 3 == 0 {
+                c.set(x, y, CLEAR);
+            }
+        }
+    }
+    if w.step >= 1 {
+        for &(x, y) in &shape {
+            if (x * 5 + y * 7) % 9 == 0 && c.get(x, y) != CLEAR {
+                let here = c.get(x, y);
+                c.set(x, y, shade(here));
+            }
+        }
+    }
+    if w.step >= 2 {
+        for _ in 0..2 {
+            let (x, y) = pick(rng, &shape);
+            if hard {
+                // A dent: dark, lit on its far side.
+                let here = c.get(x, y);
+                c.set(x, y, shade(here));
+                if c.get(x - 1, y - 1) != CLEAR {
+                    c.set(x - 1, y - 1, lighter(here));
+                }
+            } else if soft {
+                // Frayed: bites out of its lower edge.
+                let bites: Vec<(i32, i32)> = shape.iter().copied().filter(|&(ex, ey)| ey >= y && edge(c, ex, ey) && (ex + ey) % 2 == 0).take(4).collect();
+                for (ex, ey) in bites {
+                    c.set(ex, ey, CLEAR);
+                }
+            } else {
+                // A crack.
+                let (mut cx, mut cy) = (x, y);
+                for _ in 0..5 {
+                    if c.get(cx, cy) != CLEAR {
+                        c.set(cx, cy, BLACK);
+                    }
+                    cx += if rng.chance(50) { 1 } else { -1 };
+                    cy += 1;
+                }
+            }
+        }
+    }
+    if w.step >= 3 {
+        let outline: Vec<(i32, i32)> = shape.iter().copied().filter(|&(x, y)| edge(c, x, y)).collect();
+        if !outline.is_empty() {
+            // Notches out of its edge.
+            for _ in 0..3 {
+                let (x, y) = pick(rng, &outline);
+                c.set(x, y, CLEAR);
+                c.set(x - 1, y + 1, CLEAR);
+            }
+        }
+        if soft {
+            // Holes.
+            let inside: Vec<(i32, i32)> = shape.iter().copied().filter(|&(x, y)| !edge(c, x, y)).collect();
+            for _ in 0..2.min(inside.len()) {
+                let (x, y) = pick(rng, &inside);
+                c.set(x, y, CLEAR);
+                c.set(x + 1, y, CLEAR);
+            }
+        }
+    }
+    if w.step >= 4 {
+        // Split in two across its middle, the upper part knocked aside.
+        let n = shape.len() as i32;
+        let (mx, my) = (shape.iter().map(|p| p.0).sum::<i32>() / n, shape.iter().map(|p| p.1).sum::<i32>() / n);
+        let cut = mx + my;
+        let mut moved = Vec::new();
+        for &(x, y) in &shape {
+            let here = c.get(x, y);
+            if here == CLEAR {
+                continue;
+            }
+            if x + y == cut || x + y == cut + 1 {
+                c.set(x, y, CLEAR);
+            } else if x + y < cut {
+                moved.push((x, y, here, c.is_lit(x, y)));
+                c.set(x, y, CLEAR);
+            }
+        }
+        for (x, y, here, lit) in moved {
+            if lit {
+                c.light(x - 1, y - 1, here);
+            } else {
+                c.set(x - 1, y - 1, here);
+            }
+        }
+    }
+    if w.rust && ![YELLOW, WHITE, BROWN].contains(&k.metal) {
+        for (x, y) in pixels(c).collect::<Vec<_>>() {
+            let here = c.get(x, y);
+            if (here == k.metal || (hard && here == k.main)) && !c.is_lit(x, y) {
+                match (x * 3 + y * 5) % 7 {
+                    0 | 3 => c.set(x, y, BROWN),
+                    5 => c.set(x, y, RED),
+                    _ => {}
+                }
+            }
+        }
+    }
+    if w.fine {
+        // Gilt along its top, a gem set in it.
+        let gilt = if k.main == YELLOW { WHITE } else { YELLOW };
+        for (x, y) in pixels(c).collect::<Vec<_>>() {
+            if c.get(x, y) == k.main && c.get(x, y - 1) == CLEAR && x % 2 == 0 {
+                c.set(x, y, gilt);
+            }
+        }
+        let body: Vec<(i32, i32)> = pixels(c).filter(|&(x, y)| c.get(x, y) == k.main && !edge(c, x, y)).collect();
+        if !body.is_empty() {
+            let (x, y) = body[body.len() / 2];
+            c.light(x, y, k.bright.filter(|&b| b != k.main).unwrap_or(LIGHTRED));
+        }
+    }
+}
+
+/// The row a table's top is at.
+const TABLE: i32 = 17;
+
+/// A backdrop of one color fading up to black, on a table: boards, their
+/// grain, the front edge dark.
+fn table(c: &mut Canvas, color: u8) {
+    c.gradient(0, TABLE, &[BLACK, color, color]);
+    c.rect(0, TABLE, W, LABEL, BROWN);
+    for y in TABLE + 1..LABEL {
+        for x in 0..W {
+            if (x + y * 3) % 7 == 0 {
+                c.set(x, y, RED);
+            }
+        }
+    }
+    c.rect(0, LABEL - 1, W, LABEL, RED);
+}
 
 /// The rows the slot's words take: the picture's last row of cells.
 const LABEL: i32 = H - 2;
@@ -1082,18 +1614,37 @@ pub fn picture(thing: &Thing) -> Art {
     let kind = kind(thing);
     let mut rng = Rng::new(seed("item", &key(&thing.name), 0));
     let colors = colors(thing, kind, &mut rng);
-    let mut canvas = Canvas::new(SIZE.0, SIZE.1);
-    // A backdrop the item stands out from.
+    // A backdrop the item stands out from: where it's found, else one color over a table.
     let backdrops = [BLUE, MAGENTA, CYAN, GREEN, RED, BROWN, DARKGRAY];
     let mut back = backdrops[rng.below(backdrops.len() as i32) as usize];
     if back == colors.main || shade(back) == colors.main || back == shade(colors.main) {
         back = if colors.main == BLUE || colors.main == DARKGRAY { MAGENTA } else { BLUE };
     }
-    backdrop(&mut canvas, back);
-    // The item on a canvas of its own, then laid on the backdrop as what's on it says.
-    let mut item = Canvas::new(SIZE.0, SIZE.1);
-    item.rect(0, 0, W, H + 1, CLEAR);
+    let (mut canvas, light) = match thing.terrain.as_deref().filter(|t| !t.is_empty()) {
+        Some(t) => {
+            let (c, l) = figure::terrain(&key(&thing.name), t, SIZE.0, SIZE.1);
+            (c, Some(l))
+        }
+        None => {
+            let mut c = Canvas::new(SIZE.0, SIZE.1);
+            table(&mut c, back);
+            (c, None)
+        }
+    };
+    // The item on a canvas of its own, its material and wear on it, then
+    // laid on the backdrop as what's on it says.
+    let mut item = figure::clear(SIZE.0, SIZE.1);
     paint(&mut item, kind, &colors, thing, &mut rng);
+    let mut grain = Rng::new(seed("item-wear", &key(&thing.name), 0));
+    let made = class_of(thing, kind);
+    texture(&mut item, colors.main, made, &mut grain);
+    if colors.wood != colors.main {
+        texture(&mut item, colors.wood, Class::Wooden, &mut grain);
+    }
+    if colors.metal != colors.main && colors.metal != colors.wood {
+        texture(&mut item, colors.metal, Class::Metal, &mut grain);
+    }
+    damage(&mut item, wear(thing), made, &colors, &mut grain);
     let has = |any: &[&str]| thing.auras.iter().any(|a| any.contains(&a.as_str()));
     let lifted = if has(&["floating", "flying", "hovering", "levitating"]) { 3 } else { 0 };
     let invisible = has(&["invisible"]);
@@ -1115,8 +1666,9 @@ pub fn picture(thing: &Thing) -> Art {
             }
         }
     }
+    // Its shadow: under it where it stands, below it where it floats.
+    let low = (0..LABEL).rev().find(|&y| (0..W).any(|x| shaped(x, y))).unwrap_or(LABEL - 1);
     if lifted > 0 {
-        let low = (0..LABEL).rev().find(|&y| (0..W).any(|x| shaped(x, y))).unwrap_or(LABEL - 1);
         for y in low + 1..(low + 3).min(LABEL) {
             for x in CX - 6..=CX + 6 {
                 if (x + y) % 2 == 0 {
@@ -1124,15 +1676,33 @@ pub fn picture(thing: &Thing) -> Art {
                 }
             }
         }
+    } else {
+        for x in 0..W {
+            if let Some(bottom) = (0..LABEL).rev().find(|&y| shaped(x, y)) {
+                if bottom + 1 < LABEL && bottom + 1 >= low - 1 && (x + bottom) % 2 == 0 {
+                    canvas.set(x, bottom + 1, BLACK);
+                }
+            }
+        }
     }
+    canvas.pen = Part::Body;
     for y in 0..H {
         for x in 0..W {
             if !shaped(x, y) || (invisible && (x + y) % 2 == 1) {
                 continue;
             }
             let c = at(x, y);
-            canvas.set(x, y, if hidden { shade(c) } else { c });
+            if item.is_lit(x, y + lifted) {
+                canvas.light(x, y, c);
+            } else {
+                canvas.set(x, y, if hidden { shade(c) } else { c });
+            }
+            canvas.unglyph(x, y);
         }
+    }
+    canvas.pen = Part::Back;
+    if let (Some(light), false) = (&light, invisible) {
+        figure::light(&mut canvas, light);
     }
     if has(&["bound"]) {
         let ys: Vec<i32> = (0..LABEL).filter(|&y| (0..W).any(|x| shaped(x, y))).collect();
@@ -1265,57 +1835,98 @@ mod tests {
         assert_eq!(material_color("helmet"), None);
         assert_eq!(material_color("golden"), Some(YELLOW));
     }
+    #[test]
+    fn every_kind_material_and_wear_paints_in_the_16_colors() {
+        let font = crate::ansi_art::CP437;
+        let materials = [None, Some("wool"), Some("leather"), Some("oak"), Some("iron"), Some("mithril"), Some("glass"), Some("granite"), Some("diamond"), Some("a kind of wood")];
+        let wear = ["", "old ", "dented ", "battered ", "broken ", "rusty ", "crude ", "fine "];
+        for (k, names) in KINDS {
+            for (i, m) in materials.iter().enumerate() {
+                let t = Thing { material: m.map(str::to_string), terrain: (i % 3 == 0).then(|| "woods".to_string()), ..thing(&format!("a {}{}", wear[i % wear.len()], names[0])) };
+                let art = picture(&t);
+                assert_eq!((art.columns, art.rows), (SIZE.0, SIZE.1), "{k:?}");
+                assert!(colors_in(&art).iter().all(|&c| c < 16), "{k:?} {m:?}: a color past the 16");
+                assert!(art.lines.iter().flatten().all(|s| s.text.chars().all(|c| font.contains(c))), "{k:?} {m:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn its_material_wear_and_place_show() {
+        let plain = picture(&thing("a robe"));
+        // A robe is cloth already: wool changes nothing; the rest do.
+        assert_eq!(picture(&Thing { material: Some("wool".into()), ..thing("a robe") }), plain);
+        for m in ["leather", "oak", "iron", "mithril", "glass", "granite", "diamond"] {
+            assert_ne!(picture(&Thing { material: Some(m.into()), ..thing("a robe") }), plain, "{m}");
+        }
+        for w in ["old", "dented", "cracked", "frayed", "notched", "broken", "rusty", "crude", "fine"] {
+            assert_ne!(picture(&thing(&format!("a {w} sword"))), picture(&thing("a sword")), "{w}");
+        }
+        assert_ne!(picture(&Thing { terrain: Some("cave".into()), ..thing("a chest") }), picture(&thing("a chest")));
+        // Rust is wear: the blade stays steel under it.
+        assert_eq!(colors(&thing("a rusty sword"), Kind::Sword, &mut Rng::new(1)).main, LIGHTGRAY);
+    }
+
+    #[test]
+    fn what_its_made_of_by_examine_its_name_or_its_kind() {
+        assert_eq!(class("oak"), Some(Class::Wooden));
+        assert_eq!(class("white gold"), Some(Class::Metal));
+        assert_eq!(class("a kind of wood"), Some(Class::Wooden));
+        assert_eq!(class("helmet"), None);
+        assert_eq!(class_of(&Thing { material: Some("silk".into()), ..thing("a sword") }, Kind::Sword), Class::Cloth);
+        assert_eq!(class_of(&thing("a steel helmet"), Kind::Helmet), Class::Metal);
+        assert_eq!(class_of(&thing("a bag of gold coins"), Kind::Bag), Class::Cloth);
+        assert_eq!(class_of(&thing("a leather jerkin"), Kind::Armor), Class::Leather);
+        assert_eq!(class_of(&thing("a chainmail shirt"), Kind::Armor), Class::Metal);
+        assert_eq!(wear(&thing("a rusty, battered sword")), Wear { step: 3, rust: true, crude: false, fine: false });
+    }
+
+    #[test]
+    fn the_name_shapes_it() {
+        for (a, b) in [("a sword", "a scimitar"), ("a sword", "a rapier"), ("a short sword", "a long sword"), ("a dagger", "a kukri"), ("a great helm", "an iron cap"), ("a round shield", "a kite shield"), ("a vial", "a bottle")] {
+            assert_ne!(picture(&thing(a)), picture(&thing(b)), "{a} and {b}");
+        }
+    }
 }
 
 #[cfg(test)]
 mod look {
     use super::*;
-    use crate::ansi::Color;
 
     fn thing(name: &str) -> Thing {
         Thing { name: name.into(), ..Thing::default() }
     }
 
-    /// Writes a row of items as a PPM to `OUT` to look at while tuning:
+    /// Writes the items' contact sheet as a PPM to `OUT` to look at while
+    /// tuning: every kind; the shapes from numbers; the materials; the
+    /// wear; what's on it; in a place.
     /// `OUT=/tmp/i.ppm cargo test item_art::look -- --ignored`.
     #[test]
     #[ignore]
     fn show() {
-        const VGA: [[u8; 3]; 16] = [[0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170], [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255]];
-        let arts: Vec<Art> = KINDS.iter().map(|(_, names)| picture(&thing(&format!("a {}", names[0])))).chain([picture(&thing("a strange thing"))])
-            .chain(
-                [("a long sword", "glowing"), ("a potion", "invisible"), ("a gold ring", "floating"), ("a staff", "magical aura"), ("a key", "hidden"), ("a chest", "bound"), ("an amulet", "glowing blue"), ("a steel helmet", "metallic aura")]
-                    .iter()
-                    .map(|(n, a)| picture(&Thing { auras: vec![a.to_string()], ..thing(n) })),
-            )
-            .collect();
         let per = 13;
-        let rows = arts.len().div_ceil(per);
-        let (w, h) = (per * 26, rows * 26);
-        let mut px = vec![40u8; w * h * 3];
-        for (i, art) in arts.iter().enumerate() {
-            let (ox, oy) = ((i % per) * 26, (i / per) * 26);
-            for (row, line) in art.lines.iter().enumerate() {
-                let mut x = 0;
-                for span in line {
-                    let idx = |c: Option<Color>| match c { Some(Color::Index { index }) => index as usize, _ => 0 };
-                    let (fg, bg) = (idx(span.style.fg), idx(span.style.bg));
-                    for ch in span.text.chars() {
-                        let (top, bottom) = if ch == '▀' { (fg, bg) } else { (bg, bg) };
-                        for (dy, c) in [(0, top), (1, bottom)] {
-                            if row * 2 + dy >= 24 {
-                                continue;
-                            }
-                            let at = ((oy + row * 2 + dy) * w + ox + x) * 3;
-                            px[at..at + 3].copy_from_slice(&VGA[c]);
-                        }
-                        x += 1;
-                    }
-                }
+        let mut arts: Vec<Art> = KINDS.iter().map(|(_, names)| picture(&thing(&format!("a {}", names[0])))).chain([picture(&thing("a strange thing"))]).collect();
+        let pad = |arts: &mut Vec<Art>| {
+            while !arts.len().is_multiple_of(per) {
+                arts.push(picture(&thing("a strange thing")));
             }
-        }
-        let mut out = format!("P6 {w} {h} 255\n").into_bytes();
-        out.extend(px);
-        std::fs::write(std::env::var("OUT").unwrap_or_else(|_| "items.ppm".into()), out).unwrap();
+        };
+        pad(&mut arts);
+        let names = [
+            "a long sword", "a short sword", "a scimitar", "a rapier", "a claymore", "a katana", "a sword", "a dagger", "a kukri", "a stiletto", "a battleaxe", "a hand axe", "an axe",
+            "a great helm", "a nasal helmet", "an iron cap", "a helmet", "a round shield", "a kite shield", "a tower shield", "a shield", "a heater shield", "a vial", "a bottle", "a flask", "a potion",
+        ];
+        arts.extend(names.iter().map(|n| picture(&thing(n))));
+        pad(&mut arts);
+        let made = [("a robe", "wool"), ("a jerkin", "leather"), ("a chest", "oak"), ("a helmet", "iron"), ("a ring", "mithril"), ("a goblet", "glass"), ("a rock", "granite"), ("a cloak", "silk"), ("a crown", "gold"), ("a gem", "diamond"), ("a staff", "ebony"), ("a shield", "steel"), ("a pair of boots", "leather")];
+        arts.extend(made.iter().map(|(n, m)| picture(&Thing { material: Some(m.to_string()), ..thing(n) })));
+        let worn = ["an old sword", "a dented helmet", "a cracked staff", "a frayed cloak", "a notched axe", "a tattered robe", "a broken sword", "a rusty sword", "a crude club", "a fine sword", "a masterwork shield", "a broken shield", "a rusty chainmail shirt"];
+        arts.extend(worn.iter().map(|n| picture(&thing(n))));
+        let placed = [("a long sword", "woods"), ("a chest", "cave"), ("a gold ring", "city"), ("a potion", "stone"), ("a helmet", "plains"), ("a book", "wooden"), ("a fish", "watersurface"), ("a torch", "cave"), ("an amulet", "magic"), ("a lute", "hills"), ("a bag", "desert"), ("a key", "metal"), ("a gem", "mountains")];
+        arts.extend(placed.iter().map(|(n, t)| picture(&Thing { terrain: Some(t.to_string()), ..thing(n) })));
+        let auras = [("a long sword", "glowing"), ("a potion", "invisible"), ("a gold ring", "floating"), ("a staff", "magical aura"), ("a key", "hidden"), ("a chest", "bound"), ("an amulet", "glowing blue"), ("a steel helmet", "metallic aura")];
+        arts.extend(auras.iter().map(|(n, a)| picture(&Thing { auras: vec![a.to_string()], ..thing(n) })));
+        pad(&mut arts);
+        crate::face::look::sheet(&arts, per, &std::env::var("OUT").unwrap_or_else(|_| "items.ppm".into()));
     }
 }

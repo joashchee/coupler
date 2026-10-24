@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **Faces in their place, with moods, wounds and effects** (2026-10-24):
+  a creature's face in the Bestiary stands in the area it's seen in
+  most, painted by the room painter a shade darker (an animal in the
+  wild, a fish in the water), lit by its sky. People and the races that
+  think (a gnoll, a lizard man, a minotaur, a werewolf) have whites to
+  their eyes, brows and clothes; an animal sits low in the frame, its
+  back running off the side. An orc, a centaur, a naga and a harpy now
+  have a person's face (CoffeeMUD files the orc as porcine, which drew
+  a pig). Ready for the fight panel to come: six moods (calm, with a
+  sneer for the evil; angry, in pain, afraid, asleep, dead), five steps
+  of hurt as CoffeeMUD's health lines go (flesh bleeds, fur mats, stone
+  and bone crack, ghosts and elementals fade, slimes shrink), and the
+  look of about 160 effects by name (a halo for Sanctuary, poison's
+  green, frost, burning, blindness, faerie fire, webs, stone and bark
+  skin, a glow; sleep, fear and rage set the mood).
+- **Items in their material, worn or fine** (2026-10-24): an item's
+  material is a texture, not only a color: cloth woven, leather
+  stitched, wood grained, metal with a band of light, mithril and gems
+  sparkling, glass showing what's behind it, stone speckled; from what
+  EXAMINE says, its name, or its kind (CoffeeMUD's own material classes).
+  Its name's words show its wear (old, dented, cracked, frayed,
+  notched, tattered, broken), rust on iron, a crude outline or gilt
+  trim. Swords, daggers, axes, helmets, shields and potions take their
+  shape from their names (a scimitar curves, a rapier is thin with a
+  basket guard, a great helm has a face plate, a kite shield is long)
+  and their seed: shields carry one of five devices. Each stands on a
+  table, or in the place it's found most, with its shadow.
+
 ## 0.37.0 (2026-10-24)
 
 - **Mute a channel in the Log, by the game's own commands** (2026-10-24):

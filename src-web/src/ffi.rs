@@ -255,11 +255,12 @@ fn call(input: &[u8]) -> Result<Value, String> {
         "bestiary_items" => app.bestiary_items(&s("query")).and_then(json),
         "bestiary_item" => serde_json::to_value(app.bestiary_item(&s("key"))?).map_err(|e| e.to_string()),
         "bestiary_face" => {
-            let face = app.bestiary_mob(&s("key"))?.map(|m| crate::face::face(&crate::face::Sitter::from(&m)));
+            let moment: crate::face::Moment = args.get("moment").cloned().filter(|m| !m.is_null()).map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
+            let face = app.bestiary_sitter(&s("key"))?.map(|sitter| crate::face::face_in(&sitter, &moment));
             serde_json::to_value(face).map_err(|e| e.to_string())
         }
         "bestiary_item_art" => {
-            let art = app.bestiary_item(&s("key"))?.map(|i| crate::item_art::painted(&crate::item_art::Thing::from(&i)));
+            let art = app.bestiary_thing(&s("key"))?.map(|t| crate::item_art::painted(&t));
             serde_json::to_value(art).map_err(|e| e.to_string())
         }
         "automation_set" => {

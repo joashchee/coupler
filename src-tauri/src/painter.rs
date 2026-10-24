@@ -171,6 +171,26 @@ impl Rng {
     }
 }
 
+/// What a pixel is part of, for the passes after the drawing: a wound
+/// goes on the body, a mood on the eyes and the mouth (`face.rs`).
+/// What's drawn takes the canvas's `pen`; a room's picture is all `Back`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum Part {
+    #[default]
+    Back,
+    /// Skin, fur, scales, bone, stone: what a wound marks.
+    Body,
+    Hair,
+    Eye,
+    Mouth,
+    /// Clothes, armor, hats, jewelry.
+    Worn,
+    /// The brows, which a mood moves.
+    Brow,
+    /// Horns, tusks, whiskers, wings, a halo, a wound: neither hurt nor dressed.
+    Detail,
+}
+
 /// Pixels and the characters laid over them.
 pub(crate) struct Canvas {
     /// In pixels: the columns, and twice the rows.
@@ -181,12 +201,17 @@ pub(crate) struct Canvas {
     glyphs: Vec<Option<(char, u8)>>,
     /// Pixels that give their own light (windows, fires, the moon): night leaves them be.
     lit: Vec<bool>,
+    /// Per pixel: what it's part of, as the pen was when it was drawn.
+    parts: Vec<Part>,
+    /// What's drawn now is part of this.
+    pub(crate) pen: Part,
 }
 
 impl Canvas {
     pub(crate) fn new(columns: usize, rows: usize) -> Canvas {
         let (w, h) = (columns as i32, rows as i32 * 2);
-        Canvas { w, h, pixels: vec![BLACK; (w * h) as usize], glyphs: vec![None; columns * rows], lit: vec![false; (w * h) as usize] }
+        let n = (w * h) as usize;
+        Canvas { w, h, pixels: vec![BLACK; n], glyphs: vec![None; columns * rows], lit: vec![false; n], parts: vec![Part::Back; n], pen: Part::Back }
     }
 
     pub(crate) fn inside(&self, x: i32, y: i32) -> bool {
@@ -206,6 +231,31 @@ impl Canvas {
             let i = (y * self.w + x) as usize;
             self.pixels[i] = c;
             self.lit[i] = false;
+            self.parts[i] = self.pen;
+        }
+    }
+
+    /// What the pixel is part of; `Back` outside.
+    pub(crate) fn part(&self, x: i32, y: i32) -> Part {
+        if self.inside(x, y) {
+            self.parts[(y * self.w + x) as usize]
+        } else {
+            Part::Back
+        }
+    }
+
+    /// Whether the pixel gives its own light.
+    pub(crate) fn is_lit(&self, x: i32, y: i32) -> bool {
+        self.inside(x, y) && self.lit[(y * self.w + x) as usize]
+    }
+
+    /// A pixel copied as it is: its color, its light and its part.
+    pub(crate) fn put(&mut self, x: i32, y: i32, c: u8, lit: bool, part: Part) {
+        if self.inside(x, y) {
+            let i = (y * self.w + x) as usize;
+            self.pixels[i] = c;
+            self.lit[i] = lit;
+            self.parts[i] = part;
         }
     }
 
@@ -215,6 +265,7 @@ impl Canvas {
             let i = (y * self.w + x) as usize;
             self.pixels[i] = c;
             self.lit[i] = true;
+            self.parts[i] = self.pen;
         }
     }
 
@@ -222,6 +273,13 @@ impl Canvas {
     pub(crate) fn glyph(&mut self, x: i32, y: i32, c: char, fg: u8) {
         if self.inside(x, y) {
             self.glyphs[((y / 2) * self.w + x) as usize] = Some((c, fg));
+        }
+    }
+
+    /// No character over the cell holding pixel (x, y).
+    pub(crate) fn unglyph(&mut self, x: i32, y: i32) {
+        if self.inside(x, y) {
+            self.glyphs[((y / 2) * self.w + x) as usize] = None;
         }
     }
 
@@ -294,8 +352,9 @@ impl Canvas {
     }
 
     /// Night: what doesn't give light goes dark, and so do the
-    /// characters over it.
-    fn darken(&mut self) {
+    /// characters over it. Also a backdrop behind a face or an item, so
+    /// what's in front stands out (`face.rs`).
+    pub(crate) fn darken(&mut self) {
         for y in 0..self.h {
             for x in 0..self.w {
                 let i = (y * self.w + x) as usize;
@@ -311,6 +370,28 @@ impl Canvas {
                     *fg -= 8;
                 }
             }
+        }
+    }
+
+    /// Every color a step back, solid, not dithered: the place behind a
+    /// face or an item (`figure.rs`), so what's in front stands out.
+    /// What gives its own light keeps it.
+    pub(crate) fn recede(&mut self) {
+        let back = |c: u8| match c {
+            WHITE => LIGHTGRAY,
+            LIGHTGRAY => DARKGRAY,
+            DARKGRAY => BLACK,
+            YELLOW => BROWN,
+            c if c >= 9 => c - 8,
+            c => c,
+        };
+        for i in 0..self.pixels.len() {
+            if !self.lit[i] {
+                self.pixels[i] = back(self.pixels[i]);
+            }
+        }
+        for (_, fg) in self.glyphs.iter_mut().flatten() {
+            *fg = back(*fg);
         }
     }
 
@@ -342,7 +423,7 @@ impl Canvas {
 
 /// A color at night: a bright one goes to its dark self, a dark one
 /// halfway to black.
-fn dim(c: u8, x: i32, y: i32) -> u8 {
+pub(crate) fn dim(c: u8, x: i32, y: i32) -> u8 {
     match c {
         BLACK => BLACK,
         DARKGRAY => Canvas::mix(x, y, DARKGRAY, BLACK, 8),
@@ -367,7 +448,7 @@ fn ridge(rng: &mut Rng, w: i32, most: i32, step: i32) -> Vec<i32> {
 }
 
 /// Draws a room's picture.
-fn draw(scene: &Scene, style: Style, columns: usize, rows: usize, again: u32) -> Canvas {
+pub(crate) fn draw(scene: &Scene, style: Style, columns: usize, rows: usize, again: u32) -> Canvas {
     let mut rng = Rng::new(seed(&scene.world, &scene.room, again));
     let mut canvas = Canvas::new(columns, rows);
     let terrain = scene.terrain.to_ascii_lowercase();

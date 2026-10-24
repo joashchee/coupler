@@ -45,6 +45,8 @@ mod echo;
 #[path = "../../src-tauri/src/face.rs"]
 mod face;
 mod ffi;
+#[path = "../../src-tauri/src/figure.rs"]
+mod figure;
 #[path = "../../src-tauri/src/foley.rs"]
 mod foley;
 #[path = "../../src-tauri/src/hidden.rs"]

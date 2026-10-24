@@ -54,6 +54,7 @@ mod ports;
 mod painter;
 mod portrait;
 mod face;
+mod figure;
 mod item_art;
 mod screen_reader;
 mod senses;
@@ -251,17 +252,19 @@ fn bestiary_mob(app: AppHandle, key: String, session: State<'_, Session>) -> Res
 }
 
 /// A creature's face by Coupler's painter (face.rs), from all that's
-/// known of it; None if it isn't in the Bestiary.
+/// known of it, standing where it's seen most; as it is in `moment` (its
+/// mood, hurt, effects, the room), else calm. None if it isn't in the
+/// Bestiary.
 #[tauri::command]
-fn bestiary_face(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
-    Ok(session.bestiary_mob(&app, &key)?.map(|m| face::face(&face::Sitter::from(&m))))
+fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
+    Ok(session.bestiary_sitter(&app, &key)?.map(|s| face::face_in(&s, &moment.unwrap_or_default())))
 }
 
 /// An item's picture by Coupler's painter (item_art.rs), from all that's
 /// known of it; None if it isn't in the Bestiary.
 #[tauri::command]
 fn bestiary_item_art(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<item_art::Picture>, String> {
-    Ok(session.bestiary_item(&app, &key)?.map(|i| item_art::painted(&item_art::Thing::from(&i))))
+    Ok(session.bestiary_thing(&app, &key)?.map(|t| item_art::painted(&t)))
 }
 
 /// The items whose name, material or area has the words.

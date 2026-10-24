@@ -22,12 +22,47 @@
 //! The same creature always gets the same face (its name seeds the
 //! rest: the backdrop, a man's beard, the length of the hair); learning
 //! more of it changes the face to match.
+//!
+//! **In layers** (`figure.rs`): the place behind, the creature drawn on
+//! a clear canvas of its own with each pixel's part (`painter::Part`),
+//! then the passes that read the parts, then laid on the place and lit by
+//! it:
+//!
+//! - **The place**: where it's been seen the most (its area's commonest
+//!   terrain on the map), by the room painter, a shade darker; a
+//!   creature before the player now, the room itself (`Moment::scene`).
+//!   An animal stands in the wild, never a room or a street; a fish, in
+//!   the water. Nowhere known, a backdrop of one color.
+//! - **A thinking creature or an animal**: people and the races that
+//!   think (a gnoll, a lizard man, a minotaur, a werewolf) have whites
+//!   to their eyes, brows, and shoulders in clothes; an animal's head is
+//!   low in the frame, its back running off the picture's side, no
+//!   brows. A beast's head with two signs of a mind (it wears things,
+//!   it has skills, it has arms) thinks too.
+//! - **The mood** (`Mood`), at each shape's eyes, brows and mouth
+//!   (`Anchors`): calm (a sneer for the evil), angry, in pain, afraid,
+//!   asleep, dead.
+//! - **Hurt** in five steps (`Moment::hurt`), as CoffeeMUD's ten health
+//!   lines go (`healthText`, from "misplaced hairs" to "covered in
+//!   blood"): scratches, cuts, bruises, bleeding, near death. Placed by
+//!   the name, so the wounds stay put and only add up. Flesh bleeds,
+//!   fur mats, stone and bone crack, ghosts and elementals fade, a slime
+//!   shrinks.
+//! - **Effects** on it (`Moment::effects`, the names `char.effects`
+//!   gives, `effect_looks.tsv` from `scripts/painter-tables.py`): a halo,
+//!   poison's green, burning, frost, blind eyes, half seen, faerie fire's
+//!   outline, a web, stone skin, bark skin, a glow; sleep, fear and rage
+//!   set the mood.
 
 use crate::ansi_art::Art;
 use crate::bestiary::MobEntry;
-use crate::paint::seed;
+use crate::figure::{self, CLEAR};
+use crate::paint::{seed, Scene};
 use crate::painter::*;
 use crate::portrait::{self, Feature};
+use serde::Deserialize;
+
+pub(crate) use crate::figure::{lighter, shade};
 
 /// A picture's size in cells (the faces' and the items', `item_art.rs`),
 /// and the square of pixels drawn in it.
@@ -46,6 +81,12 @@ pub struct Sitter {
     pub body: Option<String>,
     /// What it wears: where ("worn on head") and what ("a steel helmet").
     pub wears: Vec<(String, String)>,
+    /// The terrain where it's been seen the most, from the map.
+    pub terrain: Option<String>,
+    /// "evil", "good": what its aura said.
+    pub alignment: Option<String>,
+    /// It's been seen using skills of its own (a spell, a fighter's).
+    pub skilled: bool,
 }
 
 impl From<&MobEntry> for Sitter {
@@ -58,8 +99,38 @@ impl From<&MobEntry> for Sitter {
             description: m.description.clone(),
             body: m.body.clone(),
             wears: m.wears.iter().map(|c| (c.what.clone().unwrap_or_default(), c.name.clone())).collect(),
+            terrain: None,
+            alignment: m.areas.iter().max_by_key(|a| a.seen).and_then(|a| a.alignment.clone()),
+            skilled: m.abilities.iter().any(|a| a.what.as_deref().is_some_and(|k| k != "power" && k != "disease")),
         }
     }
+}
+
+/// The creature now: how it feels, how hurt, what's on it, where. The
+/// Bestiary's still picture is the default: calm, unhurt, nothing on it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Moment {
+    pub mood: Mood,
+    /// 0 unhurt to 5 near death.
+    pub hurt: u8,
+    /// The names of the effects on it ("Poison", "Sanctuary").
+    pub effects: Vec<String>,
+    /// The room it's in, painted behind it instead of where it's most seen.
+    pub scene: Option<Scene>,
+}
+
+/// How it looks out of its face.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Mood {
+    #[default]
+    Calm,
+    Angry,
+    Pain,
+    Afraid,
+    Asleep,
+    Dead,
 }
 
 /// The head's shape, from the race's category.
@@ -119,10 +190,23 @@ pub(crate) fn key(name: &str) -> String {
     name.chars().filter(char::is_ascii_alphabetic).map(|c| c.to_ascii_lowercase()).collect()
 }
 
+/// Races in a beast's category with a person's head and shoulders: an
+/// orc (CoffeeMUD files it under porcine), a centaur, a naga, a harpy.
+const PEOPLE: &[&str] = &["orc", "centaur", "naga", "harpy", "manscorpion", "merfolk", "selkie"];
+
+/// Races with a beast's head that think: they're drawn as people are,
+/// with whites to their eyes, brows and clothes.
+const THINKING: &[&str] = &[
+    "gnoll", "werewolf", "wererat", "werebear", "werebat", "wereamphibian", "wereanimal", "kobold", "lizardman", "minotaur", "tabaxi", "wemic", "aarakocran", "birdman", "bullywug", "draconian", "beastkin", "mustie", "sasquatch",
+];
+
 /// The shape a race's category (`races.tsv`) and name give.
 fn shape(category: &str, race: &str) -> Shape {
     let race = key(race);
     let has = |w: &str| race.contains(w);
+    if PEOPLE.contains(&race.as_str()) {
+        return Shape::Person;
+    }
     match key(category).as_str() {
         "canine" | "mustelid" | "feline" => Shape::Beast(Ears::Pointed),
         "ursine" | "rodent" | "primate" | "seamammal" | "animal" | "pachyderm" => Shape::Beast(if has("elephant") || has("mammoth") { Ears::Wide } else { Ears::Round }),
@@ -231,33 +315,6 @@ pub(crate) fn item_color(item: &str) -> Option<u8> {
     ws.iter().find_map(|w| color_word(w).map(|(c, _)| c))
 }
 
-/// A darker shade of a color, for a nose, a shadow, a brow.
-pub(crate) fn shade(c: u8) -> u8 {
-    match c {
-        DARKGRAY => BLACK,
-        LIGHTGRAY => DARKGRAY,
-        WHITE => LIGHTGRAY,
-        LIGHTRED => RED,
-        YELLOW => BROWN,
-        BROWN => RED,
-        c if c > 8 => c - 8,
-        BLACK => DARKGRAY,
-        _ => DARKGRAY,
-    }
-}
-
-/// A lighter one, for a muzzle, a chest, a highlight.
-pub(crate) fn lighter(c: u8) -> u8 {
-    match c {
-        BLACK => DARKGRAY,
-        DARKGRAY => LIGHTGRAY,
-        LIGHTGRAY => WHITE,
-        BROWN => YELLOW,
-        c if c < 8 => c + 8,
-        _ => WHITE,
-    }
-}
-
 /// What it wears, by where.
 #[derive(Default)]
 struct Worn {
@@ -336,6 +393,13 @@ struct Look {
     tattoo: bool,
     backdrop: u8,
     worn: Worn,
+    /// It thinks: whites to its eyes, brows, a bust in clothes.
+    sapient: bool,
+    /// An animal: drawn low in the frame, its back running off the side.
+    animal: bool,
+    /// A ghost, a spectre: hurt, it fades.
+    ghostly: bool,
+    evil: bool,
 }
 
 fn read(s: &Sitter) -> Look {
@@ -436,6 +500,9 @@ fn read(s: &Sitter) -> Look {
         backdrop = if skin == BLUE { DARKGRAY } else { BLUE };
     }
     let r = key(&race);
+    let signs = [!s.wears.is_empty(), s.skilled, said.has(&["arm", "arms"])].iter().filter(|&&b| b).count();
+    let sapient = shape == Shape::Person || THINKING.contains(&r.as_str()) || (matches!(shape, Shape::Beast(_) | Shape::Bird | Shape::Scaled(_)) && signs >= 2);
+    let animal = !sapient && matches!(shape, Shape::Beast(_) | Shape::Bird | Shape::Scaled(Scales::Lizard | Scales::Snake | Scales::Frog | Scales::Dragon));
     Look {
         shape,
         skin,
@@ -458,6 +525,10 @@ fn read(s: &Sitter) -> Look {
         tattoo: said.has(&["tattoo", "tattoos", "tattooed", "warpaint"]),
         backdrop,
         worn: worn(&s.wears, &said),
+        sapient,
+        animal,
+        ghostly: ["ghost", "spectre", "specter", "spirit", "shadow", "wraith", "banshee", "phantom"].iter().any(|g| r.contains(g)),
+        evil: s.alignment.as_deref().is_some_and(|a| a.eq_ignore_ascii_case("evil")),
     }
 }
 
@@ -517,11 +588,29 @@ pub(crate) fn backdrop(c: &mut Canvas, color: u8) {
     c.gradient(0, H, &[BLACK, shade(color), color]);
 }
 
+/// Where a face's eyes, brows and mouth are, as its shape drew them:
+/// the moods and the wounds go there.
+struct Anchors {
+    /// Each eye's middle, the left first.
+    eyes: Vec<(i32, i32)>,
+    /// The brows' row, where the face has brows.
+    brow: Option<i32>,
+    /// The mouth's middle and its half width.
+    mouth: Option<(i32, i32, i32)>,
+    /// The top of the head, for a halo, a sleeper's z's.
+    crown: (i32, i32),
+    /// A closed eye's color: the eyelid's.
+    lid: u8,
+    /// Whites to the eyes: a thinking creature's.
+    whites: bool,
+}
+
 /// The person's head: an oval.
 const HEAD: (i32, i32, i32, i32) = (CX, 11, 6, 8);
 
 /// Shoulders and the chest, in the clothes, and what's worn there.
 fn shoulders(c: &mut Canvas, look: &Look, color: u8) {
+    c.pen = Part::Worn;
     let (clothes, mail) = match look.worn.torso.as_deref() {
         Some(item) => (item_color(item).unwrap_or(color), words(item).iter().any(|w| ["chain", "chainmail", "mail", "ringmail", "scale"].contains(&w.as_str()))),
         None => (color, false),
@@ -551,6 +640,7 @@ fn shoulders(c: &mut Canvas, look: &Look, color: u8) {
 
 /// Things worn around the neck, from the row under the chin.
 fn neck(c: &mut Canvas, item: &str, bottom: i32) {
+    c.pen = Part::Worn;
     let ws = words(item);
     let color = item_color(item).unwrap_or(YELLOW);
     if ws.iter().any(|w| ["collar", "scarf", "gorget", "choker", "torc", "torque", "mantle", "stole"].contains(&w.as_str())) {
@@ -574,6 +664,7 @@ fn neck(c: &mut Canvas, item: &str, bottom: i32) {
 
 /// Things worn on the head of `oval`, its brow at `brow`.
 fn hat(c: &mut Canvas, look: &Look, item: &str, oval: (i32, i32, i32, i32), brow: i32) {
+    c.pen = Part::Worn;
     let ws = words(item);
     let has = |any: &[&str]| ws.iter().any(|w| any.contains(&w.as_str()));
     let (cx, cy, rx, ry) = oval;
@@ -634,6 +725,7 @@ fn hat(c: &mut Canvas, look: &Look, item: &str, oval: (i32, i32, i32, i32), brow
 
 /// Things worn on the eyes, at row `y`, the eyes `gap` from the middle.
 fn eyewear(c: &mut Canvas, item: &str, y: i32, gap: i32, eyes: &dyn Fn(&mut Canvas)) {
+    c.pen = Part::Worn;
     let ws = words(item);
     if ws.iter().any(|w| ["blindfold", "bandage", "veil"].contains(&w.as_str())) {
         let cloth = item_color(item).unwrap_or(DARKGRAY);
@@ -657,14 +749,30 @@ fn eyewear(c: &mut Canvas, item: &str, y: i32, gap: i32, eyes: &dyn Fn(&mut Canv
     eyes(c);
 }
 
+/// A thinking creature's brows over eyes `gap` from the middle at row `ey`.
+fn brows(c: &mut Canvas, ey: i32, gap: i32, color: u8) {
+    c.pen = Part::Brow;
+    c.rect(CX - gap - 1, ey - 1, CX - gap + 2, ey, color);
+    c.rect(CX + gap - 1, ey - 1, CX + gap + 2, ey, color);
+}
+
+/// An animal's back, running off the picture's right side from under
+/// its head (`figure::lay` carries it on past the edge).
+fn back(c: &mut Canvas, color: u8, top: i32) {
+    c.pen = Part::Body;
+    c.oval(CX + 6, top + 3, 12, 4, color);
+    c.rect(CX, top + 2, W, H, color);
+}
+
 /// A person's face.
-fn paint_person(c: &mut Canvas, look: &Look) {
+fn paint_person(c: &mut Canvas, look: &Look) -> Anchors {
     let (cx, cy, rx, ry) = HEAD;
     let skin = look.skin;
     let hair = look.hair;
     let dark = shade(skin);
     // Wings behind (pixies, faeries), long hair behind the shoulders.
     if let Feature::Wings(color) = look.feature {
+        c.pen = Part::Detail;
         for i in 0..9 {
             let reach = 3 + (9 - i) / 2;
             c.rect(0, 12 + i, reach, 13 + i, color);
@@ -672,10 +780,12 @@ fn paint_person(c: &mut Canvas, look: &Look) {
         }
     }
     if let (Some(h), true) = (hair, look.long_hair) {
+        c.pen = Part::Hair;
         c.rect(cx - rx - 2, cy - 4, cx + rx + 3, 23, h);
     }
     shoulders(c, look, look.clothes);
     // The neck, its shadow under the chin.
+    c.pen = Part::Body;
     c.rect(cx - 2, cy + ry - 2, cx + 3, 23, skin);
     c.rect(cx - 2, cy + ry, cx + 3, cy + ry + 1, dark);
     // The head and its ears.
@@ -698,6 +808,7 @@ fn paint_person(c: &mut Canvas, look: &Look) {
     }
     // Hair over the top, down the sides to the ears.
     if let Some(h) = hair {
+        c.pen = Part::Hair;
         cap(c, (cx, cy, rx + 1, ry + 1), cy - ry - 1, cy - 4, h);
         for y in cy - 4..cy - 1 {
             both(c, cx - rx, y, h);
@@ -716,10 +827,9 @@ fn paint_person(c: &mut Canvas, look: &Look) {
     let brow = cy - 2;
     let ey = cy - 1;
     let gap = 3;
-    let brows = hair.map(shade).unwrap_or(dark);
-    c.rect(cx - gap - 1, brow, cx - gap + 2, brow + 1, brows);
-    c.rect(cx + gap - 1, brow, cx + gap + 2, brow + 1, brows);
+    brows(c, ey, gap, hair.map(shade).unwrap_or(dark));
     let eyes = |c: &mut Canvas| {
+        c.pen = Part::Eye;
         for side in [-1, 1] {
             let x = cx + side * gap;
             c.set(x - side, ey, WHITE);
@@ -731,6 +841,7 @@ fn paint_person(c: &mut Canvas, look: &Look) {
         }
     };
     eyes(c);
+    c.pen = Part::Body;
     if look.old {
         both(c, cx - gap - 2, ey + 1, dark);
         c.rect(cx - 2, cy - 4, cx + 3, cy - 3, dark);
@@ -738,7 +849,9 @@ fn paint_person(c: &mut Canvas, look: &Look) {
     c.rect(cx, cy, cx + 1, cy + 2, dark);
     both(c, cx - 1, cy + 2, dark);
     let mouth_y = cy + 4;
+    c.pen = Part::Mouth;
     c.rect(cx - 2, mouth_y, cx + 3, mouth_y + 1, if skin == RED || skin == LIGHTRED { RED } else { shade(dark) });
+    c.pen = Part::Body;
     if look.freckles {
         for (x, y) in [(cx - 4, cy + 1), (cx - 2, cy + 2), (cx + 2, cy + 2), (cx + 4, cy + 1)] {
             c.set(x, y, BROWN);
@@ -756,6 +869,7 @@ fn paint_person(c: &mut Canvas, look: &Look) {
     // A beard over the jaw, the mouth left showing; a mustache over it.
     let beard_color = hair.unwrap_or(LIGHTGRAY);
     if look.beard {
+        c.pen = Part::Hair;
         for y in cy + 2..cy + ry + 3 {
             for x in 0..W {
                 if within(x, y, (cx, cy + 1, rx + 1, ry + 1)) && (y > cy + 3 || (x - cx).abs() > 2) {
@@ -763,12 +877,15 @@ fn paint_person(c: &mut Canvas, look: &Look) {
                 }
             }
         }
+        c.pen = Part::Mouth;
         c.rect(cx - 2, mouth_y, cx + 3, mouth_y + 1, shade(beard_color));
     }
     if look.mustache {
+        c.pen = Part::Hair;
         c.rect(cx - 2, mouth_y - 1, cx + 3, mouth_y, beard_color);
         both(c, cx - 3, mouth_y, beard_color);
     }
+    c.pen = Part::Detail;
     if look.tusks {
         both(c, cx - 2, mouth_y - 1, WHITE);
     }
@@ -787,6 +904,7 @@ fn paint_person(c: &mut Canvas, look: &Look) {
         eyewear(c, "eyepatch", ey, gap, &eyes);
     }
     if let Some(item) = look.worn.mouth.as_deref() {
+        c.pen = Part::Worn;
         if words(item).iter().any(|w| w == "pipe") {
             c.rect(cx + 2, mouth_y, cx + 5, mouth_y + 1, BROWN);
             c.rect(cx + 5, mouth_y - 1, cx + 6, mouth_y + 1, BROWN);
@@ -798,6 +916,7 @@ fn paint_person(c: &mut Canvas, look: &Look) {
         }
     }
     if let Some(item) = look.worn.ears.as_deref() {
+        c.pen = Part::Worn;
         both_lit(c, cx - rx - 1, cy + 2, item_color(item).unwrap_or(YELLOW));
     }
     if let Some(item) = look.worn.neck.as_deref() {
@@ -809,23 +928,29 @@ fn paint_person(c: &mut Canvas, look: &Look) {
         None => {}
     }
     if look.halo {
+        c.pen = Part::Detail;
         for x in cx - 4..=cx + 4 {
             c.light(x, cy - ry - 2 + i32::from((x - cx).abs() > 2), YELLOW);
         }
     }
+    Anchors { eyes: vec![(cx - gap, ey), (cx + gap, ey)], brow: Some(brow), mouth: Some((cx, mouth_y, 2)), crown: (cx, cy - ry), lid: skin, whites: true }
 }
 
-/// A beast's face: a muzzle, its ears, its fur.
-fn paint_beast(c: &mut Canvas, look: &Look, ears: Ears) {
+/// A beast's face: a muzzle, its ears, its fur. A thinking one (a gnoll,
+/// a werewolf) has a bust in clothes, brows and whites to its eyes; an
+/// animal, its back running off the side.
+fn paint_beast(c: &mut Canvas, look: &Look, ears: Ears) -> Anchors {
     let fur = look.skin;
     let light = lighter(fur);
     let dark = shade(fur);
     let (cx, cy, rx, ry) = (CX, 12, 7, 7);
     let top = cy - ry;
-    // The chest.
-    c.oval(cx, 25, 11, 5, fur);
-    c.rect(0, 23, W, H, fur);
-    c.oval(cx, 25, 4, 4, light);
+    if look.sapient {
+        shoulders(c, look, look.clothes);
+    } else {
+        back(c, fur, 18);
+    }
+    c.pen = Part::Body;
     // Ears behind the head's top.
     match ears {
         Ears::Pointed => {
@@ -853,17 +978,21 @@ fn paint_beast(c: &mut Canvas, look: &Look, ears: Ears) {
         }
         Ears::Horned => {
             for side in [-1, 1] {
+                c.pen = Part::Detail;
                 for i in 0..5 {
                     c.set(cx + side * (rx - 1 + i), top + 2 - i / 2, LIGHTGRAY);
                 }
+                c.pen = Part::Body;
                 c.oval(cx + side * (rx - 1), cy - 4, 2, 1, fur);
             }
         }
         Ears::Curled => {
+            c.pen = Part::Detail;
             for side in [-1, 1] {
                 c.oval(cx + side * (rx - 1), cy - 3, 3, 3, DARKGRAY);
                 c.oval(cx + side * (rx - 1), cy - 3, 1, 1, LIGHTGRAY);
             }
+            c.pen = Part::Body;
         }
     }
     c.oval(cx, cy, rx, ry, fur);
@@ -880,14 +1009,17 @@ fn paint_beast(c: &mut Canvas, look: &Look, ears: Ears) {
     let pig = fur == LIGHTMAGENTA;
     c.oval(cx, cy + 4, 4, 3, if pig { LIGHTRED } else { light });
     let nose_y = cy + 2;
+    c.pen = Part::Detail;
     if pig || ears == Ears::Horned {
         both(c, cx - 1, nose_y + 1, BLACK);
     } else {
         c.rect(cx - 1, nose_y, cx + 2, nose_y + 1, BLACK);
         c.set(cx, nose_y + 1, BLACK);
+        c.pen = Part::Mouth;
         c.set(cx, nose_y + 2, dark);
         both(c, cx - 1, nose_y + 3, dark);
     }
+    c.pen = Part::Detail;
     if look.fangs || look.tusks {
         both(c, cx - 2, nose_y + 3, WHITE);
     }
@@ -898,38 +1030,57 @@ fn paint_beast(c: &mut Canvas, look: &Look, ears: Ears) {
             line(c, (cx + side * 3, nose_y + 2), (cx + side * 8, nose_y + 3), LIGHTGRAY);
         }
     }
-    // Eyes, dark at their inner corner.
+    // Eyes: an animal's dark at their inner corner, a thinking one's with whites and brows.
     let ey = cy - 2;
+    if look.sapient {
+        brows(c, ey - 1, 3, dark);
+    }
+    c.pen = Part::Eye;
     for side in [-1, 1] {
         let x = cx + side * 3;
         c.set(x, ey, look.eyes);
         c.set(x + side, ey, look.eyes);
-        c.set(x - side, ey, BLACK);
+        c.set(x - side, ey, if look.sapient { WHITE } else { BLACK });
         if look.glow {
             c.light(x, ey, LIGHTRED);
         }
     }
+    c.pen = Part::Detail;
     if look.horns && ears != Ears::Horned {
         for i in 0..4 {
             both(c, cx - 3 - i / 2, top - i, WHITE);
         }
     }
+    c.pen = Part::Body;
     if look.scar {
         line(c, (cx + 2, cy - 4), (cx + 5, cy + 1), dark);
     }
     if let Some(item) = look.worn.neck.as_deref() {
-        c.rect(cx - 5, 20, cx + 6, 21, item_color(item).unwrap_or(RED));
-        c.light(cx, 21, YELLOW);
+        if look.sapient {
+            neck(c, item, cy + ry + 1);
+        } else {
+            // A collar: it's someone's.
+            c.pen = Part::Worn;
+            c.rect(cx - 5, 20, cx + 6, 21, item_color(item).unwrap_or(RED));
+            c.light(cx, 21, YELLOW);
+        }
     }
+    if let (true, Some(item)) = (look.sapient, look.worn.head.as_deref()) {
+        hat(c, look, item, (cx, cy, rx, ry), ey - 1);
+    }
+    Anchors { eyes: vec![(cx - 3, ey), (cx + 3, ey)], brow: look.sapient.then_some(ey - 2), mouth: Some((cx, nose_y + 3, 1)), crown: (cx, top), lid: fur, whites: look.sapient }
 }
 
 /// A bird's: round head, a beak, feathers.
-fn paint_bird(c: &mut Canvas, look: &Look) {
+fn paint_bird(c: &mut Canvas, look: &Look) -> Anchors {
     let f = look.skin;
     let (cx, cy, rx, ry) = (CX, 10, 7, 7);
-    c.oval(cx, 25, 11, 6, f);
-    c.rect(0, 22, W, H, f);
-    c.oval(cx, 25, 5, 5, lighter(f));
+    if look.sapient {
+        shoulders(c, look, look.clothes);
+    } else {
+        back(c, f, 17);
+    }
+    c.pen = Part::Body;
     c.oval(cx, cy, rx, ry, f);
     // A crest, the feathers' edge.
     for i in 0..3 {
@@ -939,21 +1090,27 @@ fn paint_bird(c: &mut Canvas, look: &Look) {
         both(c, cx - rx + 1, y, shade(f));
     }
     // The beak, hooked, down the middle.
+    c.pen = Part::Mouth;
     peak(c, cx, cy - 1, cy + 4, 2, YELLOW);
     c.rect(cx - 1, cy + 4, cx + 2, cy + 6, YELLOW);
     c.set(cx, cy + 6, BROWN);
     both(c, cx - 1, cy + 1, BROWN);
     // Eyes on the sides, ringed.
     let ey = cy - 2;
+    if look.sapient {
+        brows(c, ey, 4, shade(f));
+    }
+    c.pen = Part::Eye;
     for side in [-1, 1] {
         let x = cx + side * 4;
         c.set(x, ey, YELLOW);
         c.set(x + side, ey, if look.glow { LIGHTRED } else { BLACK });
     }
+    Anchors { eyes: vec![(cx - 4, ey), (cx + 4, ey)], brow: look.sapient.then_some(ey - 1), mouth: Some((cx, cy + 5, 1)), crown: (cx, cy - ry - 2), lid: f, whites: false }
 }
 
 /// A scaled head: a lizard's, a snake's, a frog's, a fish's, a dragon's.
-fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) {
+fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) -> Anchors {
     let s = look.skin;
     let dark = shade(s);
     let belly = lighter(s);
@@ -963,9 +1120,9 @@ fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) {
         Scales::Snake => (CX, 11, 5, 8),
         _ => (CX, 11, 6, 8),
     };
+    c.pen = Part::Body;
     if kind == Scales::Fish {
-        // Water, and fins out to the sides and on top.
-        c.gradient(0, H, &[BLACK, BLUE, CYAN]);
+        // Fins out to the sides and on top.
         for side in [-1, 1] {
             for i in 0..4 {
                 let x = cx + side * (rx + i);
@@ -973,20 +1130,22 @@ fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) {
             }
         }
         peak(c, cx, cy - ry - 4, cy - ry + 2, 3, dark);
-    } else {
-        // The neck and the body's scales, the belly paler.
-        let half = if kind == Scales::Snake { 5 } else { 10 };
-        c.oval(cx, 25, half, 6, s);
-        c.rect(cx - half, 22, cx + half + 1, H, s);
-        c.oval(cx, 25, 3, 5, belly);
+    } else if look.sapient {
+        shoulders(c, look, look.clothes);
+        c.pen = Part::Body;
+        c.rect(cx - 3, cy + ry - 2, cx + 4, 23, s);
+    } else if look.animal {
+        back(c, s, cy + ry - 3);
     }
     if kind == Scales::Dragon {
+        c.pen = Part::Detail;
         for side in [-1, 1] {
             for i in 0..6 {
                 c.set(cx + side * (rx - 1 + i / 2), cy - ry + 2 - i, LIGHTGRAY);
             }
         }
     }
+    c.pen = Part::Body;
     c.oval(cx, cy, rx, ry, s);
     // The scales' pattern.
     for y in cy - ry..cy + ry {
@@ -999,16 +1158,21 @@ fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) {
     // A pale jaw, nostrils, a long mouth.
     let mouth_y = cy + ry - 3;
     cap(c, (cx, cy, rx - 1, ry), mouth_y, cy + ry, belly);
+    c.pen = Part::Mouth;
     c.rect(cx - rx + 2, mouth_y, cx + rx - 1, mouth_y + 1, shade(dark));
+    c.pen = Part::Detail;
     both(c, cx - 1, mouth_y - 2, BLACK);
     if kind == Scales::Fish {
+        c.pen = Part::Mouth;
         c.oval(cx, mouth_y + 1, 1, 1, shade(dark));
     }
     if kind == Scales::Snake {
+        c.pen = Part::Detail;
         c.rect(cx, mouth_y + 1, cx + 1, mouth_y + 3, LIGHTRED);
         both(c, cx - 1, mouth_y + 3, LIGHTRED);
     }
     if kind == Scales::Dragon || look.fangs {
+        c.pen = Part::Detail;
         for x in (cx - rx + 3..cx + rx - 2).step_by(2) {
             c.set(x, mouth_y + 1, WHITE);
         }
@@ -1021,66 +1185,84 @@ fn paint_scaled(c: &mut Canvas, look: &Look, kind: Scales) {
     for side in [-1, 1] {
         let x = cx + side * gap;
         if kind == Scales::Frog {
+            c.pen = Part::Body;
             c.oval(x, ey, 2, 2, s);
         }
+        c.pen = Part::Eye;
         c.rect(x - 1, ey, x + 2, ey + 1, look.eyes);
         c.set(x, ey, BLACK);
         if look.glow {
             c.light(x - 1, ey, look.eyes);
         }
     }
+    Anchors { eyes: vec![(cx - gap, ey), (cx + gap, ey)], brow: None, mouth: Some((cx, mouth_y, (rx - 3).max(1))), crown: (cx, cy - ry), lid: s, whites: false }
 }
 
 /// An insect's, a spider's or a worm's face.
-fn paint_bug(c: &mut Canvas, look: &Look, kind: Bug) {
+fn paint_bug(c: &mut Canvas, look: &Look, kind: Bug) -> Anchors {
     let s = look.skin;
     let (cx, cy, rx, ry) = (CX, 12, 7, 7);
+    c.pen = Part::Body;
     c.oval(cx, 25, 10, 5, s);
     c.rect(1, 23, W - 1, H, s);
     if kind == Bug::Insect {
+        c.pen = Part::Detail;
         for side in [-1, 1] {
             line(c, (cx + side * 2, cy - ry + 1), (cx + side * 6, 0), shade(s));
         }
+        c.pen = Part::Body;
     }
     c.oval(cx, cy, rx, ry, s);
     c.set(cx - 3, cy - ry + 2, lighter(s));
     c.set(cx - 2, cy - ry + 2, lighter(s));
-    match kind {
+    let eyes = match kind {
         Bug::Insect => {
             // Compound eyes, and mandibles.
             for side in [-1, 1] {
+                c.pen = Part::Eye;
                 c.oval(cx + side * 4, cy - 1, 2, 2, look.eyes);
                 c.set(cx + side * 4, cy - 2, lighter(look.eyes));
+                c.pen = Part::Mouth;
                 line(c, (cx + side * 3, cy + ry - 2), (cx + side, cy + ry + 1), BROWN);
             }
+            vec![(cx - 4, cy - 1), (cx + 4, cy - 1)]
         }
         Bug::Spider => {
             // Eight eyes, two big; fangs.
             for side in [-1, 1] {
+                c.pen = Part::Eye;
                 c.light(cx + side * 2, cy - 2, look.eyes);
                 c.light(cx + side * 2, cy - 1, look.eyes);
                 for (dx, dy) in [(3, -4), (4, -1), (5, -3)] {
                     c.light(cx + side * dx, cy + dy, look.eyes);
                 }
+                c.pen = Part::Mouth;
                 c.rect(cx + side * 2, cy + ry - 2, cx + side * 2 + 1, cy + ry + 1, BLACK);
             }
+            vec![(cx - 2, cy - 2), (cx + 2, cy - 2)]
         }
         Bug::Worm => {
             // A round mouth of teeth.
+            c.pen = Part::Mouth;
             c.oval(cx, cy + 1, 4, 4, BLACK);
+            c.pen = Part::Detail;
             for (dx, dy) in [(0, -3), (2, -2), (3, 0), (2, 2), (0, 3), (-2, 2), (-3, 0), (-2, -2)] {
                 c.set(cx + dx, cy + 1 + dy, WHITE);
             }
+            Vec::new()
         }
-    }
+    };
+    let mouth = if kind == Bug::Worm { (cx, cy + 1, 3) } else { (cx, cy + ry, 1) };
+    Anchors { eyes, brow: None, mouth: Some(mouth), crown: (cx, cy - ry), lid: s, whites: false }
 }
 
 /// A skull: the undead with no flesh to speak of.
-fn paint_skull(c: &mut Canvas, look: &Look, race: &str) {
+fn paint_skull(c: &mut Canvas, look: &Look, race: &str) -> Anchors {
     let bone = look.skin;
     let mummy = key(race).contains("mummy");
     let (cx, cy, rx, ry) = (CX, 10, 7, 8);
     shoulders(c, look, if key(race).contains("lich") { MAGENTA } else { DARKGRAY });
+    c.pen = Part::Body;
     // The spine for a neck.
     for y in cy + ry..23 {
         c.set(cx, y, LIGHTGRAY);
@@ -1100,12 +1282,15 @@ fn paint_skull(c: &mut Canvas, look: &Look, race: &str) {
         }
     }
     // Sockets with a light in them, the nose's hole, teeth.
+    c.pen = Part::Eye;
     for side in [-1, 1] {
         c.oval(cx + side * 3, cy - 1, 1, 1, BLACK);
         c.light(cx + side * 3, cy - 1, look.eyes);
     }
+    c.pen = Part::Detail;
     c.set(cx, cy + 2, BLACK);
     c.rect(cx - 1, cy + 3, cx + 2, cy + 4, BLACK);
+    c.pen = Part::Mouth;
     c.rect(cx - 3, cy + 5, cx + 4, cy + 6, BLACK);
     for x in (cx - 3..cx + 4).step_by(2) {
         c.set(x, cy + 6, BLACK);
@@ -1119,13 +1304,15 @@ fn paint_skull(c: &mut Canvas, look: &Look, race: &str) {
     if let Some(item) = look.worn.neck.as_deref() {
         neck(c, item, cy + ry + 2);
     }
+    Anchors { eyes: vec![(cx - 3, cy - 1), (cx + 3, cy - 1)], brow: None, mouth: Some((cx, cy + 5, 3)), crown: (cx, cy - ry), lid: BLACK, whites: false }
 }
 
 /// A being of stuff: fire, water, air, earth, a golem, a slime, a plant.
-fn paint_stuff(c: &mut Canvas, look: &Look, stuff: Stuff, rng: &mut Rng) {
+fn paint_stuff(c: &mut Canvas, look: &Look, stuff: Stuff, rng: &mut Rng) -> Anchors {
     let s = look.skin;
     let light = lighter(s);
     let (cx, cy, rx, ry) = (CX, 11, 7, 9);
+    c.pen = Part::Body;
     match stuff {
         Stuff::Golem => {
             // Blocks: shoulders, a square head, a heavy brow.
@@ -1139,37 +1326,47 @@ fn paint_stuff(c: &mut Canvas, look: &Look, stuff: Stuff, rng: &mut Rng) {
                     c.set(x, y, shade(s));
                 }
             }
+            c.pen = Part::Eye;
             for side in [-1, 1] {
                 c.light(cx + side * 3, cy, look.eyes);
                 c.light(cx + side * 3 + side, cy, look.eyes);
             }
+            c.pen = Part::Mouth;
             c.rect(cx - 3, cy + 5, cx + 4, cy + 6, BLACK);
+            Anchors { eyes: vec![(cx - 3, cy), (cx + 3, cy)], brow: None, mouth: Some((cx, cy + 5, 3)), crown: (cx, 2), lid: s, whites: false }
         }
         Stuff::Slime => {
             c.oval(cx, 17, 10, 10, s);
             c.rect(0, 22, W, H, s);
             c.oval(cx - 4, 12, 1, 2, light);
+            c.pen = Part::Eye;
             for side in [-1, 1] {
                 c.oval(cx + side * 3, 15, 1, 1, WHITE);
                 c.set(cx + side * 3, 15, BLACK);
             }
+            Anchors { eyes: vec![(cx - 3, 15), (cx + 3, 15)], brow: None, mouth: Some((cx, 19, 2)), crown: (cx, 7), lid: s, whites: false }
         }
         Stuff::Plant => {
             // Bark for a face, leaves about it.
+            c.pen = Part::Detail;
             for _ in 0..70 {
                 let (x, y) = (rng.between(0, W - 1), rng.between(0, 16));
                 if within(x, y, (cx, 8, rx + 4, ry)) {
                     c.set(x, y, if rng.chance(50) { GREEN } else { LIGHTGREEN });
                 }
             }
+            c.pen = Part::Body;
             c.rect(cx - 4, 6, cx + 5, H, BROWN);
             for y in (6..H).step_by(2) {
                 c.set(cx - 2 + (y % 5), y, shade(BROWN));
             }
+            c.pen = Part::Eye;
             for side in [-1, 1] {
                 c.light(cx + side * 2, 10, YELLOW);
             }
+            c.pen = Part::Mouth;
             c.oval(cx, 15, 1, 1, BLACK);
+            Anchors { eyes: vec![(cx - 2, 10), (cx + 2, 10)], brow: None, mouth: Some((cx, 15, 1)), crown: (cx, 0), lid: BROWN, whites: false }
         }
         _ => {
             // Fire, water, air or earth: a body of it, moving.
@@ -1193,29 +1390,530 @@ fn paint_stuff(c: &mut Canvas, look: &Look, stuff: Stuff, rng: &mut Rng) {
                     c.light(x, y, b);
                 }
             }
+            c.pen = Part::Eye;
             for side in [-1, 1] {
                 c.light(cx + side * 3, cy - 1, WHITE);
                 c.light(cx + side * 3 + side, cy - 1, WHITE);
             }
+            c.pen = Part::Mouth;
             c.rect(cx - 2, cy + 4, cx + 3, cy + 5, shade(a));
+            Anchors { eyes: vec![(cx - 3, cy - 1), (cx + 3, cy - 1)], brow: None, mouth: Some((cx, cy + 4, 2)), crown: (cx, cy - ry), lid: a, whites: false }
         }
     }
 }
 
-/// A creature's face, 25 by 24 pixels in 25 by 12 cells.
-pub fn face(sitter: &Sitter) -> Art {
-    let look = read(sitter);
-    let mut canvas = Canvas::new(SIZE.0, SIZE.1);
-    backdrop(&mut canvas, look.backdrop);
-    let mut rng = Rng::new(seed("face-stuff", &key(&sitter.name), 0));
+/// Paints over a pixel of the figure, never the air around it or what's worn.
+fn on(c: &mut Canvas, x: i32, y: i32, color: u8, part: Part) {
+    if c.inside(x, y) && c.get(x, y) != CLEAR && c.part(x, y) != Part::Worn {
+        c.put(x, y, color, false, part);
+    }
+}
+
+/// A color that shows on `base`: `want`, else a lighter or darker one of it.
+fn against(want: u8, base: u8) -> u8 {
+    [want, lighter(want), shade(want)].into_iter().find(|&c| c != base).unwrap_or(want)
+}
+
+/// Closes the eyes: what was eye is eyelid.
+fn close(c: &mut Canvas, a: &Anchors) {
+    for &(x, y) in &a.eyes {
+        for dy in -2..=2 {
+            for dx in -2..=2 {
+                if c.part(x + dx, y + dy) == Part::Eye {
+                    c.put(x + dx, y + dy, a.lid, false, Part::Body);
+                }
+            }
+        }
+    }
+}
+
+/// Brows moved: each eye's brow from its inner end to its outer, rows
+/// up from the eye (1 is just over it).
+fn brows_to(c: &mut Canvas, a: &Anchors, inner: i32, middle: i32, outer: i32) {
+    let Some(row) = a.brow else { return };
+    let mut color = shade(a.lid);
+    for y in 0..c.h {
+        for x in 0..c.w {
+            if c.part(x, y) == Part::Brow {
+                color = c.get(x, y);
+                c.put(x, y, a.lid, false, Part::Body);
+            }
+        }
+    }
+    let above = a.eyes.first().map_or(1, |&(_, ey)| ey - row);
+    for (i, &(x, ey)) in a.eyes.iter().enumerate() {
+        let toward = if i == 0 { 1 } else { -1 };
+        for (dx, up) in [(toward, inner), (0, middle), (-toward, outer)] {
+            on(c, x + dx, ey - above + 1 - up, color, Part::Brow);
+        }
+    }
+}
+
+/// The mood, at the face's eyes, brows and mouth.
+fn mood(c: &mut Canvas, a: &Anchors, mood: Mood, look: &Look) {
+    let dark = against(shade(a.lid), a.lid);
+    match mood {
+        Mood::Calm => {
+            // The evil smile on one side.
+            if let (true, true, Some((mx, my, half))) = (look.evil, a.whites, a.mouth) {
+                on(c, mx + half + 1, my - 1, dark, Part::Mouth);
+                on(c, mx + half, my, a.lid, Part::Body);
+            }
+        }
+        Mood::Asleep => {
+            close(c, a);
+            for &(x, y) in &a.eyes {
+                for dx in -1..=1 {
+                    on(c, x + dx, y, dark, Part::Body);
+                }
+            }
+        }
+        Mood::Pain => {
+            close(c, a);
+            for (i, &(x, y)) in a.eyes.iter().enumerate() {
+                let out = if i == 0 { -1 } else { 1 };
+                for (dx, dy) in [(out, -1), (0, 0), (out, 1)] {
+                    on(c, x + dx, y + dy, dark, Part::Body);
+                }
+            }
+            brows_to(c, a, 2, 1, 1);
+            if let Some((mx, my, half)) = a.mouth {
+                for x in mx - (half - 1).max(0)..=mx + (half - 1).max(0) {
+                    on(c, x, my, BLACK, Part::Mouth);
+                    on(c, x, my + 1, BLACK, Part::Mouth);
+                }
+                if half >= 2 {
+                    on(c, mx, my + 1, RED, Part::Mouth);
+                }
+            }
+        }
+        Mood::Angry => {
+            if a.whites {
+                brows_to(c, a, 0, 1, 2);
+            } else {
+                // A glare: the brow's fur drawn down over the eyes' inner corners.
+                for (i, &(x, y)) in a.eyes.iter().enumerate() {
+                    let inner = if i == 0 { 1 } else { -1 };
+                    on(c, x + inner, y - 1, dark, Part::Body);
+                    on(c, x, y - 1, dark, Part::Body);
+                }
+            }
+            if let Some((mx, my, half)) = a.mouth {
+                if a.whites {
+                    // A frown: the mouth's corners down.
+                    on(c, mx - half, my, a.lid, Part::Body);
+                    on(c, mx + half, my, a.lid, Part::Body);
+                    on(c, mx - half, my + 1, dark, Part::Mouth);
+                    on(c, mx + half, my + 1, dark, Part::Mouth);
+                } else {
+                    // Fangs bared.
+                    for x in mx - half..=mx + half {
+                        on(c, x, my, WHITE, Part::Mouth);
+                    }
+                    on(c, mx - half - 1, my, dark, Part::Mouth);
+                    on(c, mx + half + 1, my, dark, Part::Mouth);
+                }
+            }
+        }
+        Mood::Afraid => {
+            for &(x, y) in &a.eyes {
+                let ring = if a.whites { WHITE } else { c.get(x, y) };
+                on(c, x, y - 1, ring, Part::Eye);
+                if a.whites {
+                    on(c, x - 1, y, WHITE, Part::Eye);
+                    on(c, x + 1, y, WHITE, Part::Eye);
+                }
+            }
+            brows_to(c, a, 3, 3, 2);
+            if let Some((mx, my, _)) = a.mouth {
+                on(c, mx, my, BLACK, Part::Mouth);
+                on(c, mx, my + 1, BLACK, Part::Mouth);
+            }
+        }
+        Mood::Dead => {
+            close(c, a);
+            for &(x, y) in &a.eyes {
+                for (dx, dy) in [(-1, -1), (1, 1), (1, -1), (-1, 1), (0, 0)] {
+                    on(c, x + dx, y + dy, if a.lid == BLACK { DARKGRAY } else { against(BLACK, a.lid) }, Part::Body);
+                }
+            }
+            if let Some((mx, my, half)) = a.mouth {
+                for x in mx - half..=mx + half {
+                    on(c, x, my, dark, Part::Mouth);
+                }
+            }
+            // The color going out of it.
+            for y in 0..c.h {
+                for x in 0..c.w {
+                    if c.part(x, y) == Part::Body {
+                        let here = c.get(x, y);
+                        c.put(x, y, Canvas::mix(x, y, here, shade(here), 6), false, Part::Body);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// How a shape shows its hurt.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Wounds {
+    /// Flesh: cuts, bruises, blood of this color.
+    Bleed(u8),
+    /// Fur and feathers: torn, then matted with blood.
+    Mat,
+    /// Stone, bone, wood: cracks, then a piece gone.
+    Crack,
+    /// A ghost, fire, water, air: less and less of it there.
+    Fade,
+    /// A slime: smaller.
+    Shrink,
+}
+
+fn wounds(look: &Look) -> Wounds {
     match look.shape {
-        Shape::Person => paint_person(&mut canvas, &look),
-        Shape::Beast(ears) => paint_beast(&mut canvas, &look, ears),
-        Shape::Bird => paint_bird(&mut canvas, &look),
-        Shape::Scaled(kind) => paint_scaled(&mut canvas, &look, kind),
-        Shape::Bug(kind) => paint_bug(&mut canvas, &look, kind),
-        Shape::Skull => paint_skull(&mut canvas, &look, sitter.race.as_deref().unwrap_or("")),
-        Shape::Stuff(stuff) => paint_stuff(&mut canvas, &look, stuff, &mut rng),
+        Shape::Person if look.ghostly => Wounds::Fade,
+        Shape::Person | Shape::Scaled(_) => Wounds::Bleed(RED),
+        Shape::Bug(_) => Wounds::Bleed(GREEN),
+        Shape::Beast(_) | Shape::Bird => Wounds::Mat,
+        Shape::Skull | Shape::Stuff(Stuff::Golem | Stuff::Earth | Stuff::Plant) => Wounds::Crack,
+        Shape::Stuff(Stuff::Slime) => Wounds::Shrink,
+        Shape::Stuff(_) => Wounds::Fade,
+    }
+}
+
+/// The hurt, in five steps: 1 scratches, 2 cuts, 3 bruises (fur
+/// matted), 4 bleeding, 5 near death. Where each wound goes comes from
+/// the name alone, so a step only adds to the one before; only where
+/// it'll be seen once the figure's laid at `offset` (`figure::lay`).
+fn hurt(c: &mut Canvas, look: &Look, name: &str, step: u8, offset: (i32, i32)) {
+    if step == 0 {
+        return;
+    }
+    let step = step.min(5);
+    let mut rng = Rng::new(seed("wounds", &key(name), 0));
+    let seen = |x: i32, y: i32| x - offset.0 >= 1 && y + offset.1 < H - 2;
+    let body: Vec<(i32, i32)> = (0..c.h).flat_map(|y| (0..c.w).map(move |x| (x, y))).filter(|&(x, y)| c.part(x, y) == Part::Body && seen(x, y)).collect();
+    if body.is_empty() {
+        return;
+    }
+    let spots: Vec<(i32, i32)> = (0..8).map(|_| body[rng.below(body.len() as i32) as usize]).collect();
+    let mark = |c: &mut Canvas, x: i32, y: i32, color: u8| {
+        if matches!(c.part(x, y), Part::Body | Part::Hair) || (c.part(x, y) == Part::Detail && c.get(x, y) != CLEAR) {
+            c.put(x, y, color, false, Part::Detail);
+        }
+    };
+    let style = wounds(look);
+    match style {
+        Wounds::Bleed(_) | Wounds::Mat => {
+            let fur = style == Wounds::Mat;
+            let blood = if let Wounds::Bleed(b) = style { b } else { RED };
+            // Scratches; on fur, tufts out of place.
+            for &(x, y) in &spots[0..2] {
+                let base = c.get(x, y);
+                mark(c, x, y, if fur { lighter(base) } else { shade(base) });
+                mark(c, x + 1, y + 1, shade(base));
+            }
+            let cut = |c: &mut Canvas, (x, y): (i32, i32)| {
+                let base = c.get(x, y);
+                for i in 0..3 {
+                    mark(c, x + i, y - i, against(blood, base));
+                }
+            };
+            if step >= 2 {
+                for &s in &spots[2..4] {
+                    cut(c, s);
+                }
+            }
+            if step >= 3 {
+                for &(x, y) in &spots[4..6] {
+                    for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1), (-1, 0)] {
+                        let base = c.get(x + dx, y + dy);
+                        let bruise = if fur { Canvas::mix(x + dx, y + dy, against(RED, base), shade(base), 8) } else { Canvas::mix(x + dx, y + dy, MAGENTA, BLUE, 6) };
+                        mark(c, x + dx, y + dy, bruise);
+                    }
+                }
+            }
+            if step >= 4 {
+                cut(c, spots[6]);
+                // Blood running down from the cuts, over clothes too.
+                for (i, &(x, y)) in spots[2..4].iter().chain(&spots[6..7]).enumerate() {
+                    for dy in 1..=2 + i as i32 + i32::from(step) - 3 {
+                        let (px, py) = (x, y + dy);
+                        if c.inside(px, py) && c.get(px, py) != CLEAR && c.part(px, py) != Part::Eye {
+                            c.put(px, py, against(blood, c.get(px, py)), false, Part::Detail);
+                        }
+                    }
+                }
+            }
+            if step >= 5 {
+                cut(c, spots[7]);
+                for y in 0..c.h {
+                    for x in 0..c.w {
+                        if c.part(x, y) == Part::Body {
+                            let here = c.get(x, y);
+                            c.put(x, y, Canvas::mix(x, y, here, shade(here), 5), false, Part::Body);
+                        }
+                    }
+                }
+            }
+        }
+        Wounds::Crack => {
+            for &(x0, y0) in spots.iter().take(step as usize) {
+                let (mut x, mut y) = (x0, y0);
+                for _ in 0..3 + step {
+                    let base = c.get(x, y);
+                    if c.part(x, y) == Part::Body {
+                        c.put(x, y, if base == BLACK { DARKGRAY } else { BLACK }, false, Part::Detail);
+                    }
+                    x += if rng.chance(50) { 1 } else { -1 };
+                    y += 1;
+                }
+            }
+            if step >= 5 {
+                let (x, y) = spots[7];
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        if c.part(x + dx, y + dy) == Part::Body {
+                            c.put(x + dx, y + dy, CLEAR, false, Part::Back);
+                        }
+                    }
+                }
+            }
+        }
+        Wounds::Fade => {
+            for y in 0..c.h {
+                for x in 0..c.w {
+                    let part = c.part(x, y);
+                    if c.get(x, y) != CLEAR && part != Part::Eye && Canvas::mix(x, y, 0, 1, i32::from(step) * 2) == 1 {
+                        c.put(x, y, CLEAR, false, Part::Back);
+                    }
+                }
+            }
+        }
+        Wounds::Shrink => {
+            for _ in 0..step {
+                let edge: Vec<(i32, i32)> = (0..c.h)
+                    .flat_map(|y| (0..c.w).map(move |x| (x, y)))
+                    .filter(|&(x, y)| c.part(x, y) == Part::Body && [(x - 1, y), (x + 1, y), (x, y - 1)].iter().any(|&(nx, ny)| c.inside(nx, ny) && c.get(nx, ny) == CLEAR))
+                    .collect();
+                for (x, y) in edge {
+                    c.put(x, y, CLEAR, false, Part::Back);
+                }
+            }
+        }
+    }
+}
+
+/// What an effect on a creature looks like.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Effect {
+    Halo,
+    Poisoned,
+    Sick,
+    Burning,
+    Frozen,
+    Blind,
+    Invisible,
+    Outlined,
+    Webbed,
+    Stone,
+    Bark,
+    Asleep,
+    Afraid,
+    Raging,
+    Glowing,
+}
+
+/// An effect's look, by its name as `char.effects` gives it ("Poison")
+/// or as AFFECTS shows it ("(Sleep spell)"): `effect_looks.tsv`.
+fn effect(name: &str) -> Option<Effect> {
+    let plain = name.trim().trim_start_matches('(').trim_end_matches(')').trim().to_lowercase();
+    let plain = plain.strip_suffix(" spell").unwrap_or(&plain);
+    let look = include_str!("effect_looks.tsv").lines().skip(1).find_map(|l| l.split_once('\t').filter(|(n, _)| *n == plain).map(|(_, look)| look))?;
+    Some(match look {
+        "halo" => Effect::Halo,
+        "poisoned" => Effect::Poisoned,
+        "sick" => Effect::Sick,
+        "burning" => Effect::Burning,
+        "frozen" => Effect::Frozen,
+        "blind" => Effect::Blind,
+        "invisible" => Effect::Invisible,
+        "outlined" => Effect::Outlined,
+        "webbed" => Effect::Webbed,
+        "stone" => Effect::Stone,
+        "bark" => Effect::Bark,
+        "asleep" => Effect::Asleep,
+        "afraid" => Effect::Afraid,
+        "raging" => Effect::Raging,
+        "glowing" => Effect::Glowing,
+        _ => return None,
+    })
+}
+
+/// The effects that change the figure's own pixels: a tint, a skin, its eyes.
+fn on_figure(c: &mut Canvas, effects: &[Effect]) {
+    for y in 0..c.h {
+        for x in 0..c.w {
+            let (here, part) = (c.get(x, y), c.part(x, y));
+            if here == CLEAR {
+                continue;
+            }
+            let mut color = here;
+            if part == Part::Body {
+                for e in effects {
+                    color = match e {
+                        Effect::Poisoned | Effect::Sick => Canvas::mix(x, y, color, if color == GREEN { LIGHTGREEN } else { GREEN }, if *e == Effect::Sick { 4 } else { 6 }),
+                        Effect::Frozen => Canvas::mix(x, y, color, LIGHTCYAN, 5),
+                        Effect::Stone => Canvas::mix(x, y, LIGHTGRAY, DARKGRAY, 6),
+                        Effect::Bark => if x % 3 == 0 { RED } else { BROWN },
+                        _ => color,
+                    };
+                }
+            }
+            if part == Part::Eye {
+                if effects.contains(&Effect::Blind) {
+                    color = LIGHTGRAY;
+                } else if effects.contains(&Effect::Raging) {
+                    c.put(x, y, LIGHTRED, true, part);
+                    continue;
+                }
+            }
+            if color != here {
+                c.put(x, y, color, false, part);
+            }
+        }
+    }
+    // Frost rimes the top of it.
+    if effects.contains(&Effect::Frozen) {
+        for y in 1..c.h {
+            for x in 0..c.w {
+                if c.get(x, y) != CLEAR && c.get(x, y - 1) == CLEAR && x % 2 == 0 {
+                    let part = c.part(x, y);
+                    c.put(x, y, WHITE, true, part);
+                }
+            }
+        }
+    }
+}
+
+/// The effects drawn around the figure once it's laid on its place.
+fn around(c: &mut Canvas, effects: &[Effect], crown: (i32, i32), rng: &mut Rng) {
+    let figure = |c: &Canvas, x: i32, y: i32| figure::of_figure(c, x, y);
+    if effects.contains(&Effect::Outlined) || effects.contains(&Effect::Glowing) {
+        let (color, outside) = if effects.contains(&Effect::Outlined) { (LIGHTMAGENTA, false) } else { (YELLOW, true) };
+        let mut lit = Vec::new();
+        for y in 0..c.h {
+            for x in 0..c.w {
+                let near = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)].iter().any(|&(nx, ny)| c.inside(nx, ny) && figure(c, nx, ny) != figure(c, x, y));
+                if near && figure(c, x, y) != outside && (outside || (x + y) % 2 == 0) {
+                    lit.push((x, y));
+                }
+            }
+        }
+        for (x, y) in lit {
+            let part = c.part(x, y);
+            c.put(x, y, color, true, part);
+        }
+    }
+    if effects.contains(&Effect::Halo) {
+        let (cx, cy) = crown;
+        for x in cx - 4..=cx + 4 {
+            let y = (cy - 2 + i32::from((x - cx).abs() > 2)).max(0);
+            c.put(x, y, YELLOW, true, Part::Detail);
+        }
+    }
+    if effects.contains(&Effect::Webbed) {
+        c.pen = Part::Detail;
+        for (from, to) in [((0, 3), (W - 1, H - 7)), ((W - 1, 2), (0, H - 9)), ((0, H - 4), (W - 1, 6))] {
+            line(c, from, to, LIGHTGRAY);
+        }
+    }
+    if effects.contains(&Effect::Burning) {
+        // Flames up from the bottom, lit.
+        let mut x = rng.between(0, 2);
+        while x < W {
+            let tall = rng.between(3, 6);
+            for y in H - tall..H {
+                let tip = y < H - tall + 2;
+                c.put(x, y, if tip { YELLOW } else { RED }, true, Part::Detail);
+                if !tip && x + 1 < W {
+                    c.put(x + 1, y, LIGHTRED, true, Part::Detail);
+                }
+            }
+            x += rng.between(3, 5);
+        }
+    }
+}
+
+/// A creature's face, 25 by 24 pixels in 25 by 12 cells: the Bestiary's
+/// still picture, calm and unhurt.
+#[cfg(test)]
+pub fn face(sitter: &Sitter) -> Art {
+    face_in(sitter, &Moment::default())
+}
+
+/// A creature's face as it is now: its mood, its hurt, what's on it and
+/// where it is.
+pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
+    let look = read(sitter);
+    let name = key(&sitter.name);
+    let effects: Vec<Effect> = moment.effects.iter().filter_map(|e| effect(e)).collect();
+    let feeling = match moment.mood {
+        Mood::Calm if effects.contains(&Effect::Asleep) => Mood::Asleep,
+        Mood::Calm if effects.contains(&Effect::Afraid) => Mood::Afraid,
+        Mood::Calm if effects.contains(&Effect::Raging) => Mood::Angry,
+        m => m,
+    };
+    // The place: where it is now, else where it's most seen (the wild for
+    // an animal), else a fish's water, else a backdrop of one color.
+    let fish = look.shape == Shape::Scaled(Scales::Fish);
+    let place = if let Some(scene) = &moment.scene {
+        Some(figure::place(&name, scene, SIZE.0, SIZE.1))
+    } else if let Some(t) = sitter.terrain.as_deref().filter(|t| !t.is_empty()) {
+        let t = if look.animal { figure::wild(t, &name) } else { t.to_string() };
+        Some(figure::terrain(&name, if fish { "underwater" } else { &t }, SIZE.0, SIZE.1))
+    } else if fish {
+        Some(figure::terrain(&name, "underwater", SIZE.0, SIZE.1))
+    } else {
+        None
+    };
+    let (mut canvas, light) = match place {
+        Some((canvas, light)) => (canvas, Some(light)),
+        None => {
+            let mut c = Canvas::new(SIZE.0, SIZE.1);
+            backdrop(&mut c, look.backdrop);
+            (c, None)
+        }
+    };
+    // The creature on a clear canvas of its own.
+    let mut figure = figure::clear(SIZE.0, SIZE.1);
+    let mut rng = Rng::new(seed("face-stuff", &name, 0));
+    let anchors = match look.shape {
+        Shape::Person => paint_person(&mut figure, &look),
+        Shape::Beast(ears) => paint_beast(&mut figure, &look, ears),
+        Shape::Bird => paint_bird(&mut figure, &look),
+        Shape::Scaled(kind) => paint_scaled(&mut figure, &look, kind),
+        Shape::Bug(kind) => paint_bug(&mut figure, &look, kind),
+        Shape::Skull => paint_skull(&mut figure, &look, sitter.race.as_deref().unwrap_or("")),
+        Shape::Stuff(stuff) => paint_stuff(&mut figure, &look, stuff, &mut rng),
+    };
+    mood(&mut figure, &anchors, feeling, &look);
+    on_figure(&mut figure, &effects);
+    // An animal low in the frame, its back running off the side.
+    let offset = if look.animal { (3, 2) } else { (0, 0) };
+    hurt(&mut figure, &look, &sitter.name, moment.hurt, offset);
+    let invisible = effects.contains(&Effect::Invisible);
+    figure::lay(&mut canvas, &figure, offset, &|x, y| invisible && (x + y) % 2 == 1);
+    if let (Some(light), false) = (&light, invisible) {
+        figure::light(&mut canvas, light);
+    }
+    let crown = (anchors.crown.0 - offset.0, anchors.crown.1 + offset.1);
+    around(&mut canvas, &effects, crown, &mut rng);
+    if feeling == Mood::Asleep {
+        let (x, y) = ((crown.0 + 6).min(W - 3), (crown.1 - 2).max(0));
+        canvas.glyph(x, y, 'z', WHITE);
+        canvas.glyph(x + 2, (y - 2).max(0), 'Z', WHITE);
     }
     canvas.art()
 }
@@ -1315,70 +2013,145 @@ mod tests {
     fn read(s: &Sitter) -> Look {
         super::read(s)
     }
+
+    /// Every pixel's color index, top and bottom halves.
+    fn indexes(art: &Art) -> Vec<u8> {
+        colors(art)
+    }
+
+    const MOODS: [Mood; 6] = [Mood::Calm, Mood::Angry, Mood::Pain, Mood::Afraid, Mood::Asleep, Mood::Dead];
+    const EFFECTS: [&str; 15] = ["Sanctuary", "Poison", "Cold", "Burning", "Freeze", "Blind", "Invisibility", "Faerie Fire", "Web", "Stoneskin", "Barkskin", "Sleep", "Fear", "Berzerk", "Light"];
+
+    #[test]
+    fn every_shape_mood_hurt_and_effect_paints_in_the_16_colors_and_the_fonts_characters() {
+        let font = crate::ansi_art::CP437;
+        for (race, category) in [("Human", "Humanoid"), ("Wolf", "Canine"), ("Gnoll", "Canine"), ("Hawk", "Avian"), ("Snake", "Ophidian"), ("Fish", "Fish"), ("Spider", "Arachnid"), ("Worm", "Worm"), ("Skeleton", "Undead"), ("Ghost", "Undead"), ("Fire Elemental", "Elemental"), ("Stone Golem", "Stone Golem"), ("Slime", "Slime"), ("Treant", "Vegetation")] {
+            let mut who = sitter(&format!("a {race}"), race, category, "");
+            for terrain in [None, Some("woods"), Some("stone")] {
+                who.terrain = terrain.map(str::to_string);
+                let moments = MOODS.iter().map(|&mood| Moment { mood, ..Moment::default() }).chain((0..=5).map(|hurt| Moment { hurt, ..Moment::default() })).chain(EFFECTS.iter().map(|e| Moment { effects: vec![e.to_string()], hurt: 3, ..Moment::default() }));
+                for m in moments {
+                    let art = face_in(&who, &m);
+                    assert_eq!((art.columns, art.rows, art.lines.len()), (SIZE.0, SIZE.1, SIZE.1), "{race} {m:?}");
+                    assert!(indexes(&art).iter().all(|&c| c < 16), "{race} {m:?}: a color past the 16");
+                    assert!(art.lines.iter().flatten().all(|s| s.text.chars().all(|c| font.contains(c))), "{race} {m:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_mood_each_hurt_and_each_effect_changes_the_face() {
+        for (race, category) in [("Human", "Humanoid"), ("Wolf", "Canine"), ("Skeleton", "Undead"), ("Slime", "Slime"), ("Ghost", "Undead")] {
+            let who = sitter(&format!("a {race}"), race, category, "");
+            let calm = face(&who);
+            for mood in &MOODS[1..] {
+                assert_ne!(face_in(&who, &Moment { mood: *mood, ..Moment::default() }), calm, "{race} {mood:?}");
+            }
+            let mut before = calm.clone();
+            for hurt in 1..=5 {
+                let now = face_in(&who, &Moment { hurt, ..Moment::default() });
+                assert_ne!(now, before, "{race} hurt {hurt}");
+                before = now;
+            }
+        }
+        let who = sitter("a guard", "Human", "Humanoid", "");
+        for e in EFFECTS {
+            assert_ne!(face_in(&who, &Moment { effects: vec![e.into()], ..Moment::default() }), face(&who), "{e}");
+        }
+        // An effect no look is known for changes nothing.
+        assert_eq!(face_in(&who, &Moment { effects: vec!["Detect Magic".into()], ..Moment::default() }), face(&who));
+    }
+
+    #[test]
+    fn wounds_stay_put_and_only_add_up() {
+        let who = sitter("a guard", "Human", "Humanoid", "");
+        let look = read(&who);
+        let wounded = |step: u8| {
+            let mut c = figure::clear(SIZE.0, SIZE.1);
+            paint_person(&mut c, &look);
+            hurt(&mut c, &look, &who.name, step, (0, 0));
+            (0..c.h).flat_map(|y| (0..c.w).map(move |x| (x, y))).filter(|&(x, y)| c.part(x, y) == Part::Detail).map(|(x, y)| (x, y, c.get(x, y))).collect::<Vec<_>>()
+        };
+        let (two, three) = (wounded(2), wounded(3));
+        assert!(!two.is_empty());
+        assert!(two.iter().all(|w| three.contains(w)), "step 3 kept step 2's wounds");
+        assert!(three.len() > two.len());
+    }
+
+    #[test]
+    fn people_and_thinking_beasts_and_animals() {
+        assert_eq!(shape("Porcine", "Orc"), Shape::Person);
+        assert_eq!(shape("Equine", "Centaur"), Shape::Person);
+        let gnoll = read(&sitter("a gnoll", "Gnoll", "Canine", ""));
+        assert!(gnoll.sapient && !gnoll.animal);
+        let wolf = read(&sitter("a wolf", "Wolf", "Canine", ""));
+        assert!(!wolf.sapient && wolf.animal);
+        // Two signs of a mind make a beast think.
+        let mut odd = sitter("a strange hound", "Dog", "Canine", "It has 2 leg(s), 2 arm(s).");
+        odd.skilled = true;
+        assert!(read(&odd).sapient);
+        // An animal in a city is painted in the wild; a person stays.
+        let mut cat = sitter("a cat", "Cat", "Feline", "");
+        cat.terrain = Some("city".into());
+        let mut guard = sitter("a guard", "Human", "Humanoid", "");
+        guard.terrain = Some("city".into());
+        assert_ne!(face(&cat), face(&Sitter { terrain: None, ..cat.clone() }));
+        assert_ne!(face(&guard), face(&Sitter { terrain: None, ..guard.clone() }));
+    }
+
+    #[test]
+    fn an_effects_look_by_its_name_or_how_affects_shows_it() {
+        assert_eq!(effect("Poison"), Some(Effect::Poisoned));
+        assert_eq!(effect("(Sleep spell)"), Some(Effect::Asleep));
+        assert_eq!(effect("Sanctuary"), Some(Effect::Halo));
+        assert_eq!(effect("Detect Magic"), None);
+        // Sleep closes the eyes as the mood would.
+        let who = sitter("a guard", "Human", "Humanoid", "");
+        assert_eq!(face_in(&who, &Moment { effects: vec!["Sleep".into()], ..Moment::default() }), face_in(&who, &Moment { mood: Mood::Asleep, ..Moment::default() }));
+    }
+
+    #[test]
+    fn a_moment_comes_from_the_frontends_json() {
+        let m: Moment = serde_json::from_str(r#"{"mood":"pain","hurt":4,"effects":["Poison"]}"#).unwrap();
+        assert_eq!((m.mood, m.hurt, m.effects.len()), (Mood::Pain, 4, 1));
+        let calm: Moment = serde_json::from_str("{}").unwrap();
+        assert_eq!(calm.mood, Mood::Calm);
+    }
 }
 
 #[cfg(test)]
-mod look {
+pub(crate) mod look {
     use super::*;
     use crate::ansi::Color;
 
-    /// Writes a row of faces as a PPM to `OUT` to look at while tuning:
-    /// `OUT=/tmp/f.ppm cargo test face::look -- --ignored`.
-    #[test]
-    #[ignore]
-    fn show() {
-        const VGA: [[u8; 3]; 16] = [[0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170], [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255]];
-        let s = |name: &str, race: &str, category: &str, description: &str, sex: &str, wears: &[(&str, &str)]| Sitter {
-            name: name.into(),
-            race: Some(race.into()),
-            category: Some(category.into()),
-            description: Some(description.into()),
-            sex: Some(sex.into()),
-            body: None,
-            wears: wears.iter().map(|(p, i)| (p.to_string(), i.to_string())).collect(),
-        };
-        let sitters = [
-            s("a city guard", "Human", "Human", "A stern guard.", "male", &[("worn on head", "a steel helmet"), ("worn on torso", "a chainmail shirt")]),
-            s("a barmaid", "Human", "Human", "She has long red hair and green eyes, and freckles.", "female", &[("worn on neck", "a silver necklace")]),
-            s("an old wizard", "Human", "Human", "A bearded old man.", "male", &[("worn on head", "a pointed blue hat")]),
-            s("a dwarf", "Dwarf", "Dwarf", "", "male", &[]),
-            s("an elf", "Elf", "Elf", "", "female", &[("worn on head", "a gold circlet")]),
-            s("an orc", "Orc", "Orc", "A scarred brute.", "male", &[]),
-            s("a thief", "Human", "Human", "", "male", &[("worn on head", "a black hood")]),
-            s("a black wolf", "Wolf", "Canine", "", "male", &[]),
-            s("a cat", "Cat", "Feline", "", "female", &[]),
-            s("a bear", "Bear", "Ursine", "", "male", &[]),
-            s("a horse", "Horse", "Equine", "", "male", &[]),
-            s("a cow", "Cow", "Bovine", "", "female", &[]),
-            s("a hawk", "Hawk", "Avian", "", "male", &[]),
-            s("a snake", "Snake", "Ophidian", "", "male", &[]),
-            s("a red dragon", "Red Dragon", "Dragon", "", "male", &[]),
-            s("a fish", "Fish", "Fish", "", "male", &[]),
-            s("a frog", "Frog", "Amphibian", "", "male", &[]),
-            s("a spider", "Spider", "Arachnid", "", "male", &[]),
-            s("an ant", "Ant", "Insect", "", "male", &[]),
-            s("a skeleton", "Skeleton", "Undead", "", "male", &[]),
-            s("a fire elemental", "Fire Elemental", "Elemental", "", "male", &[]),
-            s("a stone golem", "Stone Golem", "Stone Golem", "", "male", &[]),
-            s("a green slime", "Slime", "Slime", "", "male", &[]),
-            s("a treant", "Treant", "Vegetation", "", "male", &[]),
-        ];
-        let arts: Vec<Art> = sitters.iter().map(face).collect();
-        let (w, h) = (arts.len() * 26, PIXELS.1 as usize);
+    const VGA: [[u8; 3]; 16] = [[0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170], [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255]];
+
+    /// Writes `arts` as a PPM, `per` to a row, each with a pixel between.
+    pub(crate) fn sheet(arts: &[Art], per: usize, out: &str) {
+        let (cw, ch) = (arts[0].columns + 1, arts[0].rows * 2 + 1);
+        let rows = arts.len().div_ceil(per);
+        let (w, h) = (per * cw, rows * ch);
         let mut px = vec![40u8; w * h * 3];
         for (i, art) in arts.iter().enumerate() {
+            let (ox, oy) = ((i % per) * cw, (i / per) * ch);
             for (row, line) in art.lines.iter().enumerate() {
                 let mut x = 0;
                 for span in line {
-                    let idx = |c: Option<Color>| match c { Some(Color::Index { index }) => index as usize, _ => 0 };
+                    let idx = |c: Option<Color>| match c {
+                        Some(Color::Index { index }) => index as usize,
+                        _ => 0,
+                    };
                     let (fg, bg) = (idx(span.style.fg), idx(span.style.bg));
                     for ch in span.text.chars() {
-                        let (top, bottom) = if ch == '▀' { (fg, bg) } else { (bg, bg) };
+                        // A character other than the half block shows as its color, solid.
+                        let (top, bottom) = match ch {
+                            '▀' => (fg, bg),
+                            ' ' => (bg, bg),
+                            _ => (fg, bg),
+                        };
                         for (dy, c) in [(0, top), (1, bottom)] {
-                            if row * 2 + dy >= h {
-                                continue;
-                            }
-                            let at = ((row * 2 + dy) * w + i * 26 + x) * 3;
+                            let at = ((oy + row * 2 + dy) * w + ox + x) * 3;
                             px[at..at + 3].copy_from_slice(&VGA[c]);
                         }
                         x += 1;
@@ -1386,8 +2159,64 @@ mod look {
                 }
             }
         }
-        let mut out = format!("P6 {w} {h} 255\n").into_bytes();
-        out.extend(px);
-        std::fs::write(std::env::var("OUT").unwrap_or_else(|_| "faces.ppm".into()), out).unwrap();
+        let mut file = format!("P6 {w} {h} 255\n").into_bytes();
+        file.extend(px);
+        std::fs::write(out, file).unwrap();
+    }
+
+    /// Writes the faces' contact sheet as a PPM to `OUT` to look at while
+    /// tuning: each creature in a row, calm in its place, then each mood,
+    /// each step of hurt, and the effects.
+    /// `OUT=/tmp/f.ppm cargo test face::look -- --ignored`.
+    #[test]
+    #[ignore]
+    fn show() {
+        let s = |name: &str, race: &str, category: &str, description: &str, sex: &str, wears: &[(&str, &str)], terrain: &str| Sitter {
+            name: name.into(),
+            race: Some(race.into()),
+            category: Some(category.into()),
+            description: Some(description.into()),
+            sex: Some(sex.into()),
+            wears: wears.iter().map(|(p, i)| (p.to_string(), i.to_string())).collect(),
+            terrain: (!terrain.is_empty()).then(|| terrain.to_string()),
+            ..Sitter::default()
+        };
+        let sitters = [
+            s("a city guard", "Human", "Humanoid", "A stern guard.", "male", &[("worn on head", "a steel helmet"), ("worn on torso", "a chainmail shirt")], "city"),
+            s("a barmaid", "Human", "Humanoid", "She has long red hair and green eyes, and freckles.", "female", &[("worn on neck", "a silver necklace")], "wooden"),
+            s("an old wizard", "Human", "Humanoid", "A bearded old man.", "male", &[("worn on head", "a pointed blue hat")], "stone"),
+            s("a dwarf", "Dwarf", "Dwarf", "", "male", &[], "cave"),
+            s("an elf", "Elf", "Elf", "", "female", &[("worn on head", "a gold circlet")], "woods"),
+            s("an orc", "Orc", "Porcine", "A scarred brute.", "male", &[], "hills"),
+            s("a gnoll", "Gnoll", "Canine", "", "male", &[("worn on torso", "a leather jerkin")], "plains"),
+            s("a black wolf", "Wolf", "Canine", "", "male", &[], "city"),
+            s("a cat", "Cat", "Feline", "", "female", &[], "woods"),
+            s("a bear", "Bear", "Ursine", "", "male", &[], "mountains"),
+            s("a hawk", "Hawk", "Avian", "", "male", &[], "plains"),
+            s("a lizard man", "Lizard Man", "Reptile", "", "male", &[], "swamp"),
+            s("a snake", "Snake", "Ophidian", "", "male", &[], "desert"),
+            s("a fish", "Fish", "Fish", "", "male", &[], ""),
+            s("a spider", "Spider", "Arachnid", "", "male", &[], "cave"),
+            s("a skeleton", "Skeleton", "Undead", "", "male", &[], "stone"),
+            s("a ghost", "Ghost", "Undead", "A pale ghost.", "female", &[], "stone"),
+            s("a fire elemental", "Fire Elemental", "Elemental", "", "male", &[], "rocky"),
+            s("a stone golem", "Stone Golem", "Stone Golem", "", "male", &[], "cave"),
+            s("a green slime", "Slime", "Slime", "", "male", &[], "cave"),
+            s("a treant", "Treant", "Vegetation", "", "male", &[], "woods"),
+        ];
+        let moments: Vec<Moment> = [Mood::Calm, Mood::Angry, Mood::Pain, Mood::Afraid, Mood::Asleep, Mood::Dead]
+            .into_iter()
+            .map(|mood| Moment { mood, ..Moment::default() })
+            .chain((1..=5).map(|hurt| Moment { hurt, ..Moment::default() }))
+            .chain(["Poison", "Sanctuary", "Freeze", "Blind", "Faerie Fire", "Web", "Stoneskin", "Burning", "Invisibility", "Light"].iter().map(|e| Moment { effects: vec![e.to_string()], ..Moment::default() }))
+            .collect();
+        let mut arts = Vec::new();
+        for sitter in &sitters {
+            arts.push(face(&Sitter { terrain: None, ..sitter.clone() }));
+            for m in &moments {
+                arts.push(face_in(sitter, m));
+            }
+        }
+        sheet(&arts, moments.len() + 1, &std::env::var("OUT").unwrap_or_else(|_| "faces.ppm".into()));
     }
 }

@@ -237,6 +237,17 @@ impl Map {
         self.current.as_deref()
     }
 
+    /// The terrain most of an area's visited rooms have, lower case: what
+    /// a creature or an item met there is painted standing in (`face.rs`,
+    /// `item_art.rs`). None for an area never walked.
+    pub fn terrain_of(&self, zone: &str) -> Option<String> {
+        let mut counts: BTreeMap<String, u32> = BTreeMap::new();
+        for room in self.rooms.values().filter(|r| r.visited && r.zone == zone && !r.terrain.is_empty()) {
+            *counts.entry(room.terrain.to_ascii_lowercase()).or_default() += 1;
+        }
+        counts.into_iter().max_by_key(|&(_, n)| n).map(|(t, _)| t)
+    }
+
     /// The current room's name as the game gives it (never a landmark's).
     pub fn here_name(&self) -> Option<&str> {
         self.rooms.get(self.current.as_deref()?).map(|r| r.name.as_str()).filter(|n| !n.is_empty())
@@ -715,6 +726,16 @@ mod tests {
         assert_eq!(m.find("zone", 10).len(), 4);
         assert_eq!(m.find("zone", 2).len(), 2);
         assert_eq!(m.room_name("Z#3"), "Bank");
+    }
+
+    #[test]
+    fn an_areas_commonest_terrain() {
+        let mut m = Map::default();
+        for (id, terrain) in [("A#1", "city"), ("A#2", "city"), ("A#3", "woods")] {
+            m.apply_room_info(&info(id, "Here", "Alpha", &[]).replace("\"city\"", &format!("\"{terrain}\""))).unwrap();
+        }
+        assert_eq!(m.terrain_of("Alpha").as_deref(), Some("city"));
+        assert_eq!(m.terrain_of("Nowhere"), None);
     }
 
     #[test]

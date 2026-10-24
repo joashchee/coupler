@@ -24,7 +24,7 @@ work from this file, the code and `docs/`.
   (the sandbox can't write a `.git` there); bump `BUILT_FOR` in
   `mssp.rs` if `MUD.HOST_VERSION` changed, and rerun the scripts made
   from it (`creation-art.py`, `coffeemud-bestiary.py`,
-  `command-words.py`, `artisan-tree.py`).
+  `command-words.py`, `artisan-tree.py`, `painter-tables.py`).
 - **The wiki is the players' source of truth** (decided 2026-10-24):
   check anything read from the source against
   `https://coffeemud.net:8443/wiki/index.php?title=<Page>`
@@ -248,8 +248,10 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   (`scripts/creation-art.py`). `account.rs`: the account menu
   (`AccountMenuDialog.tsx`).
 - `bestiary.rs`: every creature and item met (`bestiary_store.rs`;
-  tables by `scripts/coffeemud-bestiary.py`); faces by `face.rs`,
-  item pictures by `item_art.rs`; optional quiet auto-look
+  tables by `scripts/coffeemud-bestiary.py`); faces by `face.rs`
+  (moods, hurt, effects: `face::Moment`), item pictures by
+  `item_art.rs` (materials, wear), both standing in their area's
+  terrain (`Map::terrain_of`); optional quiet auto-look
   (`coupler.bestiaryLook`, off by default). `BestiaryDialog.tsx`.
 - `cast.rs`: every character met, each with a voice from its name
   (`cast/<world>.json`). `CastDialog.tsx`; the narrator's voice in
@@ -322,6 +324,11 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   PPM to look at), `RoomPicture.tsx`, `PicturesDialog.tsx`. Looks kept
   in `pictures/<world>.json`. Not yet: the cache, the worker, brought
   models.
+- `figure.rs`: a face or an item drawn on a clear canvas, each pixel's
+  part (`painter::Part`), laid on its place (the room painter's, a
+  shade back) and lit by it. Tables by `scripts/painter-tables.py`:
+  `materials.tsv`, `effect_looks.tsv`. Contact sheets: `face::look` and
+  `item_art::look`'s ignored `show` tests.
 - `ansi_art.rs`, `AnsiPicture.tsx`: ANSI art for ART triggers.
 
 ### Screens and UI
