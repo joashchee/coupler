@@ -60,6 +60,7 @@ mod session;
 mod songbook;
 pub mod soundbank;
 mod speech;
+mod storage;
 mod stretch;
 mod synth;
 mod telnet;
@@ -67,6 +68,7 @@ mod update;
 #[doc(hidden)]
 pub mod trigger;
 mod voicecache;
+mod ways;
 mod wav;
 mod who;
 
@@ -395,9 +397,9 @@ fn start_renders(app: &AppHandle, dir: PathBuf) {
 
 /// A line in a bundled voice, as raw audio (synth.rs says how it's laid
 /// out). Off the main thread: a long line takes a moment. A line of
-/// talk (`book` is `journal` or `log`) comes from the voice cache when
-/// it was rendered before, and goes in it when it wasn't; a line to try
-/// a voice (no `book`) is made each time.
+/// talk (`book` is `journal` or `log`) or the narrator's (`narrator`)
+/// comes from the voice cache when it was rendered before, and goes in
+/// it when it wasn't; a line to try a voice (no `book`) is made each time.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn voice_synth(app: AppHandle, engine: String, voice: String, text: String, gender: cast::Gender, pitch: u16, rate: u16, book: Option<String>) -> Result<tauri::ipc::Response, String> {
@@ -754,6 +756,29 @@ fn music_save(app: AppHandle, path: String, song: music::Song) -> Result<(), Str
     assets::replace_midi(&assets_dir(&app)?, &path, &music::write(&song))
 }
 
+/// The MIDI asset that already holds this music (`music::same_music`:
+/// names and the like aside), but `except`, the file being saved over;
+/// None when no other file has it. A file that can't be read is passed by.
+#[tauri::command]
+async fn music_duplicate(app: AppHandle, song: music::Song, except: Option<String>) -> Result<Option<String>, String> {
+    let root = assets_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        assets::list(&root)
+            .into_iter()
+            .filter(|a| (a.path.starts_with("mid/") || a.path.starts_with("midi/")) && Some(&a.path) != except.as_ref())
+            .find(|a| {
+                assets::resolve(&root, &a.path)
+                    .ok()
+                    .and_then(|file| std::fs::read(file).ok())
+                    .and_then(|bytes| music::read(&bytes).ok())
+                    .is_some_and(|other| music::same_music(&song, &other))
+            })
+            .map(|a| a.path)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Saves the song as a new MIDI asset named from `name` (another take
 /// if that's taken: nothing is written over).
 #[tauri::command]
@@ -803,19 +828,67 @@ fn music_hook(app: AppHandle, scope: String, path: Option<String>, session: Stat
     session.music_hook(&app, &scope, path.as_deref())
 }
 
+// ---- Storage (storage.rs) ----
+
+fn app_data(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))
+}
+
+/// What Coupler keeps, by kind, and the disk's free space.
+#[tauri::command]
+async fn storage_report(app: AppHandle) -> Result<storage::Report, String> {
+    let root = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || storage::report(&root)).await.map_err(|e| e.to_string())
+}
+
+/// Clears the caches (`storage::CACHES`), made again as they're
+/// wanted. Returns the bytes freed.
+#[tauri::command]
+async fn storage_clear_caches(app: AppHandle) -> Result<u64, String> {
+    let root = app_data(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut freed = app.state::<Renders>().cache.lock().unwrap().as_mut().map_or(0, voicecache::RenderCache::clear);
+        for kind in storage::CACHES.iter().filter(|k| **k != "voiceCache") {
+            freed += storage::remove(&root, kind);
+        }
+        freed
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Deletes a kind of the player's data for good: `unusedAssets` (every
+/// asset no trigger uses, but `keep`, the Music Editor's file), or one
+/// `Session::forget` lets go of. Returns the bytes freed.
+#[tauri::command]
+async fn storage_forget(app: AppHandle, what: String, keep: Option<String>) -> Result<u64, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = app.state::<Session>();
+        if what != "unusedAssets" {
+            return session.forget(&app, &what);
+        }
+        let uses = session.hooks_asset_uses(&app);
+        let deleted = storage::delete_unused(&assets_dir(&app)?, |p| uses.get(p).is_some_and(|n| *n > 0), keep.as_deref());
+        Ok(deleted.bytes)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // ---- Coupler Backup (backup.rs) ----
 
 /// Writes a Coupler Backup to `path`: app data's kept files and
-/// `settings` (the frontend's, as JSON), sending `progress` as it goes.
+/// `settings` (the frontend's, as JSON), sending `progress` as it goes;
+/// `smallest`, in Brotli's strongest setting throughout (slower).
 #[tauri::command]
-async fn backup_export(app: AppHandle, path: PathBuf, settings: String, progress: tauri::ipc::Channel<backup::Progress>) -> Result<backup::Made, String> {
+async fn backup_export(app: AppHandle, path: PathBuf, settings: String, smallest: Option<bool>, progress: tauri::ipc::Channel<backup::Progress>) -> Result<backup::Made, String> {
     let root = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
     // What's waiting to be saved goes in too.
     app.state::<Session>().save_now(&app);
     let version = app.package_info().version.to_string();
     let made = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     tauri::async_runtime::spawn_blocking(move || {
-        backup::export(&root, &path, &version, made, &settings, |p| {
+        backup::export(&root, &path, &version, made, &settings, smallest.unwrap_or(false), |p| {
             let _ = progress.send(p);
         })
     })
@@ -1017,11 +1090,15 @@ pub fn run() {
             music_new,
             music_save,
             music_save_as,
+            music_duplicate,
             music_render,
             music_instruments,
             music_write,
             music_tmf,
             music_hook,
+            storage_report,
+            storage_clear_caches,
+            storage_forget,
             backup_export,
             backup_inspect,
             backup_restore,

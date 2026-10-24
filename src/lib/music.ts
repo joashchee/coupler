@@ -50,6 +50,8 @@ export const open = (path: string) => invoke<Song>("music_open", { path });
 export const fresh = () => invoke<Song>("music_new");
 export const save = (path: string, song: Song) => invoke<void>("music_save", { path, song });
 export const saveAs = (name: string, song: Song) => invoke<Asset>("music_save_as", { name, song });
+/** The MIDI asset that already holds this music, names and other details aside (but `except`, the file being saved over), or null. */
+export const duplicate = (song: Song, except: string | null) => invoke<string | null>("music_duplicate", { song, except });
 /** The bars `from` to `to` (from 0, `to` not included) as WAV bytes, through Neumetik or `font` (a SoundFont or DLS asset). */
 export const render = (font: string | null, song: Song, from: number, to: number, looping: boolean) =>
   invoke<ArrayBuffer>("music_render", { font, song, from, to, looping });

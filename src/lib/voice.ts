@@ -50,7 +50,11 @@
  * comes from the voice cache (src-tauri/src/voicecache.rs), where
  * `prerender` put it the moment it arrived, so it starts without waiting
  * to be rendered. The system's voices speak through the WebView and
- * can't be rendered ahead. `onSpeaking` hears each line of talk as it
+ * can't be rendered ahead. The narrator's lines go in the voice cache
+ * too, the first time each is said, and its phrases said more than once
+ * are kept there for good (voicecache.rs `COMMON`): "Command line." is
+ * rendered once, ever, and the last hundred said are kept ready to
+ * play here as well (`narrated`), so a phrase said again starts at once. `onSpeaking` hears each line of talk as it
  * starts (Immersive's pop-up, components/SpeakingPopup.tsx) and null
  * when it ends or is cut off.
  */
@@ -473,10 +477,22 @@ function toBuffer(context: AudioContext, bytes: ArrayBuffer): AudioBuffer | null
   return buffer;
 }
 
+/** The narrator's lines rendered lately, ready to play: by voice and words, the last said last. */
+const narrated = new Map<string, AudioBuffer>();
+const NARRATED_MOST = 100;
+
 function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finished?: boolean) => void, mine: number, line: Line) {
+  // The narrator's (a line given no voice) are kept in the voice cache as talk is.
+  const book = line.book ?? (line.how ? undefined : "narrator");
+  const memo = book === "narrator" ? `${chosen.engine}|${chosen.id}|${how.gender}|${Math.round(how.pitch)}|${Math.round(lineRate(how))}|${words}` : null;
+  const ready = memo ? narrated.get(memo) : undefined;
+  if (memo && ready) {
+    narrated.delete(memo);
+    narrated.set(memo, ready);
+  }
   // A line paused for priority audio has its rendering already.
-  const kept = line.buffer;
-  const rendering = kept ? Promise.resolve(null) : mud.voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), line.book);
+  const kept = line.buffer ?? ready;
+  const rendering = kept ? Promise.resolve(null) : mud.voiceSynth(chosen.engine, chosen.id, words, how.gender, how.pitch, lineRate(how), book);
   const thinking = kept ? () => {} : thinkWhile(rendering, mine);
   rendering
     .then((bytes) => {
@@ -485,6 +501,10 @@ function sayBundled(words: string, how: Voice, chosen: EngineVoice, done: (finis
       const { context, gain } = voxOutput();
       const buffer = kept ?? (bytes ? toBuffer(context, bytes) : null);
       if (!buffer) return done(false);
+      if (memo && !ready) {
+        narrated.set(memo, buffer);
+        if (narrated.size > NARRATED_MOST) narrated.delete(narrated.keys().next().value!);
+      }
       const from = Math.min(line.from ?? 0, buffer.duration);
       line.buffer = undefined;
       line.from = undefined;

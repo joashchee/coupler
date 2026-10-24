@@ -65,6 +65,8 @@ use crate::speech::{Kinds, LineKind};
 use crate::telnet::{self, Event, Telnet};
 use crate::account::{self, Account};
 use crate::who::{self, Seen, Who};
+use crate::ways::{Way, Ways};
+use crate::storage;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// The MSSP probe at launch gives up after this long, all told.
@@ -337,6 +339,8 @@ pub struct Session {
     comings: Mutex<Comings>,
     /// The player's triggers, gags, aliases and tickers (`automation.rs`).
     automation: Mutex<Automation>,
+    /// Portals, ships and caravans, read from the exits text (`ways.rs`).
+    ways: Mutex<Ways>,
 }
 
 /// Something Coupler held back of the player's rules: too much at once.
@@ -515,6 +519,7 @@ impl Session {
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
+        self.ways.lock().unwrap().clear();
         self.automation.lock().unwrap().closed();
         *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
 
@@ -625,6 +630,53 @@ impl Session {
 
     pub fn connected(&self) -> bool {
         self.live.lock().unwrap().is_some()
+    }
+
+    /// Forgets a kind of the player's data for good (gear → Storage…,
+    /// `storage.rs`): what has it open lets go, and its files are deleted
+    /// while it's held, so nothing writes them back. Not while connected.
+    /// Returns the bytes freed.
+    pub fn forget(&self, app: &AppHandle, what: &str) -> Result<u64, String> {
+        if self.connected() {
+            return Err("Hang up first: that's in use while you play.".into());
+        }
+        let root = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
+        let freed = match what {
+            "maps" => {
+                let mut atlas = self.atlas.lock().unwrap();
+                *atlas = Atlas::default();
+                storage::remove(&root, what)
+            }
+            "looks" => {
+                let mut picture = self.picture.lock().unwrap();
+                picture.looks = Looks::default();
+                picture.world = None;
+                storage::remove(&root, what)
+            }
+            "journal" => {
+                let mut store = self.journal.lock().unwrap();
+                store.journal = None;
+                store.opened = false;
+                storage::remove(&root, what)
+            }
+            "bestiary" => {
+                let mut store = self.bestiary.lock().unwrap();
+                store.bestiary = None;
+                store.opened = false;
+                storage::remove(&root, what)
+            }
+            "beforeRestore" => storage::remove(&root, what),
+            _ => return Err("Coupler doesn't know that kind of data.".into()),
+        };
+        match what {
+            "maps" => self.emit_map(app),
+            "journal" => self.journal_changed(app),
+            "bestiary" => {
+                let _ = app.emit("bestiary-changed", ());
+            }
+            _ => {}
+        }
+        Ok(freed)
     }
 
     // ---- The player's rules (automation.rs) ----
@@ -1215,6 +1267,47 @@ impl Session {
         }
     }
 
+    // ---- Portals, ships and caravans (ways.rs) ----
+
+    /// The read's finished lines, for the exits text: the ways the last
+    /// exits block in it named, once it's over (at its end, or at the
+    /// prompt when `prompted`).
+    fn ways_lines(&self, texts: &[String], prompted: bool) -> Option<Vec<Way>> {
+        let mut ways = self.ways.lock().unwrap();
+        let mut found = None;
+        for text in texts {
+            if let Some(w) = ways.line(text) {
+                found = Some(w);
+            }
+        }
+        if prompted {
+            if let Some(w) = ways.prompt() {
+                found = Some(w);
+            }
+        }
+        found
+    }
+
+    /// An exits block's ways: on the map's room, and `ways` for the
+    /// narrator when they're new to say.
+    fn ways_found(&self, app: &AppHandle, ways: Vec<Way>) {
+        let (changed, here) = {
+            let mut atlas = self.atlas.lock().unwrap();
+            let changed = atlas.map.set_ways(ways.clone()).is_some();
+            atlas.unsaved |= changed;
+            (changed, atlas.map.current().map(str::to_string))
+        };
+        if changed {
+            self.emit_map(app);
+            self.save_map(app, false);
+        }
+        if let Some(here) = here {
+            if self.ways.lock().unwrap().announce(&here, &ways) {
+                let _ = app.emit("ways", &ways);
+            }
+        }
+    }
+
     fn emit_map(&self, app: &AppHandle) {
         let snapshot = self.map_snapshot();
         let _ = app.emit("map-changed", snapshot);
@@ -1418,6 +1511,7 @@ impl Session {
         *self.counted.lock().unwrap() = false;
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
+        self.ways.lock().unwrap().clear();
         self.bestiary.lock().unwrap().reader.clear();
         let message = match &left {
             Left::Logout => {
@@ -2162,6 +2256,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         session.character_left(app, left);
                     }
                     session.combat.lock().unwrap().combat.gmcp(&package, &data);
+                    session.ways.lock().unwrap().gmcp(&package, &data);
                     let moved = session.comings.lock().unwrap().gmcp(&package, &data, Instant::now());
                     let (learned, cry) = session.bestiary_gmcp(app, &package, &data);
                     bestiary_changed |= learned;
@@ -2206,6 +2301,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // own look isn't shown, nor the prompt it was asked at, written
         // again as a line when the answer began.
         let prompted = screen.partial().is_some_and(|line| line.iter().any(|span| !span.text.trim().is_empty()));
+        // Before anything's hidden: the player's gags are for the screen.
+        let ways_found = session.ways_lines(&texts, prompted);
         let (learned, died, mut hidden_lines) = session.bestiary_lines(app, &texts, prompted);
         bestiary_changed |= learned;
         cries.extend(died.into_iter().map(|(c, cry)| (c, cry, None)));
@@ -2262,6 +2359,10 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // room.info (doors, locks) is in before a walk takes its next step.
         if room_changed {
             session.room_changed(app);
+        }
+        // After the room.info, so they're the new room's.
+        if let Some(ways) = ways_found {
+            session.ways_found(app, ways);
         }
         // After the whole read too, so a room.info that came with the char.* isn't asked for again.
         if in_game {

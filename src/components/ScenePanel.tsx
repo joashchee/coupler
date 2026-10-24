@@ -1,6 +1,6 @@
 /**
  * Here: Immersive mode's panel, and Workshop's to show. The room, its
- * picture (Immersive's; Workshop has a Picture panel), a compass of its exits, the character's health, mana and movement, the
+ * picture (Immersive's; Workshop has a Picture panel), a compass of its exits and the portals, ships and caravans beside them, the character's health, mana and movement, the
  * fight, and which sound layers are playing: what the cues say, for
  * anyone who can glance at it, so a sighted player can learn the sounds
  * by seeing them beside it.
@@ -27,6 +27,9 @@ interface ScenePanelProps {
   /** The room's picture, under its name: Immersive's, with pictures on. `shows` is false where the "when" setting leaves it out. */
   picture?: { scene: mud.Scene; settings: PictureSettings; shows: boolean } | null;
 }
+
+/** A way out that isn't a direction, in a word (src-tauri/src/ways.rs). */
+const WAY_NAMES: Record<mud.Way["kind"], string> = { portal: "portal", ship: "ship", caravan: "caravan", other: "a way in" };
 
 /** How tall the picture is in Here, in rows. */
 const PICTURE_ROWS = 12;
@@ -93,7 +96,14 @@ export function ScenePanel({ snapshot, vitals, opponent, music, cues, voice, pic
             <p className="map-muted" aria-hidden="true">
               ? not explored · + door · # locked
             </p>
-            <p className="sr-only">{mud.describeExits(room)}</p>
+            {/* Always a line, so what's below keeps its place from room to room. */}
+            <p className="scene-ways" aria-hidden="true" data-testid="scene-ways" title={room.ways.length > 0 ? mud.describeWays(room.ways) : undefined}>
+              {room.ways.length > 0 ? `Also: ${room.ways.map((w) => WAY_NAMES[w.kind]).join(", ")}` : "\u00a0"}
+            </p>
+            <p className="sr-only">
+              {mud.describeExits(room)}
+              {room.ways.length > 0 ? ` Also here: ${mud.describeWays(room.ways)}.` : ""}
+            </p>
           </>
         )}
 

@@ -703,6 +703,8 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .scene-body h3 { margin: 0; }
 .scene-room { line-height: 1.5; }
 .scene-compass { margin: 0; font-family: var(--font-mono); font-size: 14px; line-height: 1.3; color: var(--text); }
+/* One line whatever's here, so what's below keeps its place; the whole list is its title and in words beside it. */
+.scene-ways { white-space: nowrap; overflow: hidden; text-overflow: clip; color: var(--text); }
 .scene-gauge { font-family: var(--font-mono); font-size: 13px; white-space: pre; color: var(--text); }
 .scene-label { white-space: pre; color: var(--muted); }
 /* A bar's color repeats its level; the numbers beside it say it. */
@@ -834,6 +836,10 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 /* Priority Audio (PriorityDialog.tsx): what, its kind, then Remove. */
 .hooks-head.priority-row,
 .hooks-list.priority-list li { display: grid; grid-template-columns: minmax(0, 1fr) 96px 64px; gap: 0 12px; align-items: start; }
+/* Storage: the kind, its size and files, and Delete… when it can be. */
+.hooks-head.storage-row,
+.hooks-list.storage-list li { display: grid; grid-template-columns: minmax(0, 1fr) 200px 80px; gap: 0 12px; align-items: start; }
+.storage-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
 .priority-add { margin-top: 10px; }
 

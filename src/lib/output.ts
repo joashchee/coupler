@@ -49,9 +49,10 @@ const EXITS = /^\s*(\[\s*exits?\s*:|obvious\s+exits?\s*:|exits?\s*:)/i;
 /**
  * A row of the long list under `Obvious exits:` (`lookAtExits`): a
  * direction or a door's name, its colon, what it leads to (`North:
- * The town square`, `a wooden portal: A dark hut`), or `None.`
+ * The town square`, `gangplank: a sailing ship Swift`; `: a swirling
+ * vortex` for a portal given no door name), or `None.`
  */
-const EXIT_ROW = /^\s*([A-Za-z0-9][A-Za-z0-9 ',-]{0,40}?\s*:\s|none\.?\s*$)/i;
+const EXIT_ROW = /^\s*(([A-Za-z0-9][A-Za-z0-9 ',-]{0,40}?)?\s*:\s|none\.?\s*$)/i;
 /** A row this long was wrapped by the game: the next line is the rest of it. */
 const WRAPPED = 70;
 

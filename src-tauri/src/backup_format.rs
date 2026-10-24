@@ -49,7 +49,8 @@ const SAMPLES: &[&str] = &["wav", "sf2", "dls"];
 /// A file this big is a block of its own whatever it is.
 const OWN_BLOCK: u64 = 16 << 20;
 /// Up to this size a block of its own gets Brotli's strongest setting;
-/// past it, one a little faster (the strongest takes minutes a gigabyte).
+/// past it, one a little faster (the strongest takes minutes a gigabyte),
+/// unless the player asked for the smallest backup (`smallest`).
 const STRONGEST_UP_TO: u64 = 8 << 20;
 
 /// What's in a backup, written at its start.
@@ -126,13 +127,16 @@ impl<W: Write> Write for Counting<W> {
 }
 
 /// Writes a backup of `items` and `settings` (a JSON object of strings),
-/// each item's bytes read from what `open` gives for it.
+/// each item's bytes read from what `open` gives for it; `smallest`, in
+/// Brotli's strongest setting throughout, however long it takes.
+#[allow(clippy::too_many_arguments)]
 pub fn write_with<W: Write + Seek, S: Read>(
     out: &mut W,
     app: &str,
     made: u64,
     settings: &str,
     items: &[Item],
+    smallest: bool,
     mut open: impl FnMut(&Item) -> io::Result<S>,
     mut progress: impl FnMut(Progress),
 ) -> Result<Manifest, String> {
@@ -164,7 +168,7 @@ pub fn write_with<W: Write + Seek, S: Read>(
 
     for item in own {
         let packed = PACKED.contains(&extension(&item.path).as_str());
-        let (method, how) = if packed { (STORED, None) } else { (BROTLI, Some(params(if item.size <= STRONGEST_UP_TO { 11 } else { 9 }, item.size))) };
+        let (method, how) = if packed { (STORED, None) } else { (BROTLI, Some(params(if smallest || item.size <= STRONGEST_UP_TO { 11 } else { 9 }, item.size))) };
         block(out, method, how, |w| {
             let mut file = open(item)?;
             record(w, &item.path, item.size, &mut file)
@@ -454,7 +458,7 @@ mod tests {
         let files = [("maps/coffeemud.json", br#"{"rooms":[]}"#.repeat(40))];
         let items: Vec<Item> = files.iter().map(|(p, b)| Item { path: p.to_string(), source: PathBuf::from(p), size: b.len() as u64 }).collect();
         let mut out = Cursor::new(Vec::new());
-        write_with(&mut out, "0.33.0", 7, "{}", &items, |_| Ok(files[0].1.as_slice()), |_| ()).unwrap();
+        write_with(&mut out, "0.33.0", 7, "{}", &items, false, |_| Ok(files[0].1.as_slice()), |_| ()).unwrap();
         let bytes = out.into_inner();
         assert!(bytes.len() < files[0].1.len(), "compressed");
         let (_, _, back) = read_all(&mut Cursor::new(&bytes)).unwrap();

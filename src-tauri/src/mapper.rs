@@ -21,6 +21,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::ways::Way;
+
 /// The direction letters CoffeeMUD uses in GMCP (`Directions.java`'s
 /// `DIRECTION_CHARS`), in the order exits are listed. `V` is a gate or
 /// vortex ("there"): it has no place on a grid and isn't walked.
@@ -85,6 +87,10 @@ pub struct Room {
     /// The player's own name for the room (a landmark to find and walk to).
     #[serde(default)]
     pub landmark: String,
+    /// The ways out that aren't directions (portals, ships, caravans:
+    /// `ways.rs`), as the room's exits text named them last.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ways: Vec<Way>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -125,6 +131,8 @@ pub struct RoomDetail {
     pub travel: String,
     pub landmark: String,
     pub exits: Vec<ExitDetail>,
+    /// Portals, ships and caravans here (`ways.rs`).
+    pub ways: Vec<Way>,
 }
 
 /// A room placed on the picture, relative to the current room at (0, 0).
@@ -347,6 +355,7 @@ impl Map {
             travel: room.travel.clone(),
             landmark: room.landmark.clone(),
             exits,
+            ways: room.ways.clone(),
         })
     }
 
@@ -498,6 +507,18 @@ impl Map {
         }
     }
 
+    /// What the current room's exits text named besides the directions
+    /// (`ways.rs`). Returns the room's ID when they changed.
+    pub fn set_ways(&mut self, ways: Vec<Way>) -> Option<String> {
+        let id = self.current.clone()?;
+        let room = self.rooms.get_mut(&id)?;
+        if room.ways == ways {
+            return None;
+        }
+        room.ways = ways;
+        Some(id)
+    }
+
     pub fn room_name(&self, id: &str) -> String {
         self.rooms.get(id).map(|r| if r.landmark.is_empty() { r.name.clone() } else { r.landmark.clone() }).unwrap_or_default()
     }
@@ -561,6 +582,19 @@ mod tests {
         assert_eq!((s.rooms_known, s.zones_known), (1, 1));
         // The same room again changes nothing worth saving.
         assert!(!m.apply_room_info(&info("Midgaard#3001", "The Temple", "Midgaard", &[("N", "Midgaard#3054"), ("D", "Midgaard#3005")])).unwrap());
+    }
+
+    #[test]
+    fn a_room_keeps_its_ways_and_they_are_saved() {
+        let mut m = square();
+        let ship = vec![Way { kind: crate::ways::Kind::Ship, command: "ENTER gangplank".into(), name: "a sailing ship Swift".into() }];
+        assert_eq!(m.set_ways(ship.clone()).as_deref(), Some("Z#4"));
+        assert_eq!(m.set_ways(ship.clone()), None);
+        assert_eq!(m.detail().unwrap().ways, ship);
+        let again = Map::from_json(&m.to_json()).unwrap();
+        assert_eq!(again.rooms["Z#4"].ways, ship);
+        assert!(again.rooms["Z#1"].ways.is_empty());
+        assert_eq!(m.set_ways(vec![]).as_deref(), Some("Z#4"));
     }
 
     #[test]

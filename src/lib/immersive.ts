@@ -303,6 +303,10 @@ export function useImmersive({ cues, voice: voiced, connected, snapshot, opponen
           say(prompt);
         }
       }),
+      // Portals, ships and caravans in the room come to (src-tauri/src/ways.rs): the exits' lines aren't said.
+      mud.onWays((ways) => {
+        if (inGame.current && !creating.current) say(mud.waysHere(ways));
+      }),
       mud.onCreation((step) => {
         creating.current = step !== null;
       }),

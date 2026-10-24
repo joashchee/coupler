@@ -366,6 +366,20 @@ and its order is in the roadmap's phase 2.
   a download (one stored block, no Brotli encoder in the page), and a
   backup chosen or dropped restores what the web keeps of it
   (`kept_on_the_web`, `src-web/src/ffi.rs`); then the page reloads.
+- `src-tauri/src/storage.rs`: **Storage**, unit-tested: gear →
+  Storage… (`components/StorageDialog.tsx`, desktop and iPhone, not the
+  web) sizes app data by kind (`KINDS`, the assets by type, `other`)
+  with the disk's free space (`storage_report`); Clear the Caches
+  (`CACHES`: the voice cache, `soundbank-cache`, `Assets/.smaller`, a
+  backup's leftovers; `storage_clear_caches`); and, after a warning
+  offering Back Up First…, deletes the player's own (`storage_forget`:
+  the assets no trigger uses, `delete_unused`, but a SoundFont a MIDI
+  file plays through and the Music Editor's file; the maps, looks,
+  journal and Bestiary through `Session::forget`, only hung up, which
+  lets go of what has them open first; the copy from before a
+  restore). Export the Smallest Backup… is `backup_export`'s
+  `smallest` (Brotli 11 on every block). A new kind of data in app data
+  joins `KINDS`.
 - `src-tauri/src/music.rs`: **the Music Editor's song**, pure and
   unit-tested: a MIDI asset read into parts (a channel of a track),
   bars and notes, every event it doesn't show kept and written back
@@ -377,7 +391,9 @@ and its order is in the roadmap's phase 2.
   the instrument menus then list what that bank plays, `music::instruments`,
   with the GS variation tones as their own banks),
   Save… and Save as… (`music_save`, `music_save_as`, never over another
-  file). Desktop only.
+  file; music another MIDI asset already holds, names and meta events
+  aside, asks first: `music::same_music`, `music_duplicate`; `#save`
+  and `#hook` use that file). Desktop only.
 - `src-tauri/src/songbook.rs`: **music in the game's journals**, pure
   and unit-tested: a clan's journal is its forum (Clan Crafting's
   `GenJournal`; `CLANFORUMDATA`). `Poster` answers WRITE's questions
@@ -591,6 +607,18 @@ and its order is in the roadmap's phase 2.
   long look at that description found. Immersive's
   narrator says them (`lib/immersive.ts`); the screen reader hears
   them after the room (`App.tsx`).
+- `src-tauri/src/ways.rs`: **portals, ships and caravans**, pure and
+  unit-tested: CoffeeMUD's GMCP lists only directions, so the room's
+  exits text (`[Exits: north gangplank]`, or `Obvious exits:`'s rows,
+  `gangplank: a sailing ship Swift`) is read for the exits that are
+  items, each a `Way` (its kind, `ENTER <door name>`, its name, told
+  from the long list's row or the room's `room.items.list`); a ship's
+  or caravan's own directions are never one. `session.rs` (both builds)
+  puts them on the map's room (`Map::set_ways`, saved with the map, in
+  the snapshot) and emits `ways` on coming to a room that has some
+  (`announce`): Immersive's narrator says "There's a ship here."
+  (`mud.waysHere`), Here's line under the compass and the Map's Where
+  you are show them, Where am I? names each with its command.
 - `src-tauri/src/creation.rs`: **making a character**, pure and
   unit-tested: CoffeeMUD's character creation (`CharCreation.java`) as
   questions (`Step`: its kind, the choices with the game's words about
@@ -729,9 +757,13 @@ and its order is in the roadmap's phase 2.
   often. `voice_synth` with a `book` reads it first. Its size follows
   the disk's free space (`budget`, `free_space`; checked after each
   render and every five minutes); `trim` flushes lines played once
-  first (the log's before the journal's, oldest first), then the
-  fewest plays, then never-played. The system's voices can't be
-  rendered ahead (they speak through the WebView).
+  first (the log's, the narrator's, then the journal's, oldest first),
+  then the fewest plays, then never-played, and last the narrator's
+  phrases said more than once (`COMMON`). **The narrator's lines go in
+  too** (`book` `narrator`, the first time each is said), so a phrase
+  is rendered once ever; `lib/voice.ts` keeps the last hundred ready in
+  memory (`narrated`). The system's voices can't be rendered ahead
+  (they speak through the WebView).
 - **The three ways to play** (`src/lib/ux.ts`, `coupler.ux`): Terminal
   (the terminal, 80 wide and as tall as the screen, at the left; on the
   right its Control Panel, `components/ControlPanel.tsx` and
@@ -889,7 +921,7 @@ and its order is in the roadmap's phase 2.
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,
-  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`, `automation-fired`, `automation-recent`, `automation-held`, `music-found`, `music-written`). It feeds the mapper, saves one map per
+  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`, `automation-fired`, `automation-recent`, `automation-held`, `music-found`, `music-written`, `ways`). It feeds the mapper, saves one map per
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
@@ -904,7 +936,8 @@ and its order is in the roadmap's phase 2.
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,
   `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `soundbank_defaults`, `asset_picture`, `asset_ansi`,
   `music_open`, `music_new`, `music_save`, `music_save_as`, `music_render`,
-  `music_instruments`, `music_write`, `music_tmf`, `music_hook`, `bestiary_mobs`, `bestiary_mob`, `bestiary_items`,
+  `music_instruments`, `music_write`, `music_tmf`, `music_hook`, `music_duplicate`,
+  `storage_report`, `storage_clear_caches`, `storage_forget`, `bestiary_mobs`, `bestiary_mob`, `bestiary_items`,
   `bestiary_item`, `backup_export`, `backup_inspect`, `backup_restore`,
   `app_restart`, `window_set_fullscreen`,
   `window_is_fullscreen`).

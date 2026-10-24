@@ -147,6 +147,12 @@ export function MapPanel({ snapshot, connected, walking, run, onAskClear, blink 
               {room.terrain ? `, ${terrainWords(room.terrain)}` : ""}
               {room.travel && room.travel !== "normal" ? `, ${room.travel}` : ""}
             </span>
+            {room.ways.length > 0 && (
+              <>
+                <br />
+                <span data-testid="map-ways">{`Also here: ${mud.describeWays(room.ways)}.`}</span>
+              </>
+            )}
             <span className="sr-only"> {mud.describeExits(room)}</span>
           </p>
         ) : (

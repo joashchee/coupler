@@ -191,6 +191,7 @@ export class Stage {
       terrain: p.terrain,
       travel: "",
       landmark: p.landmark ?? "",
+      ways: [],
       exits: p.exits.map((e) => {
         const visited = this.visited.has(e.to);
         return {

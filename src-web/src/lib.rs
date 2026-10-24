@@ -81,5 +81,7 @@ mod telnet;
 mod trigger;
 #[path = "../../src-tauri/src/wav.rs"]
 mod wav;
+#[path = "../../src-tauri/src/ways.rs"]
+mod ways;
 #[path = "../../src-tauri/src/who.rs"]
 mod who;

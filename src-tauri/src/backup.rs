@@ -107,9 +107,10 @@ pub fn clear_snapshots(root: &Path) {
     let _ = fs::remove_dir_all(root.join(SNAPSHOTS));
 }
 
-/// Writes a backup of `items`, read from their files, and `settings`.
-pub fn write<W: Write + Seek>(out: &mut W, app: &str, made: u64, settings: &str, items: &[Item], progress: impl FnMut(Progress)) -> Result<Manifest, String> {
-    write_with(out, app, made, settings, items, |item| File::open(&item.source), progress)
+/// Writes a backup of `items`, read from their files, and `settings`
+/// (`smallest`: `write_with`'s).
+pub fn write<W: Write + Seek>(out: &mut W, app: &str, made: u64, settings: &str, items: &[Item], smallest: bool, progress: impl FnMut(Progress)) -> Result<Manifest, String> {
+    write_with(out, app, made, settings, items, smallest, |item| File::open(&item.source), progress)
 }
 
 /// Unpacks a backup into `RESTORING` in `root`, checking every block,
@@ -212,14 +213,15 @@ pub fn open(path: &Path) -> Result<BufReader<File>, String> {
 }
 
 /// Writes a backup of `root` to `to`, through a file beside it renamed
-/// once whole, so a backup cut short never takes the name.
-pub fn export(root: &Path, to: &Path, app: &str, made: u64, settings: &str, progress: impl FnMut(Progress)) -> Result<Made, String> {
+/// once whole, so a backup cut short never takes the name; `smallest`,
+/// as small as Brotli makes it, however long that takes.
+pub fn export(root: &Path, to: &Path, app: &str, made: u64, settings: &str, smallest: bool, progress: impl FnMut(Progress)) -> Result<Made, String> {
     let items = collect(root);
     let result = items.and_then(|items| {
         let part = to.with_extension(format!("{EXTENSION}.part"));
         let written = File::create(&part).map_err(|e| format!("Couldn't write the backup. ({e})")).and_then(|f| {
             let mut out = BufWriter::with_capacity(1 << 20, f);
-            let manifest = write(&mut out, app, made, settings, &items, progress)?;
+            let manifest = write(&mut out, app, made, settings, &items, smallest, progress)?;
             out.into_inner().map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())?;
             Ok(manifest)
         });
@@ -288,7 +290,7 @@ mod tests {
     fn backup(root: &Path) -> Vec<u8> {
         let items = collect(root).unwrap();
         let mut out = Cursor::new(Vec::new());
-        write(&mut out, "0.27.0", 1_800_000_000, SETTINGS_JSON, &items, |_| ()).unwrap();
+        write(&mut out, "0.27.0", 1_800_000_000, SETTINGS_JSON, &items, false, |_| ()).unwrap();
         clear_snapshots(root);
         out.into_inner()
     }
@@ -385,7 +387,7 @@ mod tests {
         let root = TempDir::new("outside");
         put(&root.0, "evil.txt", b"x");
         let items = vec![Item { path: "../evil.txt".into(), source: root.0.join("evil.txt"), size: 1 }];
-        write(&mut out, "0.27.0", 0, "{}", &items, |_| ()).unwrap();
+        write(&mut out, "0.27.0", 0, "{}", &items, false, |_| ()).unwrap();
         let to = TempDir::new("outside-to");
         assert_eq!(unpack(&mut Cursor::new(out.into_inner()), &to.0, |_| ()).unwrap_err(), DAMAGED);
         assert!(!to.0.parent().unwrap().join("evil.txt").exists());

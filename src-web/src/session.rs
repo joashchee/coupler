@@ -44,6 +44,7 @@ use crate::soundbank;
 use crate::speech::{Kinds, LineKind};
 use crate::telnet::{self, Event, Telnet};
 use crate::who::{Seen, Who};
+use crate::ways::{Way, Ways};
 
 /// As the desktop's.
 const MAP_SAVE_EVERY: Duration = Duration::from_secs(20);
@@ -159,6 +160,8 @@ pub struct Coupler {
     echoes: Echoes,
     long_look: LongLook,
     creation: Creation,
+    /// Portals, ships and caravans, read from the exits text (`ways.rs`).
+    ways: Ways,
     /// The unfinished line last sent, kept while a hidden WHO is cut off mid-row.
     shown_partial: Option<Line>,
     /// The tip about SOUNDS was given this connection.
@@ -221,6 +224,7 @@ impl Coupler {
             echoes: Echoes::default(),
             long_look: LongLook::default(),
             creation: Creation::default(),
+            ways: Ways::default(),
             shown_partial: None,
             told_sounds_off: false,
             comings: Comings::default(),
@@ -280,6 +284,7 @@ impl Coupler {
         self.echoes.clear();
         self.long_look.clear();
         self.creation.clear();
+        self.ways.clear();
         self.shown_partial = None;
         self.told_sounds_off = false;
         self.automation.closed();
@@ -477,6 +482,7 @@ impl Coupler {
                         self.character_left(left);
                     }
                     self.combat.gmcp(&package, &data);
+                    self.ways.gmcp(&package, &data);
                     let moved = self.comings.gmcp(&package, &data, Instant::now());
                     let (learned, cry) = self.bestiary_gmcp(&package, &data);
                     bestiary_changed |= learned;
@@ -515,6 +521,8 @@ impl Coupler {
         // own look isn't shown, nor the prompt it was asked at, written
         // again as a line when the answer began.
         let prompted = self.screen.partial().is_some_and(|line| line.iter().any(|span| !span.text.trim().is_empty()));
+        // Before anything's hidden: the player's gags are for the screen.
+        let ways_found = self.ways_lines(&texts, prompted);
         let (learned, died, mut hidden_lines) = self.bestiary_lines(&texts, prompted);
         bestiary_changed |= learned;
         cries.extend(died.into_iter().map(|(c, cry)| (c, cry, None)));
@@ -568,6 +576,10 @@ impl Coupler {
         }
         if room_changed {
             self.room_changed();
+        }
+        // After the room.info, so they're the new room's.
+        if let Some(ways) = ways_found {
+            self.ways_found(ways);
         }
         if in_game {
             self.count_play();
@@ -722,6 +734,37 @@ impl Coupler {
         self.events.push(json!([name, payload]));
     }
 
+    /// The read's finished lines, for the exits text: as the desktop's
+    /// `ways_lines`.
+    fn ways_lines(&mut self, texts: &[String], prompted: bool) -> Option<Vec<Way>> {
+        let mut found = None;
+        for text in texts {
+            if let Some(w) = self.ways.line(text) {
+                found = Some(w);
+            }
+        }
+        if prompted {
+            if let Some(w) = self.ways.prompt() {
+                found = Some(w);
+            }
+        }
+        found
+    }
+
+    /// An exits block's ways: on the map's room, and `ways` for the narrator.
+    fn ways_found(&mut self, ways: Vec<Way>) {
+        if self.map.set_ways(ways.clone()).is_some() {
+            self.map_saved.unsaved = true;
+            self.emit_map();
+            self.save_map(false);
+        }
+        if let Some(here) = self.map.current().map(str::to_string) {
+            if self.ways.announce(&here, &ways) {
+                self.emit("ways", json!(ways));
+            }
+        }
+    }
+
     fn emit_map(&mut self) {
         let snapshot = json!(self.map.snapshot(MAP_RADIUS.0, MAP_RADIUS.1));
         self.emit("map-changed", snapshot);
@@ -825,6 +868,7 @@ impl Coupler {
         self.counted = false;
         self.echoes.clear();
         self.long_look.clear();
+        self.ways.clear();
         self.beasts.reader.clear();
         let message = match &left {
             Left::Logout => {

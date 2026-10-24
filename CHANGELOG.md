@@ -1,7 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.36.0 (2026-10-24)
 
+- **Portals, ships and caravans** (2026-10-24): what the room's exits
+  text lists after the directions (a portal's name, a ship's or a
+  caravan's gangplank) is read (`ways.rs`), kept on the map's room, and
+  shown in Here and the Map's Where you are. Immersive's narrator says
+  "There's a ship here." on arriving, and Where am I? names each with
+  the command that goes through it (ENTER gangplank). A portal's row
+  with no door name (`: a swirling vortex`) is no longer shown or said
+  in Immersive.
+- **The Music Editor won't save the same music twice without asking**
+  (2026-10-24): Save… and Save as… look for a MIDI file in the Assets
+  folder with the same notes, instruments, tempo and meter, whatever the
+  names, and ask first. `#save` and `#hook` use that file instead.
+- **The narrator's phrases are rendered once** (2026-10-24): in a
+  bundled voice, every line the narrator says goes in the voice cache
+  the first time, so "Command line." and the like play at once ever
+  after, every connection and launch. Phrases said more than once are
+  the last thing the cache ever gives up.
+- **Storage** (2026-10-24): gear → Storage… shows what Coupler keeps on
+  this computer, kind by kind, and the disk's free space. Clear the
+  Caches gives back what's made again as it's wanted; the assets no
+  hook uses, the maps, the rooms' looks, the journal, the Bestiary and
+  the copy from before a restore can be deleted, each after a warning
+  that offers a backup first. Export the Smallest Backup… uses Brotli's
+  strongest setting on every file.
 - **Where each race starts** (2026-10-24): the guide's facts about a
   race begin with where it starts on coffeemud.net (Mud School, Cora
   Isle, Magthere Wa`q or Tzbrakas Training Academy), shown beside the

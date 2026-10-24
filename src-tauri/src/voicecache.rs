@@ -2,6 +2,9 @@
 //! line plays the moment it's wanted. Every line of talk is rendered as
 //! it arrives, before anyone asks to hear it (`voice_prerender`), and
 //! put here with when it was made, when it last played and how often.
+//! The narrator's lines go in too, the first time each is said: its
+//! common phrases ("Command line.", "Hassan says") are rendered once
+//! and play at once ever after, every connection and launch.
 //! Unit-tested against a folder in the system's temp dir.
 //!
 //! - **On disk**: `voice-cache/` in app data, one `<hash>.pcm` per line
@@ -15,10 +18,13 @@
 //!   it could have, and when the disk has under 2 GB free, it gives
 //!   back what it takes to get there again.
 //! - **What goes first** (`trim`): lines played once, the oldest first,
-//!   players' channel lines (the log) before the game's (the journal);
-//!   then lines played more, the fewest plays first, the oldest first;
-//!   and last, lines rendered but never played, which are still waiting
-//!   to be heard. "Oldest" is when it last played (or was made).
+//!   players' channel lines (the log) before the narrator's, then the
+//!   game's (the journal); then lines played more, the fewest plays
+//!   first, the oldest first; then lines rendered but never played,
+//!   which are still waiting to be heard; and last of all the
+//!   narrator's phrases said more than once (`COMMON`), kept for good
+//!   unless the disk itself runs short of room. "Oldest" is when it last
+//!   played (or was made).
 //! - **Order of work** (`Queue`): the journal's lines are rendered before
 //!   the log's, each in the order they came. A line wanted now that's
 //!   still waiting is taken out of the queue and rendered at once, and
@@ -48,13 +54,19 @@ pub enum Origin {
     Log = 0,
     /// Said in the game: the journal.
     Journal = 1,
+    /// Said by the narrator (a line given no voice).
+    Narrator = 2,
 }
+
+/// A narrator's line played this often is one of its common phrases.
+pub const COMMON: i64 = 2;
 
 impl Origin {
     pub fn parse(book: &str) -> Option<Origin> {
         match book {
             "log" => Some(Origin::Log),
             "journal" => Some(Origin::Journal),
+            "narrator" => Some(Origin::Narrator),
             _ => None,
         }
     }
@@ -254,14 +266,14 @@ impl RenderCache {
         let order: Vec<(String, i64)> = {
             let Ok(mut statement) = self.db.prepare(
                 "SELECT id, bytes FROM renders ORDER BY
-                     CASE WHEN plays = 1 THEN 0 WHEN plays > 1 THEN 1 ELSE 2 END,
-                     CASE WHEN plays = 1 THEN origin ELSE 0 END,
+                     CASE WHEN origin = 2 AND plays >= ?1 THEN 3 WHEN plays = 1 THEN 0 WHEN plays > 1 THEN 1 ELSE 2 END,
+                     CASE WHEN plays = 1 THEN (CASE origin WHEN 0 THEN 0 WHEN 2 THEN 1 ELSE 2 END) ELSE 0 END,
                      plays,
                      used, made",
             ) else {
                 return 0;
             };
-            let Ok(rows) = statement.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) else { return 0 };
+            let Ok(rows) = statement.query_map([COMMON], |r| Ok((r.get(0)?, r.get(1)?))) else { return 0 };
             rows.flatten().collect()
         };
         let mut gone = 0;
@@ -273,6 +285,22 @@ impl RenderCache {
             gone += 1;
         }
         gone
+    }
+
+    /// Every line, gone: what it held, in bytes. They're made again as
+    /// they're wanted.
+    pub fn clear(&mut self) -> u64 {
+        let held = self.held;
+        let _ = self.db.execute("DELETE FROM renders", []);
+        if let Ok(entries) = std::fs::read_dir(&self.dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|x| x == "pcm") {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        self.held = 0;
+        held
     }
 
     /// Keeps the cache within what the disk can spare now.
@@ -473,19 +501,36 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(3));
         };
+        line(&mut c, "common phrase", Origin::Narrator, 2);
         line(&mut c, "waiting", Origin::Journal, 0);
         line(&mut c, "game once old", Origin::Journal, 1);
+        line(&mut c, "narrated once", Origin::Narrator, 1);
         line(&mut c, "loved", Origin::Journal, 5);
         line(&mut c, "channel once", Origin::Log, 1);
         line(&mut c, "twice", Origin::Log, 2);
         line(&mut c, "game once new", Origin::Journal, 1);
-        let order = ["channel once", "game once old", "game once new", "twice", "loved", "waiting"];
+        let order = ["channel once", "narrated once", "game once old", "game once new", "twice", "loved", "waiting", "common phrase"];
         for (i, text) in order.iter().enumerate() {
             assert!(c.has(&key(text)), "{text} went too soon");
             assert_eq!(c.trim(c.held() - 10), 1);
             assert!(!c.has(&key(text)), "{text} should be the {i}th to go");
         }
         assert_eq!(c.held(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cleared_whole() {
+        let dir = temp("clear");
+        let mut c = RenderCache::open(&dir).unwrap();
+        c.put(&key("a"), &[0; 10], Origin::Narrator, true).unwrap();
+        c.put(&key("b"), &[0; 6], Origin::Log, false).unwrap();
+        assert_eq!(c.clear(), 16);
+        assert_eq!(c.held(), 0);
+        assert!(!c.has(&key("a")));
+        assert_eq!(std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.path().extension().is_some_and(|x| x == "pcm")).count(), 0);
+        drop(c);
+        assert_eq!(RenderCache::open(&dir).unwrap().held(), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

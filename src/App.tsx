@@ -35,6 +35,7 @@ import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
 import { BestiaryDialog } from "./components/BestiaryDialog";
 import { CastDialog } from "./components/CastDialog";
+import { StorageDialog } from "./components/StorageDialog";
 import { JournalDialog } from "./components/JournalDialog";
 import { SpeakingPopup } from "./components/SpeakingPopup";
 import { describeUnheard, useJournal } from "./lib/journal";
@@ -626,6 +627,8 @@ function App() {
   /** The room whose picture was asked for by key (Cmd+Shift+P), where pictures don't show in every room. */
   const [pictureAskedFor, setPictureAskedFor] = useState<string | null>(null);
   const [castOpen, setCastOpen] = useState(false);
+  /** Storage: what Coupler keeps and making room (components/StorageDialog.tsx). */
+  const [storageOpen, setStorageOpen] = useState(false);
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
@@ -1341,21 +1344,30 @@ function App() {
       fail("The Music Editor has no music loaded: open it from the gear menu (Music Editor…), or READ a journal entry that holds music.");
       return;
     }
-    /** Saves the song if it has to be, for a command that needs its file: its path. */
-    const saved = async (name?: string): Promise<string> => {
+    /**
+     * Saves the song if it has to be, for a command that needs its file:
+     * its path. Music another file holds already (names aside) isn't
+     * saved again: that file is the song's now (`same`).
+     */
+    const saved = async (name?: string): Promise<{ path: string; same: boolean }> => {
       const { song, path, dirty } = musicEditor.get();
       if (!song) throw new Error("No music is loaded.");
-      if (path && !dirty && !name) return path;
+      if (path && !dirty && !name) return { path, same: false };
+      const same = await music.duplicate(song, path && !name ? path : null);
+      if (same) {
+        musicEditor.set({ path: same, dirty: false });
+        return { path: same, same: true };
+      }
       if (path && !name) {
         await music.save(path, song);
         musicEditor.set({ dirty: false });
         sound.forgetDecoded();
-        return path;
+        return { path, same: false };
       }
       const made = await music.saveAs(name || title, song);
       musicEditor.set({ path: made.path, dirty: false });
       setAssetsVersion((v) => v + 1);
-      return made.path;
+      return { path: made.path, same: false };
     };
     try {
       switch (c.info.name) {
@@ -1406,9 +1418,9 @@ function App() {
           tell(`Stopped ${title}.`);
           return;
         case "save": {
-          const path = await runActivity(`Saving ${title}…`, () => saved(c.rest || undefined), "music-save");
+          const { path, same } = await runActivity(`Saving ${title}…`, () => saved(c.rest || undefined), "music-save");
           earcons.commandDone();
-          tell(`Saved ${mud.assetTitle(path)} in the Assets folder.`);
+          tell(same ? `${mud.assetTitle(path)} in the Assets folder is this music already, so nothing new was saved.` : `Saved ${mud.assetTitle(path)} in the Assets folder.`);
           return;
         }
         case "load": {
@@ -1457,7 +1469,7 @@ function App() {
             tell(`No music for ${place} now.`);
             return;
           }
-          const place = await runActivity(`Hooking ${title} to the ${scope}…`, async () => music.hook(scope, await saved()), "music-hook");
+          const place = await runActivity(`Hooking ${title} to the ${scope}…`, async () => music.hook(scope, (await saved()).path), "music-hook");
           earcons.commandDone();
           tell(`${title} is the music of ${place}: it plays while you're there, fades when you go, and waits out a fight.`);
           return;
@@ -2068,17 +2080,20 @@ function App() {
 
   // ---- Coupler Backup (lib/backup.ts, src-tauri/src/backup.rs) ----
 
-  /** Writes everything Coupler keeps to one file the player names. */
-  const exportBackup = useCallback(async () => {
+  /** Writes everything Coupler keeps to one file the player names; `smallest` in Brotli's strongest setting throughout (Storage's, slower). */
+  const exportBackup = useCallback(async (smallest = false) => {
     try {
-      const path = await saveFile({ title: "Export a Coupler Backup", defaultPath: backup.defaultName(), filters: [{ name: "Coupler Backup", extensions: [backup.EXTENSION] }] });
+      const path = await saveFile({ title: smallest ? "Export the Smallest Coupler Backup" : "Export a Coupler Backup", defaultPath: backup.defaultName(), filters: [{ name: "Coupler Backup", extensions: [backup.EXTENSION] }] });
       if (!path) return;
       const started = Date.now();
       const made = await runActivity(
-        "Making a Coupler Backup…",
+        smallest ? "Making the smallest Coupler Backup…" : "Making a Coupler Backup…",
         (update) =>
-          mud.backupExport(path, backup.settings(), (p) =>
-            update({ value: p.total > 0 ? p.done / p.total : undefined, label: `Making a Coupler Backup: ${mud.sizeInWords(p.done)} of ${mud.sizeInWords(p.total)} packed…` }),
+          mud.backupExport(
+            path,
+            backup.settings(),
+            (p) => update({ value: p.total > 0 ? p.done / p.total : undefined, label: `Making a Coupler Backup: ${mud.sizeInWords(p.done)} of ${mud.sizeInWords(p.total)} packed…` }),
+            smallest,
           ),
         "backup",
       );
@@ -2204,7 +2219,7 @@ function App() {
     };
   }, [hear]);
 
-  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || bestiaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
   const turnPhone = useCallback(
@@ -3054,6 +3069,22 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>Characters' Voices…</span>
               </button>
+              {/* What Coupler keeps on this computer, and making room. Not on
+                  the web, which keeps its few files in the browser. */}
+              {!WEB && (
+                <button
+                  type="button"
+                  className="menu-item"
+                  data-testid="storage-button"
+                  onClick={() => {
+                    setGearOpen(false);
+                    setStorageOpen(true);
+                  }}
+                >
+                  <ChecklistIcon aria-hidden="true" />
+                  <span>Storage…</span>
+                </button>
+              )}
               {/* Not on the phone: a backup is a file to save or pick, and an
                   iPhone app comes from the App Store, never a download. On
                   the web it's a download, and a file chosen or dropped. */}
@@ -3623,6 +3654,18 @@ function App() {
       <JournalDialog book="log" open={logOpen} onClose={() => setLogOpen(false)} unheard={journal.unheard} onPlay={journal.play} onStatus={showStatus} onError={showError} />
 
       <CastDialog open={castOpen} onClose={() => setCastOpen(false)} onStatus={showStatus} onError={showError} />
+      {!WEB && (
+        <StorageDialog
+          open={storageOpen}
+          onClose={() => setStorageOpen(false)}
+          connected={connected}
+          musicFile={musicEditor.get().path}
+          exportBackup={exportBackup}
+          onAssetsChanged={() => setAssetsVersion((v) => v + 1)}
+          onStatus={showStatus}
+          onError={showError}
+        />
+      )}
       <BestiaryDialog open={bestiaryOpen} onClose={() => setBestiaryOpen(false)} onStatus={showStatus} onError={showError} />
 
       {!WEB && (

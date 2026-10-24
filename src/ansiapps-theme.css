@@ -614,6 +614,11 @@
 :root[data-theme="ansiapps"] .hooks-head.priority-row,
 :root[data-theme="ansiapps"] .hooks-list.priority-list li { grid-template-columns: minmax(0, 1fr) 80px 56px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
+/* Storage: the kind (the rest), its size and files (25 cells) and
+   Delete... (9), two cells between; the buttons under it a row down. */
+:root[data-theme="ansiapps"] .hooks-head.storage-row,
+:root[data-theme="ansiapps"] .hooks-list.storage-list li { grid-template-columns: minmax(0, 1fr) 200px 72px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .storage-actions { gap: 16px; margin-top: 16px; }
 :root[data-theme="ansiapps"] .priority-add { margin-top: 16px; }
 :root[data-theme="ansiapps"] .hooks-head.assets-row,
 :root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 8px 192px 72px minmax(0, 1fr) 176px 144px 56px; gap: 0 16px; }
@@ -705,6 +710,7 @@
 :root[data-theme="ansiapps"] .scene-body { gap: 0; padding-right: 8px; }
 :root[data-theme="ansiapps"] .scene-body h3 { margin-top: 16px; }
 :root[data-theme="ansiapps"] .scene-compass,
+:root[data-theme="ansiapps"] .scene-ways,
 :root[data-theme="ansiapps"] .scene-gauge,
 :root[data-theme="ansiapps"] .scene-layers,
 :root[data-theme="ansiapps"] .heard-body { font-size: inherit; line-height: 16px; color: var(--dos-white); }

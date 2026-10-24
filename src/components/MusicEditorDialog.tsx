@@ -22,7 +22,10 @@
  *   given in the Assets tab isn't used here.
  * - Save… (over the file, after a yes) and Save as… (a new name in the
  *   Assets folder; nothing is written over). Closing or opening another
- *   with changes unsaved asks first.
+ *   with changes unsaved asks first. Music another file in the Assets
+ *   folder already holds (its notes, instruments, tempo and meter; the
+ *   names and the like aside, music.rs `same_music`) asks before it's
+ *   saved again.
  * - What's loaded stays loaded when it closes (lib/musicEditor.ts), for
  *   Coupler's commands: #play, #pause, #rewind, #loop, #stop, #save,
  *   #write (into a journal, as TMF), #hook (to the room or area). Music
@@ -59,7 +62,7 @@ const PATTERN_ROWS = 6;
 const PATTERN_BARS = 24;
 const PLAYING_ID = "music-editor";
 
-type Ask = null | "over" | "as" | { discard: () => void };
+type Ask = null | "over" | "as" | { discard: () => void } | { duplicate: string; save: () => void };
 
 export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onStatus, onError }: MusicEditorDialogProps) {
   const id = useId();
@@ -209,8 +212,22 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
 
   // ---- Saving ----
 
-  async function saveOver() {
+  /** Asks first when another file holds this music already; `save` is what's done after. */
+  async function unlessDuplicate(except: string | null, save: () => void) {
+    if (!song) return;
+    setAsk(null);
+    try {
+      const same = await music.duplicate(song, except);
+      if (same) setAsk({ duplicate: same, save });
+      else save();
+    } catch (e) {
+      onError(String(e));
+    }
+  }
+
+  async function saveOver(checked = false) {
     if (!song || !path) return;
+    if (!checked) return unlessDuplicate(path, () => void saveOver(true));
     setAsk(null);
     try {
       await music.save(path, song);
@@ -222,10 +239,11 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
     }
   }
 
-  async function saveAsNew() {
+  async function saveAsNew(checked = false) {
     if (!song) return;
     const name = newName.trim();
     if (!name) return;
+    if (!checked) return unlessDuplicate(null, () => void saveAsNew(true));
     setAsk(null);
     try {
       const made = await music.saveAs(name, song);
@@ -478,7 +496,8 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
     setSaid(`Removed ${current.name}.`);
   }
 
-  const askTitle = ask === "over" ? `Save over ${title}?` : ask === "as" ? "Save as…" : "Leave your changes?";
+  const askTitle =
+    ask === "over" ? `Save over ${title}?` : ask === "as" ? "Save as…" : ask && "duplicate" in ask ? "Already in the Assets Folder" : "Leave your changes?";
 
   return (
     <>
@@ -770,6 +789,15 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
                 Save
               </button>
             </>
+          ) : ask && "duplicate" in ask ? (
+            <>
+              <button type="button" onClick={() => setAsk(null)}>
+                Cancel
+              </button>
+              <button type="button" className="primary" data-testid="music-save-anyway" onClick={ask.save}>
+                Save Anyway
+              </button>
+            </>
           ) : (
             <>
               <button type="button" onClick={() => setAsk(null)}>
@@ -780,7 +808,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
                 className="primary"
                 data-testid="music-discard"
                 onClick={() => {
-                  const then = ask && typeof ask === "object" ? ask.discard : null;
+                  const then = ask && typeof ask === "object" && "discard" in ask ? ask.discard : null;
                   setAsk(null);
                   setDirty(false);
                   then?.();
@@ -816,7 +844,10 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
             <span>.mid, in the Assets folder</span>
           </form>
         )}
-        {ask !== null && typeof ask === "object" && <p>{`The changes to ${title} aren't saved. Leave them?`}</p>}
+        {ask !== null && typeof ask === "object" && "duplicate" in ask && (
+          <p>{`${mud.assetTitle(ask.duplicate)} in the Assets folder is this music already: the same notes, instruments, tempo and meter, whatever the names. Save another copy anyway?`}</p>
+        )}
+        {ask !== null && typeof ask === "object" && "discard" in ask && <p>{`The changes to ${title} aren't saved. Leave them?`}</p>}
       </Dialog>
     </>
   );

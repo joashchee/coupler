@@ -585,7 +585,8 @@ export interface BundledVoice {
 }
 export const voiceEngines = () => invoke<BundledVoice[]>("voice_engines");
 /** A line in a bundled voice: the sample rate (u32), then 16-bit mono samples, little-endian. */
-export const voiceSynth = (engine: string, voice: string, text: string, gender: Voice["gender"], pitch: number, rate: number, book?: Book) =>
+/** A line in a bundled voice; one of talk (`book`) or the narrator's comes from the voice cache when it was rendered before, and goes in it when it wasn't. */
+export const voiceSynth = (engine: string, voice: string, text: string, gender: Voice["gender"], pitch: number, rate: number, book?: Book | "narrator") =>
   invoke<ArrayBuffer>("voice_synth", { engine, voice, text, gender, pitch: Math.round(pitch), rate: Math.round(rate), book: book ?? null });
 /** Renders a line of talk into the voice cache ahead of being wanted (src-tauri/src/voicecache.rs). */
 export const voicePrerender = (engine: string, voice: string, text: string, gender: Voice["gender"], pitch: number, rate: number, book: Book) =>
@@ -683,6 +684,15 @@ export interface MapExit {
   locked: boolean;
 }
 
+/** A way out that isn't a direction: a portal, a ship, a caravan (src-tauri/src/ways.rs). */
+export interface Way {
+  kind: "portal" | "ship" | "caravan" | "other";
+  /** What to type to go through it: "ENTER gangplank". */
+  command: string;
+  /** What it is, as the game names it ("a sailing ship Swift"). */
+  name: string;
+}
+
 export interface MapRoom {
   id: string;
   name: string;
@@ -691,6 +701,35 @@ export interface MapRoom {
   travel: string;
   landmark: string;
   exits: MapExit[];
+  /** Portals, ships and caravans here, as the room's exits text named them last. */
+  ways: Way[];
+}
+
+/** The player came to a room with portals, ships or caravans (or they're new there). */
+export const onWays = (f: (ways: Way[]) => void): Promise<UnlistenFn> => listen<Way[]>("ways", (e) => f(e.payload));
+
+const WAY_WORDS: Record<Way["kind"], [string, string]> = {
+  portal: ["a portal", "portals"],
+  ship: ["a ship", "ships"],
+  caravan: ["a caravan", "caravans"],
+  other: ["another way in", "other ways in"],
+};
+const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+/** "There's a portal here.", "There are two ships and a caravan here.": the narrator's few words. */
+export function waysHere(ways: Way[]): string {
+  const kinds = (["portal", "ship", "caravan", "other"] as const)
+    .map((k) => [k, ways.filter((w) => w.kind === k).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => (n === 1 ? WAY_WORDS[k][0] : `${COUNT_WORDS[n] ?? n} ${WAY_WORDS[k][1]}`));
+  if (kinds.length === 0) return "";
+  const one = ways.length === 1;
+  return `There ${one ? "is" : "are"} ${listInWords(kinds)} here.`;
+}
+
+/** Each way and what goes through it: "a sailing ship Swift (ENTER gangplank)". */
+export function describeWays(ways: Way[]): string {
+  return listInWords(ways.map((w) => `${w.name} (${w.command})`));
 }
 
 /** A room on the picture; (0, 0) is where the player stands. */
@@ -987,7 +1026,8 @@ export function clearedInWords(cleared: AssetsListing["cleared"]): string {
 export function sizeInWords(bytes: number): string {
   if (bytes < 1024) return `${bytes} ${bytes === 1 ? "byte" : "bytes"}`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 /** The file types the Assets folder takes, for the file chooser. */
@@ -1134,7 +1174,8 @@ export function describeExits(room: MapRoom): string {
 export function describeRoom(room: MapRoom | null): string {
   if (!room) return "The map doesn't know where you are yet. Move or look once in the game.";
   const name = room.landmark ? `${room.name} (${room.landmark})` : room.name;
-  return `${name}, in ${room.zone}. ${describeExits(room)}`;
+  const ways = room.ways?.length ? ` Also here: ${describeWays(room.ways)}.` : "";
+  return `${name}, in ${room.zone}. ${describeExits(room)}${ways}`;
 }
 
 /** The standard VGA palette for indexes 0–15, then the xterm 256-color cube and grays. */
@@ -1209,12 +1250,33 @@ export interface BackupProgress {
   done: number;
   total: number;
 }
-/** Writes a Coupler Backup of everything kept to `path`, with the settings (JSON). */
-export function backupExport(path: string, settings: string, onProgress: (p: BackupProgress) => void) {
+/** Writes a Coupler Backup of everything kept to `path`, with the settings (JSON); `smallest` in Brotli's strongest setting throughout (slower). */
+export function backupExport(path: string, settings: string, onProgress: (p: BackupProgress) => void, smallest = false) {
   const progress = new Channel<BackupProgress>();
   progress.onmessage = onProgress;
-  return invoke<{ manifest: BackupManifest; size: number }>("backup_export", { path, settings, progress });
+  return invoke<{ manifest: BackupManifest; size: number }>("backup_export", { path, settings, smallest, progress });
 }
+
+// ---- Storage (src-tauri/src/storage.rs) ----
+
+/** How much one kind of what Coupler keeps takes. */
+export interface StorageUse {
+  id: string;
+  bytes: number;
+  files: number;
+}
+export interface StorageReport {
+  uses: StorageUse[];
+  total: number;
+  /** The disk's free space, when it could be read. */
+  free: number | null;
+}
+/** What Coupler keeps on this computer, by kind. */
+export const storageReport = () => invoke<StorageReport>("storage_report");
+/** Clears the caches, made again as they're wanted. Resolves to the bytes freed. */
+export const storageClearCaches = () => invoke<number>("storage_clear_caches");
+/** Deletes a kind of the player's data for good (`keep`: the Music Editor's file, never an unused asset). Resolves to the bytes freed. */
+export const storageForget = (what: string, keep: string | null) => invoke<number>("storage_forget", { what, keep });
 /** What's in a backup, read from its start. */
 export const backupInspect = (path: string) => invoke<BackupManifest>("backup_inspect", { path });
 /** Unpacks a backup, checked, to be put in place when Coupler next starts. */

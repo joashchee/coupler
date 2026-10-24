@@ -218,6 +218,53 @@ pub fn preview(song: &Song, from: u32, to: u32) -> Vec<u8> {
     write(&cut)
 }
 
+// ---- The same music saved twice ----
+
+/// One part's music: its channel and instrument, its notes and its
+/// other channel events, in order, on a common grid.
+type PartMusic = (u8, u8, u8, Vec<(u64, u64, u8, u8)>, Vec<(u64, Vec<u8>)>);
+/// A song's music: its tempo, meter, bars, parts and own events.
+type SongMusic = (u64, u8, u8, u32, Vec<PartMusic>, Vec<(u64, Vec<u8>)>);
+
+/// A song's music alone, ticks scaled by `scale`: the tempo (as a file
+/// holds it, microseconds a beat), the meter, the bars, the parts that
+/// hold anything, in no order, and the song's own events. Left out:
+/// every name (the song's, the parts'), every meta event (titles, text,
+/// copyright, markers) and what a part holds nothing of.
+fn music_of(song: &Song, scale: u64) -> SongMusic {
+    let events = |kept: &[Kept]| {
+        let mut events: Vec<(u64, Vec<u8>)> = kept.iter().filter(|k| k.bytes.first() != Some(&0xff)).map(|k| (u64::from(k.at) * scale, k.bytes.clone())).collect();
+        events.sort();
+        events
+    };
+    let mut parts: Vec<PartMusic> = song
+        .parts
+        .iter()
+        .map(|p| {
+            let mut notes: Vec<_> = p.notes.iter().map(|n| (u64::from(n.at) * scale, u64::from(n.length) * scale, n.key, n.velocity)).collect();
+            notes.sort();
+            (p.channel, p.bank, p.program, notes, events(&p.kept))
+        })
+        .filter(|(_, _, _, notes, kept)| !notes.is_empty() || !kept.is_empty())
+        .collect();
+    parts.sort();
+    let tempo = if song.bpm > 0.0 { (60_000_000.0 / song.bpm).round() as u64 } else { 0 };
+    (tempo, song.beats, song.unit, song.bars, parts, events(&song.kept))
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// Whether two songs are the same music, whatever they're called: the
+/// same notes on the same instruments at the same tempo and meter, the
+/// same length, however finely each file counts its beats.
+pub fn same_music(a: &Song, b: &Song) -> bool {
+    let (pa, pb) = (u64::from(a.ppq.max(1)), u64::from(b.ppq.max(1)));
+    let lcm = pa / gcd(pa, pb) * pb;
+    music_of(a, lcm / pa) == music_of(b, lcm / pb)
+}
+
 // ---- What the parts play ----
 
 /// What the Music Editor's parts can play, bank by bank, and the drum
@@ -297,6 +344,38 @@ mod tests {
         out.extend(t);
         out.extend([0, 0xff, 0x2f, 0]);
         out
+    }
+
+    #[test]
+    fn the_same_music_whatever_its_called() {
+        let song = read(&little()).unwrap();
+        let mut renamed = song.clone();
+        renamed.parts[0].name = "Lead".into();
+        renamed.parts.reverse();
+        // A title (a meta event) and an empty part aren't music.
+        renamed.kept.push(Kept { at: 0, bytes: vec![0xff, 0x03, 2, b'H', b'i'] });
+        renamed.parts.push(Part { name: "Empty".into(), channel: 3, bank: 0, program: 5, notes: vec![], kept: vec![] });
+        assert!(same_music(&song, &renamed));
+        // Twice as fine a grid, the same music.
+        let mut finer = song.clone();
+        finer.ppq *= 2;
+        for part in &mut finer.parts {
+            part.notes.iter_mut().for_each(|n| (n.at, n.length) = (n.at * 2, n.length * 2));
+            part.kept.iter_mut().for_each(|k| k.at *= 2);
+        }
+        assert!(same_music(&song, &finer));
+        // As written to a file and read back.
+        assert!(same_music(&song, &read(&write(&renamed)).unwrap()));
+        // A note, an instrument, the tempo: different music.
+        let mut moved = song.clone();
+        moved.parts[0].notes[0].key += 1;
+        assert!(!same_music(&song, &moved));
+        let mut other = song.clone();
+        other.parts[0].program += 1;
+        assert!(!same_music(&song, &other));
+        let mut faster = song.clone();
+        faster.bpm += 10.0;
+        assert!(!same_music(&song, &faster));
     }
 
     #[test]
