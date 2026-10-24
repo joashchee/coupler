@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.41.0 (2026-10-24)
+
+- **Faces in The Fight on the iPhone** (2026-10-24): the strip above
+  the touch pad is now the room you're fighting in with the two of you
+  in it, your face at the left and the foe's at the right, drawn small
+  for the phone (not shrunk: each kind of face has its own small
+  drawing, so the eyes still show), angry, hurt and in pain as the
+  fight goes, with the jolt, the flash and a new foe sliding in. The
+  words sit between the faces: your health, bar, mana and moves, the
+  clock or the result, what's on you, the foe's hurt, bar and health.
+  It's eight rows; with pictures off (gear → Pictures…) it stays the
+  four rows of words.
+
 ## 0.40.0 (2026-10-24)
 
 - **The Fight moves, and comes to the iPhone** (2026-10-24): a big

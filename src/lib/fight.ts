@@ -124,6 +124,8 @@ export const FLASH_GAP_MS = 334;
 export const SLIDE_MS = 24;
 /** A face's width in cells (src-tauri/src/face.rs `SIZE`): how far a new foe slides. */
 const FACE_COLUMNS = 25;
+/** A small face's size in cells (face.rs `SMALL`): the phone strip's picture. */
+export const SMALL_FACE = { columns: 16, rows: 8 };
 
 /**
  * A big blow's frames: the one hit jolted a cell back from the other and
@@ -138,10 +140,11 @@ export function blowFrames(you: boolean, foe: boolean, flash: boolean, reduced: 
   return reduced && !flash ? [] : frames;
 }
 
-/** A new foe sliding in from the right, a cell at a time; the last frame is it in its place. Nothing with reduced motion. */
-export function slideFrames(reduced: boolean): mud.FightFrame[] {
+/** A new foe sliding in from the right, a cell at a time (`small`: the strip's small face); the last frame is it in its place. Nothing with reduced motion. */
+export function slideFrames(reduced: boolean, small = false): mud.FightFrame[] {
   if (reduced) return [];
-  return Array.from({ length: FACE_COLUMNS }, (_, i) => ({ foe: { shift: FACE_COLUMNS - 1 - i } }));
+  const width = small ? SMALL_FACE.columns : FACE_COLUMNS;
+  return Array.from({ length: width }, (_, i) => ({ foe: { shift: width - 1 - i } }));
 }
 
 /** The fight's clock: "0:42". */

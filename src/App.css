@@ -739,10 +739,14 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .fight-summary { flex: 0 0 auto; align-self: flex-start; margin: 0; }
 .fight-picture { background: #000000; overflow: hidden; user-select: none; }
 .fight-picture-row { height: 16px; }
-/* The phone's strip (FightPanel.tsx `strip`): four rows above the touch
-   pad, no frame; what's on the player scrolls round when it's too long,
-   a cell's width at a time in effect, and not at all with reduced motion. */
-.fight-strip { background: var(--panel); height: 64px; overflow: hidden; }
+/* The phone's strip (FightPanel.tsx `strip`): above the touch pad, no
+   frame, its height set by the component (eight rows painted, four
+   without); what's on the player scrolls round when it's too long, a
+   cell's width at a time in effect, and not at all with reduced motion.
+   Painted, the words are a band of the panel's color between the faces. */
+.fight-strip { background: var(--panel); overflow: hidden; }
+.fight-strip-painted { position: relative; }
+.fight-strip-middle { position: absolute; top: 0; background: var(--panel); }
 .fight-scroll { display: inline-block; overflow: hidden; vertical-align: top; }
 .fight-scroll-text { display: inline-block; animation: fight-scroll linear infinite; }
 @keyframes fight-scroll { from { transform: none; } to { transform: translateX(calc(-1 * var(--lap))); } }

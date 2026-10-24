@@ -22,11 +22,16 @@
  * of a second of the last); a new foe slides in from the right. With
  * reduced motion, the flash alone.
  *
- * On the phone, a strip of four rows above the touch pad in the Game
- * section (`strip`): the names and figures with the clock or the result
- * between them, the two health bars, mana and moves, and what's on the
- * player in a row that scrolls by itself when it's too long. No picture
- * yet: the faces at the strip's size are still to be drawn.
+ * On the phone, a strip above the touch pad in the Game section
+ * (`strip`): eight rows, the picture painted small (fight_art.rs
+ * `Size::Small`: the room, the two faces drawn at 16 by 8 cells at its
+ * two ends, their moments as on the panel), and between the faces, in a
+ * band of its own, the player's name, figures, health bar, mana and moves,
+ * the clock or the result, what's on the player (scrolling when it's too
+ * long), the foe's hurt, health bar, figures and name. With pictures off
+ * (gear → Pictures…), four rows of words across the strip instead:
+ * names and figures with the clock between, the two health bars, mana
+ * and moves, and what's on the player.
  *
  * Words first (rule 10): one sentence says it all for a screen reader,
  * and the rows, the bars and the picture are hidden from it. No live
@@ -36,7 +41,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as mud from "../lib/mud";
-import { bigBlow, BLOW_MS, blowFrames, clock, effectEntries, FLASH_GAP_MS, foeMoment, hurtWords, rangeWords, resultWords, SLIDE_MS, slideFrames, yourMoment, type Bout } from "../lib/fight";
+import { bigBlow, BLOW_MS, blowFrames, clock, effectEntries, FLASH_GAP_MS, foeMoment, hurtWords, rangeWords, resultWords, SLIDE_MS, slideFrames, SMALL_FACE, yourMoment, type Bout } from "../lib/fight";
 import type { PictureSettings } from "../lib/pictures";
 
 interface FightPanelProps {
@@ -49,7 +54,7 @@ interface FightPanelProps {
   scene: mud.Scene | null;
   /** Opens Combat Summary on this fight, once it's over. */
   onSummary: () => void;
-  /** The phone's strip: four rows, no picture, no button. */
+  /** The phone's strip: the picture small with the words between the faces (or four rows of words with pictures off), no button. */
   strip?: boolean;
 }
 
@@ -146,9 +151,9 @@ function AllyRow({ ally, tank, half, right }: { ally: mud.Ally; tank: boolean; h
 }
 
 /** The picture's rows of cells. */
-function Picture({ art }: { art: mud.AnsiArt | null }) {
+function Picture({ art, rows = PICTURE_ROWS }: { art: mud.AnsiArt | null; rows?: number }) {
   return (
-    <div className="fight-picture" style={{ height: PICTURE_ROWS * 16 }}>
+    <div className="fight-picture" style={{ height: rows * 16 }}>
       {art?.lines.map((line, row) => (
         <div key={row} className="fight-picture-row">
           {line.map((span, i) => {
@@ -219,7 +224,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
   const on = status?.effects.map((e) => e.name) ?? [];
   const you = yourMoment(bout, mine, on);
   const theirs = foeMoment(bout);
-  const painting = settings.engine !== "none" && !strip;
+  const painting = settings.engine !== "none";
   const sceneKey = scene ? `${scene.world}/${scene.room}/${scene.time}/${scene.weather}/${scene.look}` : "";
 
   // Painted again only when what it shows changes: a step of hurt, a mood, the room, the width.
@@ -229,7 +234,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
     if (!painting || columns < 1) return;
     let stale = false;
     mud
-      .fightPaint(foe, you, theirs, settings.style, columns, paintedFoe.current === foe ? [] : slideFrames(reducedMotion()))
+      .fightPaint(foe, you, theirs, settings.style, columns, paintedFoe.current === foe ? [] : slideFrames(reducedMotion(), strip), strip)
       .then((painted) => {
         if (stale) return;
         paintedFoe.current = foe;
@@ -242,7 +247,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
     };
     // The moments by their parts, so a new object with the same look doesn't paint again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [painting, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
+  }, [painting, strip, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
 
   // A big blow, to either: the one hit jolts and flashes.
   const healths = useRef({ mine, theirs: o.percent });
@@ -258,7 +263,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
     if (frames.length === 0) return;
     if (flash) lastFlash.current = Date.now();
     mud
-      .fightPaint(foe, you, theirs, settings.style, columns, frames)
+      .fightPaint(foe, you, theirs, settings.style, columns, frames, strip)
       .then((painted) => play(painted, BLOW_MS))
       .catch(() => undefined);
     // Only a change of health is a blow.
@@ -290,8 +295,51 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
     const yours = short(vitals?.hp, vitals?.maxHp);
     const theirFigures = o.health !== null && o.healthMax !== null ? `${o.health}/${o.healthMax}` : o.percent !== null ? `${o.percent}%` : "";
     const onYou = [tank, ...entries].filter(Boolean).join("  ");
+    if (painting) {
+      // Between the two faces: a band of words, a row each.
+      const mid = Math.max(0, columns - 2 * SMALL_FACE.columns);
+      const ends = (a: string, b: string) => (a.length + 1 + b.length > mid ? fit(`${a} ${b}`, mid) : a + b.padStart(mid - a.length));
+      const mana = short(vitals?.mana, vitals?.maxMana);
+      const moves = short(vitals?.moves, vitals?.maxMoves);
+      const centre = middle.length >= mid ? fit(middle, mid) : " ".repeat(Math.floor((mid - middle.length) / 2)) + middle;
+      return (
+        <section className="fight-panel fight-strip" style={{ height: SMALL_FACE.rows * 16 }} aria-labelledby="fight-title" data-testid="fight-panel">
+          <h2 id="fight-title" className="sr-only">
+            The Fight
+          </h2>
+          <p className="sr-only" data-testid="fight-words">
+            {words}
+          </p>
+          <div ref={boxRef} className="fight-body fight-strip-painted" aria-hidden="true">
+            {columns > 0 && (
+              <>
+                <Picture art={frame ?? art} rows={SMALL_FACE.rows} />
+                <div className="fight-strip-middle" style={{ left: SMALL_FACE.columns * 8, width: mid * 8 }}>
+                  <p className="fight-row">{ends("You", yours)}</p>
+                  <p className="fight-row">
+                    <HealthBar percent={mine} width={mid} from="left" />
+                  </p>
+                  <p className="fight-row">{fit([mana && `M ${mana}`, moves && `V ${moves}`].filter(Boolean).join(" "), mid)}</p>
+                  <p className="fight-row">
+                    <span className={result?.startsWith("KO") ? "fight-ko" : undefined}>{fit(centre, mid)}</span>
+                  </p>
+                  <p className="fight-row" data-testid="fight-effects">
+                    {onYou ? <Scrolling text={onYou} width={mid} /> : <span className="fight-muted">{fit(yourHurt, mid)}</span>}
+                  </p>
+                  <p className="fight-row fight-muted">{fit(theirHurt, mid, "right")}</p>
+                  <p className="fight-row">
+                    <HealthBar percent={o.percent} width={mid} from="right" foe />
+                  </p>
+                  <p className="fight-row">{ends(theirFigures, foeName)}</p>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      );
+    }
     return (
-      <section className="fight-panel fight-strip" aria-labelledby="fight-title" data-testid="fight-panel">
+      <section className="fight-panel fight-strip" style={{ height: 4 * 16 }} aria-labelledby="fight-title" data-testid="fight-panel">
         <h2 id="fight-title" className="sr-only">
           The Fight
         </h2>

@@ -338,7 +338,9 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   it (`face::standing`, the player mirrored), and its moments' frames (a
   blow's jolt and flash, a foe sliding in); `FightPanel.tsx`, the bout,
   the moods and the frames in `lib/fight.ts`. On the phone a strip of
-  four rows, no faces yet.
+  eight rows: the picture small (`face::Size::Small`, the faces drawn
+  again at 16 by 8 cells in `face.rs`'s `small`, never scaled), the
+  words between the faces; four rows of words with pictures off.
 - `figure.rs`: a face or an item drawn on a clear canvas, each pixel's
   part (`painter::Part`), laid on its place (the room painter's, a
   shade back) and lit by it. Tables by `scripts/painter-tables.py`:

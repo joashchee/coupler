@@ -518,8 +518,8 @@ export interface FightFrame {
  * moment has them; `columns` wide (at least 40), 12 rows. Once for each
  * of `frames`, else once standing still.
  */
-export const fightPaint = (foe: string, youNow: FaceMoment, foeNow: FaceMoment, style: PictureStyle, columns: number, frames: FightFrame[] = []) =>
-  invoke<AnsiArt[]>("fight_paint", { foe, youNow, foeNow, style, columns, frames });
+export const fightPaint = (foe: string, youNow: FaceMoment, foeNow: FaceMoment, style: PictureStyle, columns: number, frames: FightFrame[] = [], small = false) =>
+  invoke<AnsiArt[]>("fight_paint", { foe, youNow, foeNow, style, columns, frames, small });
 /** An item's picture by Coupler's painter (src-tauri/src/item_art.rs), the same size as a face, and its slot in words (written on it). */
 export const bestiaryItemArt = (key: string) => invoke<{ art: AnsiArt; slot: string } | null>("bestiary_item_art", { key });
 export const bestiaryItems = (query: string) => invoke<ItemRow[]>("bestiary_items", { query });

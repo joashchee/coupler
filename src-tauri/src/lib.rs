@@ -278,12 +278,14 @@ fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, sess
 /// The Fight panel's picture by Coupler's painter (fight_art.rs): the
 /// room, the player on the left and `foe` on the right, each as their
 /// moment has them, `columns` wide; once for each of `frames` (a blow's
-/// jolt and flash, a foe sliding in), else once standing still.
+/// jolt and flash, a foe sliding in), else once standing still. `small`:
+/// the phone's strip, its faces drawn small.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, frames: Option<Vec<fight_art::Frame>>, session: State<'_, Session>) -> Result<Vec<ansi_art::Art>, String> {
+fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, frames: Option<Vec<fight_art::Frame>>, small: Option<bool>, session: State<'_, Session>) -> Result<Vec<ansi_art::Art>, String> {
     let (you, foe, scene) = session.fighters(&app, &foe)?;
-    Ok(fight_art::frames(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns, &frames.unwrap_or_default()))
+    let size = if small.unwrap_or(false) { face::Size::Small } else { face::Size::Full };
+    Ok(fight_art::frames(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns, &frames.unwrap_or_default(), size))
 }
 
 /// An item's picture by Coupler's painter (item_art.rs), from all that's

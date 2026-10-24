@@ -12,6 +12,11 @@
 //! frontend's (`FightPanel.tsx`), in bands of their own: no text sits on
 //! the picture.
 //!
+//! On the phone's Fight strip it's painted small (`Size::Small`): the
+//! room eight rows tall across the strip, the two faces drawn at 16 by
+//! 8 cells (`face.rs`'s small faces, never the big ones scaled) at its
+//! two ends; the strip's words cover the middle.
+//!
 //! Its moments are frames painted in one go (`frames`): a big blow jolts
 //! the one hit a cell away from the other and flashes it once, a new foe
 //! slides in from the right a cell at a time. The frontend plays them
@@ -19,7 +24,7 @@
 //! than three a second, no jolt or slide with reduced motion).
 
 use crate::ansi_art::Art;
-use crate::face::{self, Moment, Sitter, SIZE};
+use crate::face::{self, Moment, Sitter, Size};
 use crate::figure::{self, lighter, CLEAR};
 use crate::paint::{Scene, Style};
 use crate::painter::*;
@@ -30,8 +35,14 @@ use serde::Deserialize;
 pub const LEAST_COLUMNS: usize = 40;
 /// The most: the stage's width.
 const MOST_COLUMNS: usize = 160;
-/// The picture's rows: a face's.
-pub const ROWS: usize = SIZE.1;
+
+/// The fewest columns at a size: small, both faces whole.
+fn least(size: Size) -> usize {
+    match size {
+        Size::Full => LEAST_COLUMNS,
+        Size::Small => 2 * size.cells().0,
+    }
+}
 
 /// Both fighters, as they are now.
 pub struct Fighters<'a> {
@@ -57,30 +68,31 @@ pub struct Frame {
     pub foe: Pose,
 }
 
-/// The picture, `columns` wide and a face tall, both standing still.
-/// Without a room (not yet known), a plain dark ground.
+/// The picture, `columns` wide and a face of `size` tall, both standing
+/// still. Without a room (not yet known), a plain dark ground.
 #[cfg(test)]
-pub fn paint(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize) -> Art {
-    frames(scene, style, fighters, columns, &[Frame::default()]).remove(0)
+pub fn paint(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, size: Size) -> Art {
+    frames(scene, style, fighters, columns, &[Frame::default()], size).remove(0)
 }
 
 /// The picture once for each frame, the room and the faces painted once
 /// for them all. No frames, one still.
-pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, frames: &[Frame]) -> Vec<Art> {
-    let columns = columns.clamp(LEAST_COLUMNS, MOST_COLUMNS);
+pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, frames: &[Frame], size: Size) -> Vec<Art> {
+    let columns = columns.clamp(least(size), MOST_COLUMNS);
+    let (face_columns, rows) = size.cells();
     let (room, light) = match scene {
         Some(scene) => {
-            let (c, light) = figure::room(scene, style, columns, ROWS);
+            let (c, light) = figure::room(scene, style, columns, rows);
             (c, Some(light))
         }
         None => {
-            let mut c = Canvas::new(columns, ROWS);
+            let mut c = Canvas::new(columns, rows);
             c.gradient(0, c.h, &[BLACK, BLACK, DARKGRAY]);
             (c, None)
         }
     };
-    let you = face::standing(fighters.you.0, fighters.you.1).mirrored();
-    let foe = face::standing(fighters.foe.0, fighters.foe.1);
+    let you = face::standing(fighters.you.0, fighters.you.1, size).mirrored();
+    let foe = face::standing(fighters.foe.0, fighters.foe.1, size);
     let (you_lit, foe_lit) = (flashed(&you), flashed(&foe));
     let still = [Frame::default()];
     let frames = if frames.is_empty() { &still[..] } else { frames };
@@ -89,7 +101,7 @@ pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns:
         .map(|frame| {
             let mut canvas = room.clone();
             canvas.stamp(if frame.you.flash { &you_lit } else { &you }, frame.you.shift, CLEAR);
-            canvas.stamp(if frame.foe.flash { &foe_lit } else { &foe }, (columns - SIZE.0) as i32 + frame.foe.shift, CLEAR);
+            canvas.stamp(if frame.foe.flash { &foe_lit } else { &foe }, (columns - face_columns) as i32 + frame.foe.shift, CLEAR);
             if let Some(light) = &light {
                 figure::light(&mut canvas, light);
             }
@@ -117,7 +129,7 @@ fn flashed(figure: &Canvas) -> Canvas {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::face::Mood;
+    use crate::face::{Mood, SIZE, SMALL};
 
     fn person(name: &str, race: &str) -> Sitter {
         face::player(name, Some(race))
@@ -133,9 +145,9 @@ mod tests {
         let (calm, angry) = (Moment::default(), Moment { mood: Mood::Angry, hurt: 2, ..Moment::default() });
         let font = crate::ansi_art::CP437;
         for columns in [10, 50, 64, 73, 200] {
-            let art = paint(Some(&scene("woods")), Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, &angry) }, columns);
+            let art = paint(Some(&scene("woods")), Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, &angry) }, columns, Size::Full);
             assert_eq!(art.columns, columns.clamp(LEAST_COLUMNS, 160));
-            assert_eq!((art.rows, art.lines.len()), (ROWS, ROWS));
+            assert_eq!((art.rows, art.lines.len()), (SIZE.1, SIZE.1));
             assert!(art.lines.iter().flatten().all(|s| s.text.chars().all(|c| font.contains(c))));
         }
     }
@@ -144,7 +156,7 @@ mod tests {
     fn the_player_faces_the_foe() {
         let you = person("Ada", "Human");
         let calm = Moment::default();
-        let alone = face::standing(&you, &calm);
+        let alone = face::standing(&you, &calm, Size::Full);
         let mirrored = alone.mirrored();
         // The same face, left for right.
         for y in 0..alone.h {
@@ -154,8 +166,8 @@ mod tests {
         }
         // Laid on the place, the foe's side is the foe's.
         let foe = face::sitter_named("a goblin");
-        let art = paint(None, Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, &calm) }, 64);
-        let only_you = paint(None, Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&you, &calm) }, 64);
+        let art = paint(None, Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, &calm) }, 64, Size::Full);
+        let only_you = paint(None, Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&you, &calm) }, 64, Size::Full);
         assert_eq!(art.lines.len(), only_you.lines.len());
         assert_ne!(art, only_you);
     }
@@ -164,7 +176,7 @@ mod tests {
     fn hurt_and_mood_change_the_picture() {
         let (you, foe) = (person("Ada", "Elf"), face::sitter_named("an orc"));
         let calm = Moment::default();
-        let at = |m: &Moment| paint(Some(&scene("plains")), Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, m) }, 60);
+        let at = |m: &Moment| paint(Some(&scene("plains")), Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, m) }, 60, Size::Full);
         let fresh = at(&calm);
         assert_ne!(fresh, at(&Moment { hurt: 4, ..Moment::default() }));
         assert_ne!(fresh, at(&Moment { mood: Mood::Dead, ..Moment::default() }));
@@ -178,10 +190,10 @@ mod tests {
         let calm = Moment::default();
         let fighters = Fighters { you: (&you, &calm), foe: (&foe, &calm) };
         let room = scene("woods");
-        let still = paint(Some(&room), Style::Fantasy, &fighters, 64);
+        let still = paint(Some(&room), Style::Fantasy, &fighters, 64, Size::Full);
         // No frames is the one still.
-        assert_eq!(frames(Some(&room), Style::Fantasy, &fighters, 64, &[]), vec![still.clone()]);
-        let hit = |you: Pose, foe: Pose| frames(Some(&room), Style::Fantasy, &fighters, 64, &[Frame { you, foe }]).remove(0);
+        assert_eq!(frames(Some(&room), Style::Fantasy, &fighters, 64, &[], Size::Full), vec![still.clone()]);
+        let hit = |you: Pose, foe: Pose| frames(Some(&room), Style::Fantasy, &fighters, 64, &[Frame { you, foe }], Size::Full).remove(0);
         let jolted = hit(Pose::default(), Pose { shift: 1, flash: false });
         let flashed = hit(Pose { shift: 0, flash: true }, Pose::default());
         assert_ne!(jolted, still);
@@ -193,15 +205,42 @@ mod tests {
         let alone = {
             let none = Sitter { name: "nothing".into(), ..Sitter::default() };
             let f = Fighters { you: (&you, &calm), foe: (&none, &calm) };
-            frames(Some(&room), Style::Fantasy, &f, 64, &[Frame { foe: Pose { shift: SIZE.0 as i32, flash: false }, ..Frame::default() }]).remove(0)
+            frames(Some(&room), Style::Fantasy, &f, 64, &[Frame { foe: Pose { shift: SIZE.0 as i32, flash: false }, ..Frame::default() }], Size::Full).remove(0)
         };
         assert_eq!(gone, alone);
         // Each frame its own picture, in order.
         let slide: Vec<Frame> = (0..=4).rev().map(|shift| Frame { foe: Pose { shift, flash: false }, ..Frame::default() }).collect();
-        let played = frames(Some(&room), Style::Fantasy, &fighters, 64, &slide);
+        let played = frames(Some(&room), Style::Fantasy, &fighters, 64, &slide, Size::Full);
         assert_eq!(played.len(), 5);
         assert_eq!(played[4], still);
         assert_ne!(played[0], played[4]);
+    }
+
+    #[test]
+    fn small_on_the_phones_strip() {
+        let (you, foe) = (person("Ada", "Human"), face::sitter_named("a large wolf"));
+        let calm = Moment::default();
+        let fighters = Fighters { you: (&you, &calm), foe: (&foe, &calm) };
+        let font = crate::ansi_art::CP437;
+        for columns in [10, 48, 96] {
+            let art = paint(Some(&scene("woods")), Style::Fantasy, &fighters, columns, Size::Small);
+            assert_eq!(art.columns, columns.max(2 * SMALL.0));
+            assert_eq!((art.rows, art.lines.len()), (SMALL.1, SMALL.1));
+            assert!(art.lines.iter().flatten().all(|s| s.text.chars().all(|c| font.contains(c))));
+        }
+        // Not the big picture cut down: its own.
+        let big = paint(Some(&scene("woods")), Style::Fantasy, &fighters, 48, Size::Full);
+        let small = paint(Some(&scene("woods")), Style::Fantasy, &fighters, 48, Size::Small);
+        assert_ne!(big.lines[..SMALL.1], small.lines[..]);
+        // The moments show at this size too.
+        let at = |m: &Moment| paint(Some(&scene("plains")), Style::Fantasy, &Fighters { you: (&you, &calm), foe: (&foe, m) }, 48, Size::Small);
+        let fresh = at(&calm);
+        assert_ne!(fresh, at(&Moment { hurt: 4, ..Moment::default() }));
+        assert_ne!(fresh, at(&Moment { mood: Mood::Dead, ..Moment::default() }));
+        let slide: Vec<Frame> = (0..SMALL.0 as i32).rev().map(|shift| Frame { foe: Pose { shift, flash: false }, ..Frame::default() }).collect();
+        let played = frames(Some(&scene("plains")), Style::Fantasy, &fighters, 48, &slide, Size::Small);
+        assert_eq!(played.last(), Some(&at(&calm)));
+        assert_ne!(played[0], at(&calm));
     }
 
     #[test]
@@ -237,7 +276,28 @@ mod tests {
                 (Moment { mood: Mood::Angry, hurt: 2, ..Moment::default() }, Moment { mood: Mood::Pain, hurt: 4, ..Moment::default() }),
                 (Moment { hurt: 2, ..Moment::default() }, Moment { mood: Mood::Dead, hurt: 5, ..Moment::default() }),
             ] {
-                arts.push(paint(Some(&scene), Style::Fantasy, &Fighters { you: (&you, &mine), foe: (&foe, &theirs) }, 72));
+                arts.push(paint(Some(&scene), Style::Fantasy, &Fighters { you: (&you, &mine), foe: (&foe, &theirs) }, 72, Size::Full));
+            }
+        }
+        face::look::sheet(&arts, 3, &out);
+    }
+
+    /// The same fights as the phone's strip paints them, small.
+    /// `OUT=/tmp/strip.ppm cargo test fight_art::tests::show_small -- --ignored`.
+    #[test]
+    #[ignore]
+    fn show_small() {
+        let out = std::env::var("OUT").unwrap_or_else(|_| "strip.ppm".into());
+        let mut arts = Vec::new();
+        for (race, foe, terrain) in [("Human", "a large wolf", "woods"), ("Elf", "an orc", "hills"), ("Dwarf", "a giant spider", "cave"), ("Halfling", "a city guard", "city"), ("Gnome", "a skeleton", "stone"), ("Human", "a fire elemental", "rocky")] {
+            let you = face::player("Ada", Some(race));
+            let foe = face::sitter_named(foe);
+            for (mine, theirs) in [
+                (Moment { mood: Mood::Angry, ..Moment::default() }, Moment { mood: Mood::Angry, ..Moment::default() }),
+                (Moment { mood: Mood::Angry, hurt: 2, ..Moment::default() }, Moment { mood: Mood::Pain, hurt: 4, ..Moment::default() }),
+                (Moment { hurt: 2, ..Moment::default() }, Moment { mood: Mood::Dead, hurt: 5, ..Moment::default() }),
+            ] {
+                arts.push(paint(Some(&scene(terrain)), Style::Fantasy, &Fighters { you: (&you, &mine), foe: (&foe, &theirs) }, 48, Size::Small));
             }
         }
         face::look::sheet(&arts, 3, &out);

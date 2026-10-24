@@ -269,7 +269,8 @@ fn call(input: &[u8]) -> Result<Value, String> {
             let (you, foe, scene) = app.fighters(&s("foe"))?;
             let frames: Vec<crate::fight_art::Frame> = args.get("frames").cloned().filter(|f| !f.is_null()).map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
             let fighters = crate::fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) };
-            serde_json::to_value(crate::fight_art::frames(scene.as_ref(), style, &fighters, columns, &frames)).map_err(|e| e.to_string())
+            let size = if args.get("small").and_then(Value::as_bool).unwrap_or(false) { crate::face::Size::Small } else { crate::face::Size::Full };
+            serde_json::to_value(crate::fight_art::frames(scene.as_ref(), style, &fighters, columns, &frames, size)).map_err(|e| e.to_string())
         }
         "bestiary_item_art" => {
             let art = app.bestiary_thing(&s("key"))?.map(|t| crate::item_art::painted(&t));
