@@ -49,7 +49,10 @@ code as the Mac's; what differs:
 
 The tablet screen (`lib/formFactor.ts` `TABLET_SCREEN`, `tabletLayout`
 in `App.tsx`, `src/tablet.css`): upright only, played by touch, today in
-the web build (the iOS app is iPhone only). What differs:
+the web build (the iOS app is iPhone only). An iPhone in the web build
+gets it too (decided 2026-10-24): the phone screen is the iPhone app's.
+On a 390-point iPhone only the smallest text leaves the desk its 40
+columns (`tabletFit`'s `largest`). What differs:
 
 | Feature | iPad | Note |
 |---|---|---|
@@ -58,6 +61,7 @@ the web build (the iOS app is iPhone only). What differs:
 | Zoom | `maximum-scale=1, user-scalable=no` set at launch, Safari's `gesturestart` and two-finger `touchmove` stopped, `touch-action: pan-x pan-y` | iOS ignores the viewport's `user-scalable` for a pinch, hence the gesture events |
 | Orientation | `screen.orientation.lock("portrait")` where a browser allows it (none on iOS); otherwise a notice covers the screen held sideways | An iPad app would set `UISupportedInterfaceOrientations~ipad` |
 | Full screen | Left out | |
+| Installing | The web build's `manifest.webmanifest` and `apple-touch-icon` (`web/`, added by `vite.config.ts` `installable`): Share → Add to Home Screen, opening without Safari's bars. No service worker | Chrome and Edge's Install and Safari's Add to Dock on a computer, from the same manifest |
 
 The connection itself (`std::net::TcpStream`, `flate2`) is the same on
 every platform. Planned, add a row when each lands: saved passwords

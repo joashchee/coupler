@@ -1255,19 +1255,19 @@ impl Coupler {
     }
 
     pub fn bestiary_mobs(&self, query: &str) -> Result<String, String> {
-        Ok(json!(self.with_bestiary(|b, world| b.mobs(world, query))?).to_string())
+        Ok(json!(self.with_bestiary(|b, world| b.mobs(world, query).map(|rows| rows.into_iter().map(bestiary::MobRow::shown).collect::<Vec<_>>()))?).to_string())
     }
 
     pub fn bestiary_mob(&self, key: &str) -> Result<Option<bestiary::MobEntry>, String> {
-        self.with_bestiary(|b, world| b.mob_entry(world, key))
+        self.with_bestiary(|b, world| b.mob_entry(world, key).map(|e| e.map(bestiary::MobEntry::shown)))
     }
 
     pub fn bestiary_items(&self, query: &str) -> Result<String, String> {
-        Ok(json!(self.with_bestiary(|b, world| b.items(world, query))?).to_string())
+        Ok(json!(self.with_bestiary(|b, world| b.items(world, query).map(|rows| rows.into_iter().map(bestiary::ItemRow::shown).collect::<Vec<_>>()))?).to_string())
     }
 
     pub fn bestiary_item(&self, key: &str) -> Result<Option<bestiary::ItemEntry>, String> {
-        self.with_bestiary(|b, world| b.item_entry(world, key))
+        self.with_bestiary(|b, world| b.item_entry(world, key).map(|e| e.map(bestiary::ItemEntry::shown)))
     }
 
     // ---- The game's sounds, Coupler's own and the creatures' (soundbank.rs) ----

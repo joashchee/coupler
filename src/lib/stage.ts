@@ -84,6 +84,8 @@ export type TabletTextSize = (typeof TABLET_TEXT_SIZES)[number];
 export interface TabletFit {
   /** The upper desk's text size, its whole cells across and down, and where it starts across (centered on what's left over). */
   text: TabletTextSize;
+  /** The largest text size that still leaves the desk its fewest columns: on an iPhone (the web build's), the smallest only. */
+  largest: TabletTextSize;
   columns: number;
   rows: number;
   left: number;
@@ -94,11 +96,14 @@ export interface TabletFit {
   sideways: boolean;
 }
 
-/** The tablet's two stages in a frame `width` by `height` points. */
-export function tabletFit(width: number, height: number, text: TabletTextSize): TabletFit {
+/** The tablet's two stages in a frame `width` by `height` points, the text at `asked` or the largest under it that fits. */
+export function tabletFit(width: number, height: number, asked: TabletTextSize): TabletFit {
+  const fits = TABLET_TEXT_SIZES.filter((size) => size === 1 || width / (CELL_WIDTH * size) >= TABLET_LEAST_COLUMNS);
+  const largest = fits[fits.length - 1];
+  const text = Math.min(asked, largest) as TabletTextSize;
   const lowerScale = width / TABLET_LOWER_WIDTH;
   const lowerTop = Math.max(0, height - TABLET_LOWER_HEIGHT * lowerScale);
   const columns = Math.max(TABLET_LEAST_COLUMNS, Math.floor(width / (CELL_WIDTH * text)));
   const rows = Math.max(TABLET_LEAST_ROWS, Math.floor(lowerTop / (CELL_HEIGHT * text)));
-  return { text, columns, rows, left: Math.max(0, (width - columns * CELL_WIDTH * text) / 2), lowerScale, lowerTop, sideways: width > height };
+  return { text, largest, columns, rows, left: Math.max(0, (width - columns * CELL_WIDTH * text) / 2), lowerScale, lowerTop, sideways: width > height };
 }

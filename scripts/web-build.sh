@@ -37,6 +37,9 @@ const headers = fs
   .replace("{{STYLE_HASHES}}", hashes("style"));
 fs.writeFileSync("dist-web/_headers", headers);
 JS
+# Installable as an app (vite.config.ts, `installable`).
+cp web/manifest.webmanifest dist-web/
+cp -R web/icons dist-web/
 
 if [[ -d web-mirror ]]; then
   mkdir -p dist-web/mirror

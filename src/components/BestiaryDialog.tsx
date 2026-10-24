@@ -6,7 +6,8 @@
  * name, a race or material, or an area. A long list is cut short with the
  * full count above it, as in the hooks list.
  *
- * Each row: the name, its race or level in short, the areas it's been
+ * Each row: the name in the game's colors on black, as the game output
+ * shows it (CoffeeMUD's `^` codes, read by `ansi::caret_line`), its race or level in short, the areas it's been
  * seen in, then Show…, which opens everything known of it over the list,
  * a fact a line (lib/bestiary.ts), and its picture by Coupler's painter
  * beside them, 200 by 192 (25 by 12 cells): a creature's face (src-tauri/src/face.rs: its
@@ -24,6 +25,7 @@
  */
 import { memo, useCallback, useEffect, useId, useState, type KeyboardEvent } from "react";
 import * as bestiary from "../lib/bestiary";
+import { loadDisplay } from "../lib/display";
 import * as mud from "../lib/mud";
 import { Dialog } from "./Dialog";
 
@@ -49,6 +51,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 interface Row {
   key: string;
   name: string;
+  /** The name in the game's colors, drawn on black as the game output is. */
+  styled: mud.Line;
   summary: string;
   areas: string;
 }
@@ -62,13 +66,15 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
   /** The key of the entry shown, and what's known of it. */
   const [showing, setShowing] = useState<string | null>(null);
   const [entry, setEntry] = useState<{ name: string; facts: string[]; picture: mud.AnsiArt | null } | null>(null);
+  /** The names' colors as the player sees the game's (gear → Display…). */
+  const colors = open ? loadDisplay().colors : "game";
 
   const read = useCallback(() => {
     const areas = (a: string[]) => a.join(", ");
     const listed =
       tab === "creatures"
-        ? mud.bestiaryMobs(query).then((r) => r.map((m) => ({ key: m.key, name: m.name, summary: bestiary.mobSummary(m), areas: areas(m.areas) })))
-        : mud.bestiaryItems(query).then((r) => r.map((i) => ({ key: i.key, name: i.name, summary: bestiary.itemSummary(i), areas: areas(i.areas) })));
+        ? mud.bestiaryMobs(query).then((r) => r.map((m) => ({ key: m.key, name: m.name, styled: m.styled, summary: bestiary.mobSummary(m), areas: areas(m.areas) })))
+        : mud.bestiaryItems(query).then((r) => r.map((i) => ({ key: i.key, name: i.name, styled: i.styled, summary: bestiary.itemSummary(i), areas: areas(i.areas) })));
     listed.then(setRows).catch((e) => onError(String(e)));
   }, [tab, query, onError]);
 
@@ -211,7 +217,18 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
           {open &&
             shown.map((r) => (
               <li key={r.key} className="bestiary-row">
-                <span className="hook-key">{r.name}</span>
+                <span className="hook-key bestiary-name">
+                  {r.styled.length === 0
+                    ? r.name
+                    : r.styled.map((span, i) => {
+                        const { color, background } = mud.spanColors(span, colors);
+                        return (
+                          <span key={i} style={{ color, background }}>
+                            {span.text}
+                          </span>
+                        );
+                      })}
+                </span>
                 <span className="hook-value">{r.summary}</span>
                 <span className="hook-value">
                   <span className="sr-only">Found in </span>

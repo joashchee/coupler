@@ -657,6 +657,7 @@
    known of one is a fact a line, 20 rows scrolling inside the frame. */
 :root[data-theme="ansiapps"] .hooks-head.bestiary-row,
 :root[data-theme="ansiapps"] .hooks-list.bestiary-list li { grid-template-columns: 280px 160px minmax(0, 1fr) 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.bestiary-list .bestiary-name { background: var(--dos-black); color: var(--dos-lightgray); }
 :root[data-theme="ansiapps"] .bestiary-facts { margin: 16px 0 0; height: 320px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
 :root[data-theme="ansiapps"] .bestiary-facts li + li { margin-top: 0; }
 :root[data-theme="ansiapps"] .bestiary-entry .bestiary-facts { height: 400px; }

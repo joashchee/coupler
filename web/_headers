@@ -7,7 +7,7 @@
 # make something work; fix the thing instead.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval' {{SCRIPT_HASHES}}; style-src 'self' {{STYLE_HASHES}}; img-src 'self' blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' wss://coffeemud.net; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'wasm-unsafe-eval' {{SCRIPT_HASHES}}; style-src 'self' {{STYLE_HASHES}}; img-src 'self' blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' wss://coffeemud.net; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
@@ -22,6 +22,10 @@
 
 /mirror/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The install manifest's name and icons can change with a release.
+/manifest.webmanifest
+  Cache-Control: no-cache
 
 # The mirror's list of triggers and files changes with each publish.
 /mirror.json

@@ -8,7 +8,7 @@ use std::cell::{Cell, RefCell};
 
 use serde::{Deserialize, Serialize};
 
-use crate::bestiary::{narrow, race_in_name, race_named, seems, Counted, Creature, Fact, ItemEntry, ItemRow, MobArea, MobEntry, MobRow};
+use crate::bestiary::{item_key, item_name, narrow, race_in_name, race_named, seems, Counted, Creature, Fact, ItemEntry, ItemRow, MobArea, MobEntry, MobRow};
 use crate::senses::letters_and_digits;
 
 /// A `mobs` row.
@@ -163,16 +163,23 @@ impl Tables {
         self.mobs.len() - 1
     }
 
+    /// An item's row (a bundle by what it holds, `item_name`), its name in
+    /// the game's colors once one comes.
     fn item(&mut self, world: &str, name: &str, at: i64) -> usize {
-        let key = letters_and_digits(name);
+        let name = item_name(name);
+        let key = item_key(&name);
         if let Some(i) = self.items.iter().position(|m| m.world == world && m.key == key) {
-            self.items[i].last_seen = at;
+            let row = &mut self.items[i];
+            row.last_seen = at;
+            if name.contains('^') && !row.name.contains('^') {
+                row.name = name;
+            }
             return i;
         }
         self.items.push(Item {
             world: world.to_string(),
             key,
-            name: name.to_string(),
+            name,
             level_low: None,
             level_high: None,
             weight_low: None,
@@ -184,6 +191,81 @@ impl Tables {
             last_seen: at,
         });
         self.items.len() - 1
+    }
+
+    /// Kept before an item's key left its colors out and a bundle its
+    /// weight (`item_key`): the desktop's `rekey_items`, row by row.
+    /// Whether anything changed.
+    fn rekey_items(&mut self) -> bool {
+        let moves: Vec<(String, String, String, String)> = self
+            .items
+            .iter()
+            .filter_map(|i| {
+                let (to, kept) = (item_key(&i.name), item_name(&i.name));
+                (to != i.key || kept != i.name).then(|| (i.world.clone(), i.key.clone(), to, kept))
+            })
+            .collect();
+        let changed = !moves.is_empty();
+        for (world, from, to, name) in moves {
+            let at = self.items.iter().position(|i| i.world == world && i.key == from).expect("listed above");
+            if from == to {
+                self.items[at].name = name;
+                continue;
+            }
+            let mut old = self.items.remove(at);
+            match self.items.iter_mut().find(|i| i.world == world && i.key == to) {
+                Some(row) => {
+                    let low = |a: Option<i64>, b: Option<i64>| a.into_iter().chain(b).min();
+                    let high = |a: Option<i64>, b: Option<i64>| a.into_iter().chain(b).max();
+                    if name.contains('^') && !row.name.contains('^') {
+                        row.name = name;
+                    }
+                    row.level_low = low(row.level_low, old.level_low);
+                    row.level_high = high(row.level_high, old.level_high);
+                    row.weight_low = low(row.weight_low, old.weight_low);
+                    row.weight_high = high(row.weight_high, old.weight_high);
+                    row.material = row.material.take().or(old.material);
+                    row.description = row.description.take().or(old.description);
+                    row.container |= old.container;
+                    row.first_seen = row.first_seen.min(old.first_seen);
+                    row.last_seen = row.last_seen.max(old.last_seen);
+                }
+                None => {
+                    old.key = to.clone();
+                    old.name = name;
+                    self.items.push(old);
+                }
+            }
+            for (w, k, aura) in std::mem::take(&mut self.item_auras) {
+                let k = if w == world && k == from { to.clone() } else { k };
+                if !self.item_auras.iter().any(|(w2, k2, a2)| *w2 == w && *k2 == k && *a2 == aura) {
+                    self.item_auras.push((w, k, aura));
+                }
+            }
+            for mut area in std::mem::take(&mut self.item_areas) {
+                if area.world == world && area.key == from {
+                    area.key = to.clone();
+                }
+                match self.item_areas.iter_mut().find(|a| a.world == area.world && a.key == area.key && a.area == area.area) {
+                    Some(a) => {
+                        a.seen += area.seen;
+                        a.last_seen = a.last_seen.max(area.last_seen);
+                    }
+                    None => self.item_areas.push(area),
+                }
+            }
+            for mut held in std::mem::take(&mut self.mob_items) {
+                if held.world == world && held.item == from {
+                    held.item = to.clone();
+                }
+                match self.mob_items.iter_mut().find(|m| m.world == held.world && m.key == held.key && m.item == held.item && m.how == held.how && m.place == held.place) {
+                    Some(m) if m.how == "carry" => m.count = m.count.max(held.count),
+                    Some(m) => m.count += held.count,
+                    None => self.mob_items.push(held),
+                }
+            }
+        }
+        changed
     }
 
     fn mob_area(&mut self, world: &str, key: &str, area: Option<&str>, at: i64) -> Option<usize> {
@@ -226,8 +308,9 @@ impl Bestiary {
         if json.is_empty() {
             return Ok(Bestiary::default());
         }
-        let t: Tables = serde_json::from_str(json).map_err(|e| format!("The Bestiary couldn't be read. ({e})"))?;
-        Ok(Bestiary { t: RefCell::new(t), changed: Cell::new(false) })
+        let mut t: Tables = serde_json::from_str(json).map_err(|e| format!("The Bestiary couldn't be read. ({e})"))?;
+        let changed = t.rekey_items();
+        Ok(Bestiary { t: RefCell::new(t), changed: Cell::new(changed) })
     }
 
     /// The Bestiary as JSON for the page to keep; it's then unchanged.
@@ -447,7 +530,7 @@ impl Bestiary {
         newest(&mut found, |m| m.last_seen);
         Ok(found
             .into_iter()
-            .map(|m| MobRow { areas: Self::mob_areas_of(&t, world, &m.key), key: m.key.clone(), name: m.name.clone(), race: m.race.clone(), deaths: m.deaths, last_seen: m.last_seen })
+            .map(|m| MobRow { areas: Self::mob_areas_of(&t, world, &m.key), key: m.key.clone(), name: m.name.clone(), styled: Vec::new(), race: m.race.clone(), deaths: m.deaths, last_seen: m.last_seen })
             .collect())
     }
 
@@ -538,6 +621,7 @@ impl Bestiary {
                 areas: Self::item_areas_of(&t, world, &i.key).into_iter().map(|a| a.area.clone()).collect(),
                 key: i.key.clone(),
                 name: i.name.clone(),
+                styled: Vec::new(),
                 level_low: i.level_low,
                 level_high: i.level_high,
                 last_seen: i.last_seen,
@@ -583,5 +667,33 @@ impl Bestiary {
             butchered_from: Self::holders(&t, world, key, "butcher"),
             auras: t.item_auras.iter().filter(|(w, k, _)| w == world && k == key).map(|(_, _, a)| a.clone()).collect(),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn items_kept_before_are_made_one() {
+        let w = "coffeemud";
+        let mut t = Tables::default();
+        // As kept before: each bundle its own, the colors' letters in the key.
+        for (key, name, seen) in [("a25oakbundle", "a 25# oak bundle", 2), ("a3oakbundle", "a 3# oak bundle", 3), ("gagreenpotion", "^ga green potion^?", 1)] {
+            t.item(w, name, seen);
+            let row = t.items.last_mut().unwrap();
+            (row.key, row.name) = (key.into(), name.into());
+            t.item_areas.push(ItemArea { world: w.into(), key: key.into(), area: "Midgaard".into(), seen: seen as u32, last_seen: seen });
+            t.mob_items.push(MobItem { world: w.into(), key: "anorc".into(), item: key.into(), how: "drop".into(), place: String::new(), count: 1 });
+        }
+        let b = Bestiary::from_json(&serde_json::to_string(&t).unwrap()).unwrap();
+        assert!(b.changed());
+        let rows = b.items(w, "").unwrap();
+        let keys: Vec<(&str, &str)> = rows.iter().map(|r| (r.key.as_str(), r.name.as_str())).collect();
+        assert_eq!(keys, [("anoakbundle", "an oak bundle"), ("agreenpotion", "^ga green potion^?")]);
+        let bundle = b.item_entry(w, "anoakbundle").unwrap().unwrap();
+        assert_eq!((bundle.areas[0].count, bundle.dropped_by[0].count, bundle.first_seen, bundle.last_seen), (5, 2, 2, 3));
+        let again = Bestiary::from_json(&b.to_json()).unwrap();
+        assert!(!again.changed());
     }
 }

@@ -571,6 +571,8 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
    it's found, then Show. What's known of one is a fact a line. */
 .hooks-head.bestiary-row,
 .hooks-list.bestiary-list li { display: grid; grid-template-columns: 280px 160px minmax(0, 1fr) 64px; gap: 0 12px; align-items: start; }
+/* The name as the game output shows it: its colors on black. */
+.hooks-list.bestiary-list .bestiary-name { background: #000000; color: #aaaaaa; }
 .bestiary-facts { list-style: none; margin: 10px 0 0; padding: 0; height: 320px; overflow-y: auto; font-size: 13px; line-height: 1.5; color: var(--text); user-select: text; }
 .bestiary-facts li + li { margin-top: 4px; }
 .bestiary-entry { display: flex; gap: 16px; align-items: flex-start; }

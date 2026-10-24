@@ -1175,19 +1175,19 @@ impl Session {
     }
 
     pub fn bestiary_mobs(&self, app: &AppHandle, query: &str) -> Result<Vec<bestiary::MobRow>, String> {
-        self.with_bestiary(app, |b, world| b.mobs(world, query))
+        self.with_bestiary(app, |b, world| b.mobs(world, query).map(|rows| rows.into_iter().map(bestiary::MobRow::shown).collect::<Vec<_>>()))
     }
 
     pub fn bestiary_mob(&self, app: &AppHandle, key: &str) -> Result<Option<bestiary::MobEntry>, String> {
-        self.with_bestiary(app, |b, world| b.mob_entry(world, key))
+        self.with_bestiary(app, |b, world| b.mob_entry(world, key).map(|e| e.map(bestiary::MobEntry::shown)))
     }
 
     pub fn bestiary_items(&self, app: &AppHandle, query: &str) -> Result<Vec<bestiary::ItemRow>, String> {
-        self.with_bestiary(app, |b, world| b.items(world, query))
+        self.with_bestiary(app, |b, world| b.items(world, query).map(|rows| rows.into_iter().map(bestiary::ItemRow::shown).collect::<Vec<_>>()))
     }
 
     pub fn bestiary_item(&self, app: &AppHandle, key: &str) -> Result<Option<bestiary::ItemEntry>, String> {
-        self.with_bestiary(app, |b, world| b.item_entry(world, key))
+        self.with_bestiary(app, |b, world| b.item_entry(world, key).map(|e| e.map(bestiary::ItemEntry::shown)))
     }
 
     /// Creatures' cries, each recorded as its `coupler.creature` pair and

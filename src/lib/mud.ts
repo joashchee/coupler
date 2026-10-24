@@ -324,7 +324,9 @@ export const journalList = (book: Book, query: string, who: string | null) => in
 /** A creature in the Bestiary's list. */
 export interface MobRow {
   key: string;
+  /** The name in plain words; `styled` is it in the game's colors (CoffeeMUD's `^` codes, read in Rust). */
   name: string;
+  styled: Line;
   race: string | null;
   /** The areas it's been seen in, the latest first. */
   areas: string[];
@@ -381,7 +383,9 @@ export interface MobEntry {
 /** An item in the list. */
 export interface ItemRow {
   key: string;
+  /** The name in plain words; `styled` is it in the game's colors (CoffeeMUD's `^` codes, read in Rust). */
   name: string;
+  styled: Line;
   levelLow: number | null;
   levelHigh: number | null;
   areas: string[];

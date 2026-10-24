@@ -185,8 +185,9 @@ pub struct Step {
 }
 
 /// CoffeeMUD's own color codes (`^w`, `^#123`, `^|123`, `^^`) and ANSI
-/// escapes can ride along in names. The map keeps plain words.
-fn plain(text: &str) -> String {
+/// escapes can ride along in names. The map keeps plain words, and the
+/// Bestiary's lists show them (`bestiary.rs`).
+pub(crate) fn plain(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {

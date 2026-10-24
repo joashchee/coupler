@@ -72,6 +72,7 @@ use std::time::Duration;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::ansi::{caret_line, Line};
 use crate::clock::Instant;
 pub use crate::bestiary_store::Bestiary;
 
@@ -1130,6 +1131,32 @@ fn coins(item: &str) -> String {
     }
 }
 
+/// What an item is kept as: a bundle by what it holds, not its weight
+/// ("a 25# oak bundle" is "an oak bundle", "a 12# pool of water" "a pool
+/// of water": `RawCMaterial.adjustResourceName`), the rest as the game
+/// names it, colors and all.
+pub fn item_name(name: &str) -> String {
+    let plain = crate::mapper::plain(name);
+    let mut words = plain.split(' ');
+    let (Some(article), Some(weight)) = (words.next(), words.next()) else { return name.trim().to_string() };
+    let rest: Vec<&str> = words.collect();
+    let weighed = weight.strip_suffix('#').is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    let bundle = rest.last() == Some(&"bundle") || rest.first() == Some(&"pool");
+    if !matches!(article.to_lowercase().as_str(), "a" | "an") || !weighed || !bundle || rest.len() < 2 {
+        return name.trim().to_string();
+    }
+    let rest = rest.join(" ");
+    let an = rest.starts_with(|c: char| "aeiouAEIOU".contains(c));
+    format!("{} {rest}", if an { "an" } else { "a" })
+}
+
+/// An item's key: its kept name's letters and digits, its colors left out,
+/// so the name GMCP sends (`^ga green potion^?`) and the one a line
+/// prints are the same item.
+pub fn item_key(name: &str) -> String {
+    crate::senses::letters_and_digits(&crate::mapper::plain(&item_name(name)))
+}
+
 // ---- What's kept (bestiary_store.rs) ----
 
 /// A creature in the list.
@@ -1137,7 +1164,9 @@ fn coins(item: &str) -> String {
 #[serde(rename_all = "camelCase")]
 pub struct MobRow {
     pub key: String,
+    /// The name in plain words; `styled` is it in the game's colors.
     pub name: String,
+    pub styled: Line,
     pub race: Option<String>,
     /// The areas it's been seen in.
     pub areas: Vec<String>,
@@ -1205,7 +1234,9 @@ pub struct MobEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ItemRow {
     pub key: String,
+    /// The name in plain words; `styled` is it in the game's colors.
     pub name: String,
+    pub styled: Line,
     pub level_low: Option<i64>,
     pub level_high: Option<i64>,
     pub areas: Vec<String>,
@@ -1238,6 +1269,60 @@ pub struct ItemEntry {
     pub butchered_from: Vec<Counted>,
     /// What's been seen after its name: "glowing", "magical aura", "floating".
     pub auras: Vec<String>,
+}
+
+/// A name as it's kept (colors and all) in plain words, for the rows'
+/// and entries' names.
+fn plain(name: &mut String) {
+    if name.contains(['^', '\u{1b}']) {
+        *name = crate::mapper::plain(name);
+    }
+}
+
+fn plain_all(rows: &mut [Counted]) {
+    for row in rows {
+        plain(&mut row.name);
+    }
+}
+
+impl MobRow {
+    /// As the list shows it: the name in its colors and in plain words.
+    pub fn shown(mut self) -> Self {
+        self.styled = caret_line(&self.name);
+        plain(&mut self.name);
+        self
+    }
+}
+
+impl ItemRow {
+    /// As the list shows it: the name in its colors and in plain words.
+    pub fn shown(mut self) -> Self {
+        self.styled = caret_line(&self.name);
+        plain(&mut self.name);
+        self
+    }
+}
+
+impl MobEntry {
+    /// Every name in it in plain words, for its facts and its picture.
+    pub fn shown(mut self) -> Self {
+        plain(&mut self.name);
+        for list in [&mut self.drops, &mut self.wears, &mut self.carried, &mut self.butchered] {
+            plain_all(list);
+        }
+        self
+    }
+}
+
+impl ItemEntry {
+    /// Every name in it in plain words, for its facts and its picture.
+    pub fn shown(mut self) -> Self {
+        plain(&mut self.name);
+        for list in [&mut self.dropped_by, &mut self.worn_by, &mut self.carried_by, &mut self.butchered_from] {
+            plain_all(list);
+        }
+        self
+    }
 }
 
 /// Narrows a range by another: where they overlap, else the newer (a
@@ -1590,6 +1675,33 @@ mod tests {
         assert_eq!(reader.target("sword"), None);
         reader.typed("look at guard unobtrusively", Instant::now());
         assert_eq!(reader.looking.map(|l| l.name).as_deref(), Some("a city guard"));
+    }
+
+    #[test]
+    fn bundles_by_what_they_hold() {
+        assert_eq!(item_name("a 25# oak bundle"), "an oak bundle");
+        assert_eq!(item_name("an 8# iron ore bundle"), "an iron ore bundle");
+        assert_eq!(item_name("a 12# pool of water"), "a pool of water");
+        assert_eq!(item_name("a bundle of oak"), "a bundle of oak");
+        assert_eq!(item_name("a 25# sword"), "a 25# sword");
+        assert_eq!(item_name("^ga green potion^?"), "^ga green potion^?");
+        assert_eq!(item_key("^ga green potion^?"), item_key("a green potion"));
+    }
+
+    #[test]
+    fn one_entry_for_a_bundle_and_for_a_name_in_colors() {
+        let b = Bestiary::in_memory().unwrap();
+        let w = "coffeemud";
+        for (n, name) in ["a 25# oak bundle", "a 3# oak bundle", "a green potion", "^ga green potion^?", "a green potion"].iter().enumerate() {
+            b.record(w, Some("Midgaard"), &Fact::ItemSeen { name: name.to_string(), container: false }, 1_000 * n as i64).unwrap();
+        }
+        let rows: Vec<ItemRow> = b.items(w, "").unwrap().into_iter().map(ItemRow::shown).collect();
+        let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["a green potion", "an oak bundle"]);
+        // The colors the game gave, once it gave them.
+        assert_eq!(rows[0].styled[0].style.fg, Some(crate::ansi::Color::Index { index: 10 }));
+        let entry = b.item_entry(w, &rows[1].key).unwrap().unwrap();
+        assert_eq!(entry.areas[0].count, 2);
     }
 
     #[test]

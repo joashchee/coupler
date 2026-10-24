@@ -893,13 +893,13 @@ function App() {
   }, [tablet]);
   const changeTabletText = useCallback(
     (by: 1 | -1) => {
-      const next = stepTabletText(tabletText, by);
-      if (next === tabletText) return false;
+      const next = stepTabletText(tablet.text, by);
+      if (next === tablet.text || next > tablet.largest) return false;
       storeTabletText(next);
       setTabletText(next);
       return true;
     },
-    [tabletText],
+    [tablet.text, tablet.largest],
   );
 
   const append = useCallback((added: TermLine[]) => {
@@ -1570,6 +1570,19 @@ function App() {
     },
     [narrated],
   );
+  /**
+   * A say key's answer, heard and seen: said (and in the status bar, as
+   * `sayNow`) and written in the game output as Coupler's own line, so a
+   * command the player gave always shows and sounds. Not given to the
+   * screen reader again: the status bar already was.
+   */
+  const sayTold = useCallback(
+    (text: string) => {
+      sayNow(text);
+      append([{ id: nextLineId.current++, kind: "note", line: [{ text: `*** ${text}` }] }]);
+    },
+    [sayNow, append],
+  );
 
   // CoffeeMUD hangs up on a character being made (or an account menu)
   // after 10 minutes without an answer; Coupler's keep-alive (session.rs)
@@ -1593,8 +1606,8 @@ function App() {
   const { touchLog } = journal;
   const sayUnheard = useCallback(() => {
     touchLog();
-    sayNow(describeUnheard(journal.unheard));
-  }, [sayNow, journal.unheard, touchLog]);
+    sayTold(describeUnheard(journal.unheard));
+  }, [sayTold, journal.unheard, touchLog]);
   const { playUnheard: playJournal } = journal;
   const playUnheard = useCallback(() => {
     playJournal("journal").then(
@@ -1603,9 +1616,9 @@ function App() {
     );
   }, [playJournal]);
 
-  const whereAmI = useCallback(() => sayNow(mud.describeRoom(snapshot?.room ?? null)), [sayNow, snapshot]);
-  const sayVitals = useCallback(() => sayNow(mud.describeVitals(vitals)), [sayNow, vitals]);
-  const sayOpponent = useCallback(() => sayNow(mud.describeOpponent(opponent)), [sayNow, opponent]);
+  const whereAmI = useCallback(() => sayTold(mud.describeRoom(snapshot?.room ?? null)), [sayTold, snapshot]);
+  const sayVitals = useCallback(() => sayTold(mud.describeVitals(vitals)), [sayTold, vitals]);
+  const sayOpponent = useCallback(() => sayTold(mud.describeOpponent(opponent)), [sayTold, opponent]);
   /**
    * Who's online. Before any WHO was read, it's asked now (its reply
    * hidden, as Coupler's own) and said once it's in, which also starts
@@ -1622,9 +1635,9 @@ function App() {
           report = await mud.whoNow();
         }
       }
-      sayNow(mud.describeWho(report));
+      sayTold(mud.describeWho(report));
     })().catch((e) => setError(String(e)));
-  }, [sayNow]);
+  }, [sayNow, sayTold]);
   /** What the game said since the last command: its words, not its art, the last 15 lines at most. */
   const sayRecent = useCallback(() => {
     const said = linesRef.current
@@ -2804,10 +2817,10 @@ function App() {
               {/* The tablet's text size: the upper desk's cells (lib/tablet.ts). */}
               {TABLET_SCREEN && (
                 <>
-                  <button type="button" className="menu-item" data-testid="tablet-text-larger" disabled={stepTabletText(tabletText, 1) === tabletText} onClick={() => changeTabletText(1)}>
+                  <button type="button" className="menu-item" data-testid="tablet-text-larger" disabled={stepTabletText(tablet.text, 1) === tablet.text || stepTabletText(tablet.text, 1) > tablet.largest} onClick={() => changeTabletText(1)}>
                     <span>{keys.keys("Larger Text (Cmd+Plus)")}</span>
                   </button>
-                  <button type="button" className="menu-item" data-testid="tablet-text-smaller" disabled={stepTabletText(tabletText, -1) === tabletText} onClick={() => changeTabletText(-1)}>
+                  <button type="button" className="menu-item" data-testid="tablet-text-smaller" disabled={stepTabletText(tablet.text, -1) === tablet.text} onClick={() => changeTabletText(-1)}>
                     <span>{keys.keys("Smaller Text (Cmd+Minus)")}</span>
                   </button>
                 </>
@@ -3750,7 +3763,7 @@ function App() {
     {/* Upright only: held sideways, the tablet screen waits under this. */}
     {TABLET_SCREEN && tablet.sideways && (
       <div className="tablet-sideways" role="alert" data-testid="tablet-sideways">
-        <p>Turn the tablet upright to play.</p>
+        <p>Turn the screen upright to play.</p>
       </div>
     )}
     </div>

@@ -50,6 +50,9 @@ html[data-form="phone"] .gear-menu .menu-item { min-height: 48px; padding-top: 1
 :root[data-form="phone"] .terminal { width: 384px; }
 :root[data-theme="ansiapps"][data-form="phone"] .terminal { width: 384px; padding: 0 8px; }
 html[data-form="phone"] .terminal::-webkit-scrollbar { display: none; }
+/* Every box's scroll bar is Coupler's (lib/scrollbars.ts), shown whether
+   or not it's being scrolled; the browser's give way. */
+html[data-form="phone"] ::-webkit-scrollbar { display: none; }
 
 /* The keys (components/PhoneKeys.tsx): the touch pad's eight buttons of
    six cells by three rows, or the section's own, as many cells as each

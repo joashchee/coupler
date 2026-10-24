@@ -187,7 +187,10 @@ and its order is in the roadmap's phase 2.
   `xcodegen generate` there after changing it). `coupler.phone` = `on`
   shows it on a tablet or the dev build on the Mac.
 - **The iPad** (begun 2026-10-23, `lib/formFactor.ts`
-  `TABLET_SCREEN`): every tablet, upright only, today in the web build.
+  `TABLET_SCREEN`): every tablet, upright only, today in the web build,
+  and an iPhone in the web build (`WEB_IPHONE`, decided 2026-10-24; the
+  phone screen is the iPhone app's; the text sizes that fit,
+  `tabletFit`'s `largest`).
   Two stages (`lib/stage.ts` `tabletFit`): above, Workshop's desk
   (`tabletLayout` in `App.tsx`, kept under the `tablet:` layout scope),
   in whole cells of the player's text size (`lib/tablet.ts`,
@@ -536,6 +539,12 @@ and its order is in the roadmap's phase 2.
   player's ART on `room.info.id` is the Scene's `art` and shows in
   place of the painting. Not yet: the picture cache, the worker,
   brought models.
+- **Scroll bars**: a touch screen's browser shows its own only while
+  scrolling, so `src/lib/scrollbars.ts` (the phone and tablet screens)
+  draws one at the right edge of every box with more than it shows, on
+  a layer of its own; the desktop's are the themes' `::-webkit-scrollbar`.
+- **A say key answers seen and heard** (`sayTold` in `App.tsx`): said,
+  in the status bar, and written in the game output as a `***` line.
 - **Seeing the game** (low vision, deaf and sighted players):
   `src/lib/display.ts` (gear → Display…, `DisplayDialog.tsx`,
   `coupler.display`): game colors as sent, lifted to 4.5:1
@@ -671,7 +680,11 @@ and its order is in the roadmap's phase 2.
   EXAMINE's "is a level N item", and butchering ("You manage to skin and
   chop up the body of X.", then the room's `room.items.list` brings
   materials named by the race's resources: `butchered`, the race as
-  the game says it, `Fact::Butchered`). The race until then is read from the
+  the game says it, `Fact::Butchered`). Items are kept by `item_name` (a
+  bundle by what it holds, not its weight) and keyed by `item_key` (the
+  name's `^` color codes left out); `rekey_items` joins entries kept
+  before. The lists show each name in its colors on black
+  (`ansi::caret_line`, `MobRow`/`ItemRow` `shown`). The race until then is read from the
   name (`race_in_name`, `races.tsv`); abilities by the lines they print
   when used (`abilities.tsv`, only from each ability's `invoke`); both
   tables made by `scripts/coffeemud-bestiary.py` from the snapshot
@@ -899,8 +912,12 @@ and its order is in the roadmap's phase 2.
   how a GMCP message becomes pairs (`hooks.rs` re-exports them).
   `src-tauri/src/clock.rs`: the `Instant` `speech.rs` and `daytime.rs`
   read. All three exist so the web build can share them.
-- **The web build** (coupler.ansiapps.com):
-  `src-web/`, a crate that includes the pure modules above by `#[path]`
+- **The web build** (coupler.ansiapps.com), installable as an app
+  as Fontastik and Cue are (Chrome's Install, Safari's Add to Dock and
+  Add to Home Screen): `web/manifest.webmanifest` and `web/icons/`
+  (made from `src-tauri/icons/icon.png`), linked by `vite.config.ts`'s
+  `installable` in web mode only, copied by `web-build.sh`; no service
+  worker. `src-web/`, a crate that includes the pure modules above by `#[path]`
   and adds its own `session.rs` (the desktop's without the socket, the
   threads, the hooks database and the voice cache), `journal_store.rs`
   and `bestiary_store.rs` (the desktop's SQLite as rows kept in JSON),

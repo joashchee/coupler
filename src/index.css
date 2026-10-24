@@ -47,7 +47,19 @@ body {
 
 h1, h2, p { margin: 0; }
 
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+/* Drawn all the time, not only while scrolling, so a box with more in it
+   says so (the ANSIapps theme's own in ansiapps-theme.css). */
+::-webkit-scrollbar { width: 10px; height: 10px; background: var(--panel-2); }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 4px; }
+
+/* A touch screen's scroll bars (lib/scrollbars.ts): the browser's show
+   only while scrolling there, so Coupler draws one at the right edge of
+   each box with more than it shows. */
+.touch-scrollbars { position: fixed; inset: 0; z-index: 3000; pointer-events: none; }
+.touch-scrollbar { position: fixed; background: var(--panel-2); }
+.touch-scrollbar-thumb { position: absolute; left: 0; right: 0; background: var(--muted); border-radius: 3px; }
+:root[data-theme="ansiapps"] .touch-scrollbar { background: var(--dos-cyan); }
+:root[data-theme="ansiapps"] .touch-scrollbar-thumb { background: var(--dos-black); border-radius: 0; }
 
 input:focus,
 textarea:focus,

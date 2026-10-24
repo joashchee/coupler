@@ -31,6 +31,10 @@ html[data-form="tablet"] button { -webkit-touch-callout: none; user-select: none
 html[data-form="tablet"] .movable.menu-bar[data-panel="menu"] { align-items: flex-start; }
 html[data-form="tablet"] .movable.menu-bar[data-panel="menu"] > h1 { height: auto; }
 
+/* The browser's scroll bars give way to Coupler's (lib/scrollbars.ts),
+   which show whether or not the box is being scrolled. */
+html[data-form="tablet"] ::-webkit-scrollbar { display: none; }
+
 /* Upright only: held sideways, this covers everything. */
 .tablet-sideways { position: fixed; inset: 0; z-index: 2000; background: var(--bg); color: var(--text); padding: 32px 16px; box-sizing: border-box; }
 .tablet-sideways p { margin: 0; line-height: 16px; }

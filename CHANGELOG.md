@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **The Bestiary's names in the game's colors** (2026-10-24): the Name
+  column is black, as the game output is, and each name is drawn in the
+  colors the game gave it (CoffeeMUD's `^` codes, which showed as
+  letters before). An item named in colors and the same item printed
+  plainly are now one entry.
+- **Bundles are one item** (2026-10-24): "a 25# oak bundle" and "a 3#
+  oak bundle" (and pools of a liquid) are kept as "an oak bundle", and
+  the entries kept before are joined when the Bestiary opens.
+- **The say keys answer on the screen too** (2026-10-24): Who, HP,
+  Where, Fight and the unheard count (the tablet's buttons and their
+  keyboard shortcuts) write their answer in the game output as well as
+  saying it, so whatever the player asks always shows and sounds.
+- **Scroll bars that show** (2026-10-24): on an iPad or iPhone, where
+  the browser shows its own only while scrolling, every box with more
+  than it shows has a bar at its right edge (the ways to play after
+  hanging up, the lists, the game output). On the desktop the modern
+  theme's bars show all the time, as the ANSIapps theme's did.
+
+- **Install the web build as an app** (2026-10-24): coupler.ansiapps.com
+  has a manifest and icons, so Chrome and Edge offer Install, Safari
+  Add to Dock, and an iPhone or iPad's Add to Home Screen opens it
+  without the browser's bars, with Coupler's icon and name.
+- **The web build on an iPhone plays on the tablet screen**
+  (2026-10-24): the game above and the command line with Coupler's own
+  keyboard and the controls below, never zooming, as on an iPad. Only
+  the smallest text fits an iPhone's width, so Larger Text is greyed
+  there. The iPhone app keeps the phone screen.
+
 ## 0.36.0 (2026-10-24)
 
 - **Portals, ships and caravans** (2026-10-24): what the room's exits

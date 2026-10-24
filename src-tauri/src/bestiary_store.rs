@@ -7,7 +7,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::bestiary::{narrow, race_in_name, race_named, seems, Counted, Creature, Fact, ItemEntry, ItemRow, MobArea, MobEntry, MobRow};
+use crate::bestiary::{item_key, item_name, narrow, race_in_name, race_named, seems, Counted, Creature, Fact, ItemEntry, ItemRow, MobArea, MobEntry, MobRow};
 use crate::senses::letters_and_digits;
 
 pub struct Bestiary {
@@ -83,7 +83,67 @@ impl Bestiary {
         if !columns.iter().any(|c| c == "auto_looked") {
             db.execute("ALTER TABLE mobs ADD COLUMN auto_looked INTEGER NOT NULL DEFAULT 0", []).map_err(failed)?;
         }
-        Ok(Bestiary { db })
+        let b = Bestiary { db };
+        b.rekey_items()?;
+        Ok(b)
+    }
+
+    /// Kept before an item's key left its colors out and a bundle its
+    /// weight (`item_key`): each item under its key now, the ones that
+    /// share it made one (seen in each area added up, the widest levels
+    /// and weights, what's known of either).
+    fn rekey_items(&self) -> Result<(), String> {
+        let db = &self.db;
+        let rows: Vec<(String, String, String)> =
+            db.prepare("SELECT world, key, name FROM items").and_then(|mut s| s.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()).map_err(failed)?;
+        let moves: Vec<_> = rows.into_iter().filter_map(|(world, key, name)| {
+            let (to, kept) = (item_key(&name), item_name(&name));
+            (to != key || kept != name).then_some((world, key, to, kept))
+        }).collect();
+        if moves.is_empty() {
+            return Ok(());
+        }
+        let tx = db.unchecked_transaction().map_err(failed)?;
+        for (world, from, to, name) in moves {
+            if from == to {
+                tx.execute("UPDATE items SET name = ?3 WHERE world = ?1 AND key = ?2", params![world, from, name]).map_err(failed)?;
+                continue;
+            }
+            tx.execute(
+                "INSERT INTO items (world, key, name, level_low, level_high, weight_low, weight_high, material, description, container, first_seen, last_seen)
+                 SELECT world, ?3, ?4, level_low, level_high, weight_low, weight_high, material, description, container, first_seen, last_seen
+                 FROM items WHERE world = ?1 AND key = ?2
+                 ON CONFLICT (world, key) DO UPDATE SET
+                     name = CASE WHEN instr(excluded.name, '^') > 0 AND instr(name, '^') = 0 THEN excluded.name ELSE name END,
+                     level_low = min(coalesce(level_low, excluded.level_low), coalesce(excluded.level_low, level_low)),
+                     level_high = max(coalesce(level_high, excluded.level_high), coalesce(excluded.level_high, level_high)),
+                     weight_low = min(coalesce(weight_low, excluded.weight_low), coalesce(excluded.weight_low, weight_low)),
+                     weight_high = max(coalesce(weight_high, excluded.weight_high), coalesce(excluded.weight_high, weight_high)),
+                     material = coalesce(material, excluded.material), description = coalesce(description, excluded.description),
+                     container = max(container, excluded.container),
+                     first_seen = min(first_seen, excluded.first_seen), last_seen = max(last_seen, excluded.last_seen)",
+                params![world, from, to, name],
+            )
+            .map_err(failed)?;
+            tx.execute("INSERT OR IGNORE INTO item_auras (world, key, aura) SELECT world, ?3, aura FROM item_auras WHERE world = ?1 AND key = ?2", params![world, from, to]).map_err(failed)?;
+            tx.execute(
+                "INSERT INTO item_areas (world, key, area, seen, last_seen) SELECT world, ?3, area, seen, last_seen FROM item_areas WHERE world = ?1 AND key = ?2 AND true
+                 ON CONFLICT (world, key, area) DO UPDATE SET seen = seen + excluded.seen, last_seen = max(last_seen, excluded.last_seen)",
+                params![world, from, to],
+            )
+            .map_err(failed)?;
+            tx.execute(
+                "INSERT INTO mob_items (world, key, item, how, place, count) SELECT world, key, ?3, how, place, count FROM mob_items WHERE world = ?1 AND item = ?2 AND true
+                 ON CONFLICT (world, key, item, how, place) DO UPDATE SET count = CASE WHEN how = 'carry' THEN max(count, excluded.count) ELSE count + excluded.count END",
+                params![world, from, to],
+            )
+            .map_err(failed)?;
+            for table in ["items", "item_auras", "item_areas"] {
+                tx.execute(&format!("DELETE FROM {table} WHERE world = ?1 AND key = ?2"), params![world, from]).map_err(failed)?;
+            }
+            tx.execute("DELETE FROM mob_items WHERE world = ?1 AND item = ?2", params![world, from]).map_err(failed)?;
+        }
+        tx.commit().map_err(failed)
     }
 
     /// Makes sure a creature has its entry, its race read from its name
@@ -101,12 +161,17 @@ impl Bestiary {
         Ok(key)
     }
 
+    /// Makes sure an item has its entry (a bundle by what it holds,
+    /// `item_name`), its name in the game's colors once one comes; returns
+    /// its key.
     fn item(&self, world: &str, name: &str, at: i64) -> Result<String, String> {
-        let key = letters_and_digits(name);
+        let name = item_name(name);
+        let key = item_key(&name);
         self.db
             .execute(
                 "INSERT INTO items (world, key, name, first_seen, last_seen) VALUES (?1, ?2, ?3, ?4, ?4)
-                 ON CONFLICT (world, key) DO UPDATE SET last_seen = ?4",
+                 ON CONFLICT (world, key) DO UPDATE SET last_seen = ?4,
+                     name = CASE WHEN instr(?3, '^') > 0 AND instr(name, '^') = 0 THEN ?3 ELSE name END",
                 params![world, key, name, at],
             )
             .map_err(failed)?;
@@ -329,7 +394,7 @@ impl Bestiary {
             .collect::<Result<Vec<_>, _>>()
             .map_err(failed)?;
         rows.into_iter()
-            .map(|(key, name, race, deaths, last_seen)| Ok(MobRow { areas: self.areas_of("mob_areas", world, &key)?, key, name, race, deaths, last_seen }))
+            .map(|(key, name, race, deaths, last_seen)| Ok(MobRow { areas: self.areas_of("mob_areas", world, &key)?, key, name, styled: Vec::new(), race, deaths, last_seen }))
             .collect()
     }
 
@@ -436,7 +501,7 @@ impl Bestiary {
             .collect::<Result<Vec<_>, _>>()
             .map_err(failed)?;
         rows.into_iter()
-            .map(|(key, name, level_low, level_high, last_seen)| Ok(ItemRow { areas: self.areas_of("item_areas", world, &key)?, key, name, level_low, level_high, last_seen }))
+            .map(|(key, name, level_low, level_high, last_seen)| Ok(ItemRow { areas: self.areas_of("item_areas", world, &key)?, key, name, styled: Vec::new(), level_low, level_high, last_seen }))
             .collect()
     }
 
@@ -496,5 +561,30 @@ impl Bestiary {
         let mut stmt = db.prepare("SELECT aura FROM item_auras WHERE world = ?1 AND key = ?2 ORDER BY rowid").map_err(failed)?;
         entry.auras = stmt.query_map(params![world, key], |r| r.get(0)).map_err(failed)?.collect::<Result<_, _>>().map_err(failed)?;
         Ok(Some(entry))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn items_kept_before_are_made_one() {
+        let b = Bestiary::in_memory().unwrap();
+        let w = "coffeemud";
+        // As kept before: each bundle its own, the colors' letters in the key.
+        for (key, name, seen) in [("a25oakbundle", "a 25# oak bundle", 2), ("a3oakbundle", "a 3# oak bundle", 3), ("gagreenpotion", "^ga green potion^?", 1)] {
+            b.db.execute("INSERT INTO items (world, key, name, first_seen, last_seen) VALUES (?1, ?2, ?3, ?4, ?4)", params![w, key, name, seen]).unwrap();
+            b.db.execute("INSERT INTO item_areas (world, key, area, seen, last_seen) VALUES (?1, ?2, 'Midgaard', ?3, ?3)", params![w, key, seen]).unwrap();
+            b.db.execute("INSERT INTO mob_items (world, key, item, how, place, count) VALUES (?1, 'anorc', ?2, 'drop', '', 1)", params![w, key]).unwrap();
+        }
+        b.rekey_items().unwrap();
+        let rows = b.items(w, "").unwrap();
+        let keys: Vec<(&str, &str)> = rows.iter().map(|r| (r.key.as_str(), r.name.as_str())).collect();
+        assert_eq!(keys, [("anoakbundle", "an oak bundle"), ("agreenpotion", "^ga green potion^?")]);
+        let bundle = b.item_entry(w, "anoakbundle").unwrap().unwrap();
+        assert_eq!((bundle.areas[0].count, bundle.dropped_by[0].count, bundle.first_seen, bundle.last_seen), (5, 2, 2, 3));
+        b.rekey_items().unwrap();
+        assert_eq!(b.items(w, "").unwrap().len(), 2);
     }
 }

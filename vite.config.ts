@@ -23,9 +23,23 @@ const webAliases = {
   "@tauri-apps/plugin-dialog": fileURLToPath(new URL("./src/web/dialog.ts", import.meta.url)),
 };
 
+// The web build installs as an app (Chrome and Edge's Install, Safari's
+// Add to Dock and Add to Home Screen), as Fontastik and Cue do: Chrome
+// needs only the manifest, no service worker. Safari ignores an SVG
+// apple-touch-icon, hence the PNG. Both live in web/, which
+// scripts/web-build.sh copies beside the page; the desktop has neither.
+const installable = {
+  name: "coupler-installable",
+  transformIndexHtml: () => [
+    { tag: "link", attrs: { rel: "manifest", href: "/manifest.webmanifest" }, injectTo: "head" as const },
+    { tag: "link", attrs: { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" }, injectTo: "head" as const },
+    { tag: "meta", attrs: { name: "apple-mobile-web-app-title", content: "Coupler" }, injectTo: "head" as const },
+  ],
+};
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: mode === "web" ? [react(), installable] : [react()],
   resolve: mode === "web" ? { alias: webAliases } : undefined,
   // The desktop app loads its one chunk from disk, so splitting it buys
   // nothing: its size warning starts at 1 MB. The web build is downloaded

@@ -5,9 +5,10 @@
  * (`phoneLayout` in App.tsx), not the desktop's 1280 by 720 shrunk.
  *
  * Decided when the page loads, never by the window's size: an iPhone is
- * a phone (an iPad runs the iPhone app as it is, the project being
- * iPhone only), and a Mac, Windows or Linux window is the desktop
- * however it's sized. On a tablet (an iPad), and in a dev build on the
+ * a phone in the iPhone app (an iPad runs the iPhone app as it is, the
+ * project being iPhone only) and gets the tablet screen in the web
+ * build, and a Mac, Windows or Linux window is the desktop however it's
+ * sized. On a tablet (an iPad), and in a dev build on the
  * Mac, gear → Phone Screen, for Testing (`coupler.phone` = "on") shows
  * the phone screen, phone-shaped, to try it.
  *
@@ -16,6 +17,9 @@
  * targets and portrait locked are kept; one component tree, not a
  * second app, so a feature is never on one profile only by accident.
  */
+import { startTouchScrollbars } from "./scrollbars";
+import { WEB } from "./web";
+
 const PHONE_KEY = "coupler.phone";
 
 function phoneAsked(): boolean {
@@ -42,22 +46,35 @@ function iPhoneAsMac(): boolean {
   return touchMac() && screenSide() < 600;
 }
 
-const REAL_PHONE = typeof navigator !== "undefined" && (/iPhone|iPod/.test(navigator.userAgent) || iPhoneAsMac());
+const IPHONE = typeof navigator !== "undefined" && (/iPhone|iPod/.test(navigator.userAgent) || iPhoneAsMac());
+
+/**
+ * An iPhone in the web build plays on the tablet screen, not the phone's
+ * (decided 2026-10-24): no zooming, the game above and Coupler's own
+ * keyboard below, the same as a tablet's browser. The phone screen is
+ * the iPhone app's.
+ */
+const WEB_IPHONE = IPHONE && WEB;
+
+/** The iPhone app: the phone screen. */
+const REAL_PHONE = IPHONE && !WEB;
 
 /**
  * A tablet: an iPad (its Safari passes for a Mac with a touch screen) or
- * another touch screen 600 points or more across. The tablet screen
- * (`TABLET_SCREEN`), unless the player turns on the phone screen to try
- * it (gear menu).
+ * another touch screen 600 points or more across, or an iPhone in the
+ * web build (`WEB_IPHONE`). The tablet screen (`TABLET_SCREEN`), unless
+ * the player turns on the phone screen to try it (gear menu; not on an
+ * iPhone, which is phone-sized already).
  */
 export const TABLET =
-  !REAL_PHONE &&
-  typeof navigator !== "undefined" &&
-  (/iPad/.test(navigator.userAgent) || touchMac() || (/Android/.test(navigator.userAgent) && !/Mobile/.test(navigator.userAgent))) &&
-  screenSide() >= 600;
+  WEB_IPHONE ||
+  (!IPHONE &&
+    typeof navigator !== "undefined" &&
+    (/iPad/.test(navigator.userAgent) || touchMac() || (/Android/.test(navigator.userAgent) && !/Mobile/.test(navigator.userAgent))) &&
+    screenSide() >= 600);
 
-/** Where the phone screen can be turned on and off to try it: a tablet, or the dev build on the Mac. */
-export const PHONE_TRYABLE = TABLET || (!REAL_PHONE && import.meta.env.DEV);
+/** Where the phone screen can be turned on and off to try it: a tablet (not an iPhone), or the dev build on the Mac. */
+export const PHONE_TRYABLE = !IPHONE && (TABLET || import.meta.env.DEV);
 
 /** An iPhone (or iPod), or a tablet or the dev build trying the phone screen. */
 export const PHONE = REAL_PHONE || (PHONE_TRYABLE && phoneAsked());
@@ -93,7 +110,7 @@ function tabletAsked(): boolean {
 }
 
 /** Where the tablet screen can be tried on a computer: the dev build on the Mac. */
-export const TABLET_TRYABLE = !REAL_PHONE && !TABLET && import.meta.env.DEV;
+export const TABLET_TRYABLE = !IPHONE && !TABLET && import.meta.env.DEV;
 
 /** A tablet (not trying the phone screen), or the dev build trying the tablet screen. */
 export const TABLET_SCREEN = !PHONE && (TABLET || (TABLET_TRYABLE && tabletAsked()));
@@ -153,10 +170,12 @@ function applyTablet() {
   orientation?.lock?.("portrait").catch(() => {});
 }
 
-/** Marks <html> for phone.css and tablet.css, and lets the game's sounds play with the ring switch on silent. */
+/** Marks <html> for phone.css and tablet.css, draws the scroll bars, and lets the game's sounds play with the ring switch on silent. */
 export function applyFormFactor() {
   if (TABLET_SCREEN) applyTablet();
   if (!PHONE && !TABLET_SCREEN) return;
+  // The system's scroll bars show only while scrolling there (lib/scrollbars.ts).
+  startTouchScrollbars();
   if (PHONE) document.documentElement.dataset.form = "phone";
   // Safari 16.4 and later: "playback" is what a game heard more than read
   // needs; by default the Web Audio a page plays is muted by the switch.

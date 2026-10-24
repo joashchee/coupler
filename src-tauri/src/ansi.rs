@@ -271,8 +271,162 @@ fn extended(rest: &[u16]) -> (Option<Color>, usize) {
     }
 }
 
+/// The basic color a `^` code letter stands for (CoffeeMUD's
+/// `ColorLibrary.Color`), as a palette index: lower case the bright ones.
+fn caret_basic(c: char) -> Option<u8> {
+    Some(match c {
+        'K' => 0,
+        'R' => 1,
+        'G' => 2,
+        'Y' => 3,
+        'B' => 4,
+        'P' => 5,
+        'C' => 6,
+        'W' => 7,
+        'k' => 8,
+        'r' => 9,
+        'g' => 10,
+        'y' => 11,
+        'b' => 12,
+        'p' => 13,
+        'c' => 14,
+        'w' => 15,
+        _ => return None,
+    })
+}
+
+/// A named `^` code's stock color, foreground and background
+/// (`Brown.java`'s `standardColorLookups`; a player's COLORSCHEME can
+/// change them, which no name says).
+fn caret_special(c: char) -> Option<(u8, Option<u8>)> {
+    Some(match c {
+        'H' | 'c' | 'O' | 'q' | 'h' | 'm' | 'v' => (14, None),
+        'f' | 'E' | 'M' => (13, None),
+        'e' => (9, None),
+        'F' => (1, None),
+        'S' => (11, None),
+        'J' | 'L' => (15, None),
+        'T' | 'd' | 'u' => (12, None),
+        't' => (6, None),
+        'Q' | 'x' | 'D' => (14, Some(4)),
+        'X' => (11, Some(4)),
+        'Z' => (11, Some(1)),
+        'U' => (6, Some(4)),
+        'I' => (10, None),
+        _ => return None,
+    })
+}
+
+/// A background `^~` letter: CoffeeMUD's eight, dark.
+fn caret_background(c: char) -> Option<u8> {
+    Some(match c {
+        'k' => 0,
+        'r' => 1,
+        'g' => 2,
+        'y' => 3,
+        'b' => 4,
+        'p' => 5,
+        'c' => 6,
+        'w' => 7,
+        _ => return None,
+    })
+}
+
+/// A name with CoffeeMUD's own color codes in it (GMCP sends an item's or
+/// a creature's `Name()` as the builder wrote it: `^ga green slime^?`) as
+/// one line of styled spans, the codes gone. `^?` goes back to the color
+/// before the last change, `^.` and `^N` to none; `^#123` and `^|123`
+/// are the 256 colors; `^^` is a caret. An ANSI escape riding along is
+/// dropped.
+pub fn caret_line(text: &str) -> Line {
+    let mut line: Line = Vec::new();
+    let mut style = Style::default();
+    let mut before = Style::default();
+    let mut chars = text.chars().peekable();
+    let push = |line: &mut Line, style: Style, c: char| match line.last_mut() {
+        Some(last) if last.style == style => last.text.push(c),
+        _ => line.push(Span { text: c.to_string(), style }),
+    };
+    let number = |chars: &mut std::iter::Peekable<std::str::Chars>| {
+        let mut n: u32 = 0;
+        for _ in 0..3 {
+            match chars.peek().and_then(|d| d.to_digit(10)) {
+                Some(d) => {
+                    n = n * 10 + d;
+                    chars.next();
+                }
+                None => break,
+            }
+        }
+        u8::try_from(n).ok()
+    };
+    while let Some(c) = chars.next() {
+        match c {
+            '^' => {
+                let Some(code) = chars.next() else { break };
+                let was = style;
+                match code {
+                    '^' | '<' | '>' | '"' | '&' => push(&mut line, style, code),
+                    '?' => style = before,
+                    '.' | 'N' => style = Style::default(),
+                    '!' => style.bold = true,
+                    '_' => style.underline = true,
+                    '/' => style.italic = true,
+                    '#' => style.fg = number(&mut chars).map(|index| Color::Index { index }).or(style.fg),
+                    '|' => style.bg = number(&mut chars).map(|index| Color::Index { index }).or(style.bg),
+                    '~' => {
+                        if let Some(index) = chars.next().and_then(caret_background) {
+                            style.bg = Some(Color::Index { index });
+                        }
+                    }
+                    c => {
+                        if let Some(index) = caret_basic(c) {
+                            // The bright ones are `1;3x`, keeping the rest; the dark `0;3x`, a reset first.
+                            let kept = if index >= 8 { style } else { Style::default() };
+                            style = Style { fg: Some(Color::Index { index }), ..kept };
+                        } else if let Some((fg, bg)) = caret_special(c) {
+                            style = Style { fg: Some(Color::Index { index: fg }), bg: bg.map(|index| Color::Index { index }), ..Style::default() };
+                        }
+                    }
+                }
+                if style != was && code != '?' {
+                    before = was;
+                }
+            }
+            '\u{1b}' => {
+                if chars.peek() == Some(&'[') {
+                    chars.next();
+                    for d in chars.by_ref() {
+                        if d.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+            }
+            c if c.is_control() => push(&mut line, style, ' '),
+            c => push(&mut line, style, c),
+        }
+    }
+    line
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn caret_codes_become_spans() {
+        let fg = |index| Style { fg: Some(Color::Index { index }), ..Style::default() };
+        let line = caret_line("^ga green slime^?");
+        assert_eq!(line, vec![Span { text: "a green slime".into(), style: fg(10) }]);
+        let line = caret_line("a ^Rred^N and ^#202orange^. cap^^");
+        let texts: Vec<_> = line.iter().map(|s| (s.text.as_str(), s.style)).collect();
+        assert_eq!(texts, [("a ", Style::default()), ("red", fg(1)), (" and ", Style::default()), ("orange", fg(202)), (" cap^", Style::default())]);
+        // ^? goes back to the color before: here the item's own.
+        let line = caret_line("^Ia sword of ^rfire^?, gleaming");
+        assert_eq!(line[2], Span { text: ", gleaming".into(), style: fg(10) });
+        let line = caret_line("^~b^wbanner");
+        assert_eq!((line[0].style.fg, line[0].style.bg), (Some(Color::Index { index: 15 }), Some(Color::Index { index: 4 })));
+    }
+
     use super::*;
 
     fn plain(line: &Line) -> String {
