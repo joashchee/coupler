@@ -277,11 +277,13 @@ fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, sess
 
 /// The Fight panel's picture by Coupler's painter (fight_art.rs): the
 /// room, the player on the left and `foe` on the right, each as their
-/// moment has them, `columns` wide.
+/// moment has them, `columns` wide; once for each of `frames` (a blow's
+/// jolt and flash, a foe sliding in), else once standing still.
 #[tauri::command]
-fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, session: State<'_, Session>) -> Result<ansi_art::Art, String> {
+#[allow(clippy::too_many_arguments)]
+fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, frames: Option<Vec<fight_art::Frame>>, session: State<'_, Session>) -> Result<Vec<ansi_art::Art>, String> {
     let (you, foe, scene) = session.fighters(&app, &foe)?;
-    Ok(fight_art::paint(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns))
+    Ok(fight_art::frames(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns, &frames.unwrap_or_default()))
 }
 
 /// An item's picture by Coupler's painter (item_art.rs), from all that's

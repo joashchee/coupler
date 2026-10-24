@@ -6,7 +6,7 @@
  * words are pure; `useBout` keeps the bout.
  */
 import { useEffect, useRef, useState } from "react";
-import { endingOf, type Ending } from "./fightTalk";
+import { BIG_HIT, endingOf, type Ending } from "./fightTalk";
 import * as mud from "./mud";
 
 /** How long the result stays up after the fight ends. */
@@ -111,6 +111,37 @@ export function resultWords(bout: Bout): string | null {
     default:
       return "The fight is over.";
   }
+}
+
+/** A fall of health, out of 100, big enough at once to jolt and flash the one hit (as the fight talk's big hit). */
+export const bigBlow = (before: number | null, now: number | null) => before !== null && now !== null && before - now >= BIG_HIT;
+
+/** How long each frame of a blow shows: the flash, then the jolt alone. */
+export const BLOW_MS = 100;
+/** Flashes no closer than this: never more than three a second (rule 10). */
+export const FLASH_GAP_MS = 334;
+/** How long each step of a foe sliding in shows, a cell at a time. */
+export const SLIDE_MS = 24;
+/** A face's width in cells (src-tauri/src/face.rs `SIZE`): how far a new foe slides. */
+const FACE_COLUMNS = 25;
+
+/**
+ * A big blow's frames: the one hit jolted a cell back from the other and
+ * flashed (when `flash`: not too soon after the last), then jolted alone.
+ * With reduced motion, the flash alone, or nothing.
+ */
+export function blowFrames(you: boolean, foe: boolean, flash: boolean, reduced: boolean): mud.FightFrame[] {
+  const jolt = (hit: boolean, back: number) => (hit && !reduced ? back : 0);
+  const pose = (hit: boolean, back: number, lit: boolean): mud.FightPose => ({ shift: jolt(hit, back), flash: hit && lit });
+  const frames = [{ you: pose(you, -1, flash), foe: pose(foe, 1, flash) }];
+  if (!reduced) frames.push({ you: pose(you, -1, false), foe: pose(foe, 1, false) });
+  return reduced && !flash ? [] : frames;
+}
+
+/** A new foe sliding in from the right, a cell at a time; the last frame is it in its place. Nothing with reduced motion. */
+export function slideFrames(reduced: boolean): mud.FightFrame[] {
+  if (reduced) return [];
+  return Array.from({ length: FACE_COLUMNS }, (_, i) => ({ foe: { shift: FACE_COLUMNS - 1 - i } }));
 }
 
 /** The fight's clock: "0:42". */

@@ -739,6 +739,7 @@
 :root[data-theme="ansiapps"] .gauge-low { color: var(--dos-lightred); }
 :root[data-theme="ansiapps"] .gauge-foe { color: var(--dos-lightmagenta); }
 :root[data-theme="ansiapps"] .fight-panel { padding: 16px 8px 16px 16px; }
+:root[data-theme="ansiapps"] .fight-panel.fight-strip { padding: 0; }
 /* The Fight on blue: white words, light gray for what's empty (ranks 5
    and 23); a health bar's lost strip white, mana and moves light cyan,
    KO yellow (5, 7, 6). */

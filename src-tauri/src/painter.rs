@@ -192,6 +192,7 @@ pub(crate) enum Part {
 }
 
 /// Pixels and the characters laid over them.
+#[derive(Clone)]
 pub(crate) struct Canvas {
     /// In pixels: the columns, and twice the rows.
     pub(crate) w: i32,

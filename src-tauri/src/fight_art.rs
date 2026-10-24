@@ -11,12 +11,19 @@
 //! The panel's words (the names, the bars, the clock) are the
 //! frontend's (`FightPanel.tsx`), in bands of their own: no text sits on
 //! the picture.
+//!
+//! Its moments are frames painted in one go (`frames`): a big blow jolts
+//! the one hit a cell away from the other and flashes it once, a new foe
+//! slides in from the right a cell at a time. The frontend plays them
+//! and keeps to its own limits (a flash at most once a blow, never more
+//! than three a second, no jolt or slide with reduced motion).
 
 use crate::ansi_art::Art;
 use crate::face::{self, Moment, Sitter, SIZE};
-use crate::figure::{self, CLEAR};
+use crate::figure::{self, lighter, CLEAR};
 use crate::paint::{Scene, Style};
 use crate::painter::*;
+use serde::Deserialize;
 
 /// The fewest columns: the two faces side by side, overlapping in the
 /// middle where the panel is narrower than both (the foe in front).
@@ -32,11 +39,36 @@ pub struct Fighters<'a> {
     pub foe: (&'a Sitter, &'a Moment),
 }
 
-/// The picture, `columns` wide and a face tall.
+/// Where a fighter stands in a frame, in cells from its place (the
+/// player's at the left edge, the foe's at the right; more is further
+/// right), and whether it flashes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Pose {
+    pub shift: i32,
+    pub flash: bool,
+}
+
+/// One frame: the two fighters' poses.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Frame {
+    pub you: Pose,
+    pub foe: Pose,
+}
+
+/// The picture, `columns` wide and a face tall, both standing still.
 /// Without a room (not yet known), a plain dark ground.
+#[cfg(test)]
 pub fn paint(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize) -> Art {
+    frames(scene, style, fighters, columns, &[Frame::default()]).remove(0)
+}
+
+/// The picture once for each frame, the room and the faces painted once
+/// for them all. No frames, one still.
+pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, frames: &[Frame]) -> Vec<Art> {
     let columns = columns.clamp(LEAST_COLUMNS, MOST_COLUMNS);
-    let (mut canvas, light) = match scene {
+    let (room, light) = match scene {
         Some(scene) => {
             let (c, light) = figure::room(scene, style, columns, ROWS);
             (c, Some(light))
@@ -49,12 +81,37 @@ pub fn paint(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: 
     };
     let you = face::standing(fighters.you.0, fighters.you.1).mirrored();
     let foe = face::standing(fighters.foe.0, fighters.foe.1);
-    canvas.stamp(&you, 0, CLEAR);
-    canvas.stamp(&foe, (columns - SIZE.0) as i32, CLEAR);
-    if let Some(light) = &light {
-        figure::light(&mut canvas, light);
+    let (you_lit, foe_lit) = (flashed(&you), flashed(&foe));
+    let still = [Frame::default()];
+    let frames = if frames.is_empty() { &still[..] } else { frames };
+    frames
+        .iter()
+        .map(|frame| {
+            let mut canvas = room.clone();
+            canvas.stamp(if frame.you.flash { &you_lit } else { &you }, frame.you.shift, CLEAR);
+            canvas.stamp(if frame.foe.flash { &foe_lit } else { &foe }, (columns - SIZE.0) as i32 + frame.foe.shift, CLEAR);
+            if let Some(light) = &light {
+                figure::light(&mut canvas, light);
+            }
+            canvas.art()
+        })
+        .collect()
+}
+
+/// A fighter in the flash of a blow: every pixel a shade lighter, and
+/// giving its own light, so neither the rim nor the night touches it.
+fn flashed(figure: &Canvas) -> Canvas {
+    let mut lit = figure.clone();
+    for y in 0..lit.h {
+        for x in 0..lit.w {
+            let c = lit.get(x, y);
+            if c != CLEAR {
+                let part = lit.part(x, y);
+                lit.put(x, y, lighter(c), true, part);
+            }
+        }
     }
-    canvas.art()
+    lit
 }
 
 #[cfg(test)]
@@ -113,6 +170,38 @@ mod tests {
         assert_ne!(fresh, at(&Moment { mood: Mood::Dead, ..Moment::default() }));
         // The same moment, the same picture.
         assert_eq!(fresh, at(&calm));
+    }
+
+    #[test]
+    fn frames_jolt_flash_and_slide() {
+        let (you, foe) = (person("Ada", "Human"), face::sitter_named("a large wolf"));
+        let calm = Moment::default();
+        let fighters = Fighters { you: (&you, &calm), foe: (&foe, &calm) };
+        let room = scene("woods");
+        let still = paint(Some(&room), Style::Fantasy, &fighters, 64);
+        // No frames is the one still.
+        assert_eq!(frames(Some(&room), Style::Fantasy, &fighters, 64, &[]), vec![still.clone()]);
+        let hit = |you: Pose, foe: Pose| frames(Some(&room), Style::Fantasy, &fighters, 64, &[Frame { you, foe }]).remove(0);
+        let jolted = hit(Pose::default(), Pose { shift: 1, flash: false });
+        let flashed = hit(Pose { shift: 0, flash: true }, Pose::default());
+        assert_ne!(jolted, still);
+        assert_ne!(flashed, still);
+        // A flash only lightens: the same picture's size, in the font and the 16 colors.
+        assert_eq!((flashed.rows, flashed.columns), (still.rows, still.columns));
+        // Slid all the way out, the foe's gone: the same as no foe at all.
+        let gone = hit(Pose::default(), Pose { shift: SIZE.0 as i32, flash: false });
+        let alone = {
+            let none = Sitter { name: "nothing".into(), ..Sitter::default() };
+            let f = Fighters { you: (&you, &calm), foe: (&none, &calm) };
+            frames(Some(&room), Style::Fantasy, &f, 64, &[Frame { foe: Pose { shift: SIZE.0 as i32, flash: false }, ..Frame::default() }]).remove(0)
+        };
+        assert_eq!(gone, alone);
+        // Each frame its own picture, in order.
+        let slide: Vec<Frame> = (0..=4).rev().map(|shift| Frame { foe: Pose { shift, flash: false }, ..Frame::default() }).collect();
+        let played = frames(Some(&room), Style::Fantasy, &fighters, 64, &slide);
+        assert_eq!(played.len(), 5);
+        assert_eq!(played[4], still);
+        assert_ne!(played[0], played[4]);
     }
 
     #[test]

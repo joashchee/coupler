@@ -23,8 +23,8 @@ import * as voice from "./voice";
 const SILENCE_MS = 250;
 /** How often the silence is checked: often enough that a silence is never much longer. */
 const TICK_MS = 50;
-/** A blow this share of the maximum or more, at once, is said at once. */
-const BIG_HIT = 15;
+/** A blow this share of the maximum or more, at once, is said at once (and jolts The Fight's face, lib/fight.ts). */
+export const BIG_HIT = 15;
 /** Health under these is said at once, each the first time it's crossed. */
 const LOW_MARKS = [30, 15];
 /** The same words aren't said again within this long. */

@@ -17,15 +17,26 @@
  * each ally in the group, their health a bar and figures, mana and moves
  * (src-tauri/src/effects.rs).
  *
+ * Its moments (src-tauri/src/fight_art.rs `frames`): a big blow jolts
+ * the face hit a cell back and flashes it once (no flash within a third
+ * of a second of the last); a new foe slides in from the right. With
+ * reduced motion, the flash alone.
+ *
+ * On the phone, a strip of four rows above the touch pad in the Game
+ * section (`strip`): the names and figures with the clock or the result
+ * between them, the two health bars, mana and moves, and what's on the
+ * player in a row that scrolls by itself when it's too long. No picture
+ * yet: the faces at the strip's size are still to be drawn.
+ *
  * Words first (rule 10): one sentence says it all for a screen reader,
  * and the rows, the bars and the picture are hidden from it. No live
  * region: the fight talk (lib/fightTalk.ts) and the say key speak the
  * fight. It never takes the focus. Once it's over, Combat Summary… opens
  * the fight's page (components/CombatSummaryDialog.tsx).
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as mud from "../lib/mud";
-import { clock, effectEntries, foeMoment, hurtWords, rangeWords, resultWords, yourMoment, type Bout } from "../lib/fight";
+import { bigBlow, BLOW_MS, blowFrames, clock, effectEntries, FLASH_GAP_MS, foeMoment, hurtWords, rangeWords, resultWords, SLIDE_MS, slideFrames, yourMoment, type Bout } from "../lib/fight";
 import type { PictureSettings } from "../lib/pictures";
 
 interface FightPanelProps {
@@ -38,6 +49,8 @@ interface FightPanelProps {
   scene: mud.Scene | null;
   /** Opens Combat Summary on this fight, once it's over. */
   onSummary: () => void;
+  /** The phone's strip: four rows, no picture, no button. */
+  strip?: boolean;
 }
 
 /** How long a lost strip of a health bar stays before it drains away. */
@@ -132,11 +145,55 @@ function AllyRow({ ally, tank, half, right }: { ally: mud.Ally; tank: boolean; h
   );
 }
 
-export function FightPanel({ bout, vitals, status, settings, scene, onSummary }: FightPanelProps) {
+/** The picture's rows of cells. */
+function Picture({ art }: { art: mud.AnsiArt | null }) {
+  return (
+    <div className="fight-picture" style={{ height: PICTURE_ROWS * 16 }}>
+      {art?.lines.map((line, row) => (
+        <div key={row} className="fight-picture-row">
+          {line.map((span, i) => {
+            const { color, background } = mud.spanColors(span);
+            return (
+              <span key={i} style={{ color, background }}>
+                {span.text}
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A row of text `width` cells wide that scrolls by itself, round and round, when it's longer; with reduced motion it stays put. */
+function Scrolling({ text, width }: { text: string; width: number }) {
+  if (text.length <= width || reducedMotion()) return <>{fit(text, width)}</>;
+  const lap = `${text}   `;
+  return (
+    <span className="fight-scroll" style={{ width: width * 8 }}>
+      <span className="fight-scroll-text" style={{ "--lap": `${lap.length * 8}px`, animationDuration: `${lap.length * 0.25}s` } as CSSProperties}>
+        {lap + lap}
+      </span>
+    </span>
+  );
+}
+
+export function FightPanel({ bout, vitals, status, settings, scene, onSummary, strip = false }: FightPanelProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(0);
   const [art, setArt] = useState<mud.AnsiArt | null>(null);
+  /** A moment's frame showing over the still picture, while one plays. */
+  const [frame, setFrame] = useState<mud.AnsiArt | null>(null);
+  const playing = useRef<number[]>([]);
   const [now, setNow] = useState(Date.now());
+
+  /** Plays `frames`, `ms` each, then the still picture again; a new moment cuts the one playing. */
+  const play = useCallback((frames: mud.AnsiArt[], ms: number) => {
+    playing.current.forEach((t) => window.clearTimeout(t));
+    playing.current = frames.map((f, i) => window.setTimeout(() => setFrame(f), i * ms));
+    playing.current.push(window.setTimeout(() => setFrame(null), frames.length * ms));
+  }, []);
+  useEffect(() => () => playing.current.forEach((t) => window.clearTimeout(t)), []);
 
   useEffect(() => {
     const box = boxRef.current;
@@ -162,16 +219,23 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary }:
   const on = status?.effects.map((e) => e.name) ?? [];
   const you = yourMoment(bout, mine, on);
   const theirs = foeMoment(bout);
-  const painting = settings.engine !== "none";
+  const painting = settings.engine !== "none" && !strip;
   const sceneKey = scene ? `${scene.world}/${scene.room}/${scene.time}/${scene.weather}/${scene.look}` : "";
 
   // Painted again only when what it shows changes: a step of hurt, a mood, the room, the width.
+  // A foe not yet painted slides in first, its frames painted in the same go.
+  const paintedFoe = useRef<string | null>(null);
   useEffect(() => {
     if (!painting || columns < 1) return;
     let stale = false;
     mud
-      .fightPaint(foe, you, theirs, settings.style, columns)
-      .then((painted) => !stale && setArt(painted))
+      .fightPaint(foe, you, theirs, settings.style, columns, paintedFoe.current === foe ? [] : slideFrames(reducedMotion()))
+      .then((painted) => {
+        if (stale) return;
+        paintedFoe.current = foe;
+        setArt(painted[painted.length - 1] ?? null);
+        if (painted.length > 1) play(painted.slice(0, -1), SLIDE_MS);
+      })
       .catch(() => !stale && setArt(null));
     return () => {
       stale = true;
@@ -179,6 +243,27 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary }:
     // The moments by their parts, so a new object with the same look doesn't paint again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [painting, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
+
+  // A big blow, to either: the one hit jolts and flashes.
+  const healths = useRef({ mine, theirs: o.percent });
+  const lastFlash = useRef(0);
+  useEffect(() => {
+    const was = healths.current;
+    healths.current = { mine, theirs: o.percent };
+    if (!painting || columns < 1 || bout.ended || paintedFoe.current !== foe) return;
+    const [hitYou, hitFoe] = [bigBlow(was.mine, mine), bigBlow(was.theirs, o.percent)];
+    if (!hitYou && !hitFoe) return;
+    const flash = Date.now() - lastFlash.current >= FLASH_GAP_MS;
+    const frames = blowFrames(hitYou, hitFoe, flash, reducedMotion());
+    if (frames.length === 0) return;
+    if (flash) lastFlash.current = Date.now();
+    mud
+      .fightPaint(foe, you, theirs, settings.style, columns, frames)
+      .then((painted) => play(painted, BLOW_MS))
+      .catch(() => undefined);
+    // Only a change of health is a blow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, o.percent]);
 
   const half = Math.floor(columns / 2);
   const right = columns - half;
@@ -197,6 +282,48 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary }:
     `${elapsed}${range ? `, ${range}` : ""}.${result ? ` ${result}` : ""}` +
     (entries.length > 0 ? ` On you: ${entries.join(", ").replace(/~/g, "about ")}.` : "") +
     (group ? ` Your group: ${group.allies.map((a) => `${a.name}${a.hp !== null && a.maxHp !== null ? ` ${a.hp} of ${a.maxHp}` : ""}`).join(", ")}.` : "");
+
+  if (strip) {
+    const middle = result ?? `${range ? `${range} ` : ""}${elapsed}`;
+    const left = Math.floor((columns - middle.length) / 2);
+    const short = (now: number | null | undefined, most: number | null | undefined) => (now == null ? "" : most == null ? `${now}` : `${now}/${most}`);
+    const yours = short(vitals?.hp, vitals?.maxHp);
+    const theirFigures = o.health !== null && o.healthMax !== null ? `${o.health}/${o.healthMax}` : o.percent !== null ? `${o.percent}%` : "";
+    const onYou = [tank, ...entries].filter(Boolean).join("  ");
+    return (
+      <section className="fight-panel fight-strip" aria-labelledby="fight-title" data-testid="fight-panel">
+        <h2 id="fight-title" className="sr-only">
+          The Fight
+        </h2>
+        <p className="sr-only" data-testid="fight-words">
+          {words}
+        </p>
+        <div ref={boxRef} className="fight-body" aria-hidden="true">
+          {columns > 0 && (
+            <>
+              <p className="fight-row">
+                {fit(`You ${yours}`, left)}
+                <span className={result?.startsWith("KO") ? "fight-ko" : undefined}>{middle}</span>
+                {fit(`${theirFigures} ${foeName}`, columns - left - middle.length, "right")}
+              </p>
+              <p className="fight-row">
+                <HealthBar percent={mine} width={half - 1} from="left" />
+                {"  "}
+                <HealthBar percent={o.percent} width={right - 1} from="right" foe />
+              </p>
+              <p className="fight-row">
+                <ThinBar name="Mana" now={vitals?.mana ?? null} most={vitals?.maxMana ?? null} width={half} />
+                <ThinBar name="Moves" now={vitals?.moves ?? null} most={vitals?.maxMoves ?? null} width={right} />
+              </p>
+              <p className="fight-row" data-testid="fight-effects">
+                {onYou ? <Scrolling text={onYou} width={columns} /> : <span className="fight-muted">{fit(`You, ${yourHurt}. ${foeName}, ${theirHurt}.`, columns)}</span>}
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="fight-panel panel" aria-labelledby="fight-title" data-testid="fight-panel">
@@ -224,21 +351,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary }:
               <ThinBar name="Moves" now={vitals?.moves ?? null} most={vitals?.maxMoves ?? null} width={half} />
               <span className={result?.startsWith("KO") ? "fight-ko" : undefined}>{fit(result ?? "", right, "right")}</span>
             </p>
-            <div className="fight-picture" style={{ height: PICTURE_ROWS * 16 }}>
-              {painting &&
-                art?.lines.map((line, row) => (
-                  <div key={row} className="fight-picture-row">
-                    {line.map((span, i) => {
-                      const { color, background } = mud.spanColors(span);
-                      return (
-                        <span key={i} style={{ color, background }}>
-                          {span.text}
-                        </span>
-                      );
-                    })}
-                  </div>
-                ))}
-            </div>
+            <Picture art={painting ? (frame ?? art) : null} />
             <p className="fight-row">
               {fit(`You, ${yourHurt}`, half)}
               {fit(`${foeName}, ${theirHurt}`, right, "right")}

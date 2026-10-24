@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.40.0 (2026-10-24)
+
+- **The Fight moves, and comes to the iPhone** (2026-10-24): a big
+  blow (15 percent or more of the health at once) knocks the face hit a
+  cell back and flashes it once, never more than three flashes a
+  second; a new foe slides in from the right. With reduced motion,
+  only the flash. On the iPhone, The Fight is a strip of four rows
+  above the touch pad in the Game section: both names and health with
+  the clock (then the result) between them, the two health bars, your
+  mana and moves, and what's on you, scrolling round when it's long.
+  No faces in the strip yet.
+
 ## 0.39.0 (2026-10-24)
 
 - **What's on you, and your group** (2026-10-24): Coupler now knows

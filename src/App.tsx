@@ -233,13 +233,15 @@ function bigTextLayout(theme: Theme, showing: Showing, size: TextSize): Record<s
  * finger hits): the bar at the top (the connection, Hang Up, the gear),
  * the game output (or, offline, the ways to play) in every row left,
  * the touch pad, the command line, and two rows of messages at the
- * foot. The keyboard showing takes its rows from the game output.
+ * foot. The keyboard showing takes its rows from the game output, and so
+ * does The Fight's strip (`fight`, `PHONE_FIGHT_ROWS`), above the pad.
  */
-function phoneLayout(rows: number): Record<string, Usual> {
+function phoneLayout(rows: number, fight: boolean): Record<string, Usual> {
   const bar = 48;
   const foot = 2 * 16;
-  const output = rows * 16 - bar - 2 * bar - foot - bar;
-  const pad = bar + output;
+  const strip = fight ? PHONE_FIGHT_ROWS * 16 : 0;
+  const output = rows * 16 - bar - 2 * bar - foot - bar - strip;
+  const pad = bar + output + strip;
   // The section's part fills the middle (lib/phoneSections.ts): one at a time.
   const middle = { at: { x: 0, y: bar }, size: { width: PHONE_WIDTH, height: output } };
   return {
@@ -250,14 +252,17 @@ function phoneLayout(rows: number): Record<string, Usual> {
     map: middle,
     scene: middle,
     heard: middle,
+    ...(fight ? { fight: { at: { x: 0, y: pad - strip }, size: { width: PHONE_WIDTH, height: strip } } } : {}),
     pad: { at: { x: 0, y: pad }, size: { width: PHONE_WIDTH, height: bar } },
     command: { at: { x: 0, y: pad + bar }, size: { width: PHONE_WIDTH, height: bar } },
     messages: { at: { x: 0, y: pad + 2 * bar }, size: { width: PHONE_WIDTH, height: foot } },
   };
 }
+/** The Fight's strip on the phone (FightPanel.tsx `strip`): its rows, above the touch pad in the Game section. */
+const PHONE_FIGHT_ROWS = 4;
 /** The game output's rows on the phone: what phoneLayout leaves it, in the theme's line height. */
-function phoneTerminalRows(theme: Theme, rows: number): number {
-  const output = rows * 16 - 4 * 48 - 2 * 16;
+function phoneTerminalRows(theme: Theme, rows: number, fight: boolean): number {
+  const output = rows * 16 - 4 * 48 - 2 * 16 - (fight ? PHONE_FIGHT_ROWS * 16 : 0);
   return Math.max(4, Math.floor(output / (theme === "ansiapps" ? 16 : 14 * 1.3)));
 }
 /** What the phone shows, whichever the way to play: the bar, the gear, the keys, the command line and the messages, and the section's own part. */
@@ -1120,8 +1125,10 @@ function App() {
   /** What's on the tablet's menu bar now, for its layout to pack (`tabletLayout`). */
   const onBar = (id: string) =>
     has(id) && (id === "mode" ? connected && !!(snapshot?.room || opponent) : id === "hangup" ? connected : id === "nowPlaying" ? !!nowPlaying : true);
+  /** The phone's Fight strip shows: in a fight, in the Game section, unless The Fight is hidden. */
+  const phoneFight = PHONE && !!bout && pictureSettings.fight && phoneSection === "game" && connected;
   const usual = PHONE
-    ? phoneLayout(phone.rows)
+    ? phoneLayout(phone.rows, phoneFight)
     : TABLET_SCREEN
       ? { ...tabletLayout(theme, tablet.columns, tablet.rows, { map: mapOpen, connected, output: showTerminal }, onBar), ...TABLET_LOWER }
       : uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
@@ -3338,7 +3345,7 @@ function App() {
               lines={lines}
               partial={partial}
               onSize={onSize}
-              rows={PHONE ? phoneTerminalRows(theme, phone.rows) : ux === "terminal" ? terminalRows(theme, connected, textSize) : 25}
+              rows={PHONE ? phoneTerminalRows(theme, phone.rows, phoneFight) : ux === "terminal" ? terminalRows(theme, connected, textSize) : 25}
               colors={display.colors}
               hide={hide}
               reviewing={reviewId}
@@ -3458,10 +3465,15 @@ function App() {
           </Movable>
         )}
 
-        {/* The Fight: over the picture in every way to play, the phone's strip still to come. */}
+        {/* The Fight: over the picture in every way to play; on the phone, a strip above the touch pad. */}
         {bout && pictureSettings.fight && !PHONE && usual.fight && (
           <Movable id="fight" label="The Fight panel" usual={usual.fight} least={FIGHT_LEAST} tier={1} frontOnShow announce={announcePanel}>
             <FightPanel bout={bout} vitals={vitals} status={playerStatus} settings={pictureSettings} scene={pictureScene} onSummary={() => openSummary("next")} />
+          </Movable>
+        )}
+        {phoneFight && bout && usual.fight && (
+          <Movable fixed id="fight" label="The Fight strip" usual={usual.fight} tier={2} announce={announcePanel}>
+            <FightPanel strip bout={bout} vitals={vitals} status={playerStatus} settings={pictureSettings} scene={pictureScene} onSummary={() => openSummary("next")} />
           </Movable>
         )}
         {ux !== "immersive" && has("picture") && (
