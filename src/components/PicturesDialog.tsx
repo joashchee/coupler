@@ -84,6 +84,10 @@ export function PicturesDialog({ open, onClose, settings, onSettings, onForgetLo
           </label>
         ))}
       </fieldset>
+      <label className="check-row">
+        <input type="checkbox" data-testid="picture-fight" checked={settings.fight} onChange={(e) => onSettings({ ...settings, fight: e.currentTarget.checked })} />
+        <span>{keys.keys("The Fight: in a fight, the two of you face off over the room, with health, mana and moves (Cmd+Shift+F)")}</span>
+      </label>
       <fieldset className="radio-group" data-testid="portrait-sources">
         <legend>Race and class portraits, while making a character</legend>
         {PORTRAIT_SOURCES.map((p) => (

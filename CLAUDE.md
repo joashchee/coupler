@@ -324,6 +324,9 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   PPM to look at), `RoomPicture.tsx`, `PicturesDialog.tsx`. Looks kept
   in `pictures/<world>.json`. Not yet: the cache, the worker, brought
   models.
+- `fight_art.rs`: The Fight's picture, the room with the two faces in
+  it (`face::standing`, the player mirrored); `FightPanel.tsx`, the bout
+  and the moods in `lib/fight.ts`. Not on the phone yet.
 - `figure.rs`: a face or an item drawn on a clear canvas, each pixel's
   part (`painter::Part`), laid on its place (the room painter's, a
   shade back) and lit by it. Tables by `scripts/painter-tables.py`:

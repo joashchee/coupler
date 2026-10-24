@@ -259,6 +259,15 @@ fn call(input: &[u8]) -> Result<Value, String> {
             let face = app.bestiary_sitter(&s("key"))?.map(|sitter| crate::face::face_in(&sitter, &moment));
             serde_json::to_value(face).map_err(|e| e.to_string())
         }
+        "fight_paint" => {
+            let moment = |name: &str| -> Result<crate::face::Moment, String> { args.get(name).cloned().filter(|m| !m.is_null()).map(serde_json::from_value).transpose().map_err(|e| e.to_string()).map(Option::unwrap_or_default) };
+            let (you_now, foe_now) = (moment("youNow")?, moment("foeNow")?);
+            let style: crate::paint::Style = serde_json::from_value(args.get("style").cloned().unwrap_or_default()).map_err(|e| e.to_string())?;
+            let columns = args.get("columns").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let (you, foe, scene) = app.fighters(&s("foe"))?;
+            let fighters = crate::fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) };
+            serde_json::to_value(crate::fight_art::paint(scene.as_ref(), style, &fighters, columns)).map_err(|e| e.to_string())
+        }
         "bestiary_item_art" => {
             let art = app.bestiary_thing(&s("key"))?.map(|t| crate::item_art::painted(&t));
             serde_json::to_value(art).map_err(|e| e.to_string())

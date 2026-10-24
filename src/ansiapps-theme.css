@@ -724,6 +724,15 @@
 :root[data-theme="ansiapps"] .gauge-warn { color: var(--dos-yellow); }
 :root[data-theme="ansiapps"] .gauge-low { color: var(--dos-lightred); }
 :root[data-theme="ansiapps"] .gauge-foe { color: var(--dos-lightmagenta); }
+:root[data-theme="ansiapps"] .fight-panel { padding: 16px 8px 16px 16px; }
+/* The Fight on blue: white words, light gray for what's empty (ranks 5
+   and 23); a health bar's lost strip white, mana and moves light cyan,
+   KO yellow (5, 7, 6). */
+:root[data-theme="ansiapps"] .fight-body { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .fight-muted { color: var(--dos-lightgray); }
+:root[data-theme="ansiapps"] .gauge-ghost { color: var(--dos-white); }
+:root[data-theme="ansiapps"] .gauge-thin { color: var(--dos-lightcyan); }
+:root[data-theme="ansiapps"] .fight-ko { color: var(--dos-yellow); }
 :root[data-theme="ansiapps"] .vitals-panel { padding: 16px 8px 16px 16px; }
 :root[data-theme="ansiapps"] .vitals-panel .scene-body { column-gap: 16px; row-gap: 0; }
 :root[data-theme="ansiapps"] .heard-body { padding-right: 8px; }

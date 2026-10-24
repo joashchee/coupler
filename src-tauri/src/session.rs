@@ -1242,6 +1242,19 @@ impl Session {
         Ok(Some(sitter))
     }
 
+    /// The Fight panel's two fighters (`fight_art.rs`): the player, by
+    /// their race from `char.base`, and the foe as the Bestiary knows it,
+    /// else by its name alone; and the room they're in.
+    pub fn fighters(&self, app: &AppHandle, foe: &str) -> Result<(face::Sitter, face::Sitter, Option<Scene>), String> {
+        let you = {
+            let character = self.character.lock().unwrap();
+            let (name, race) = character.now();
+            face::player(name.unwrap_or("you"), race)
+        };
+        let foe = self.bestiary_sitter(app, &crate::senses::letters_and_digits(foe))?.unwrap_or_else(|| face::sitter_named(foe));
+        Ok((you, foe, self.scene(app)))
+    }
+
     /// An item as its picture is painted, and the terrain of the area it's
     /// been found in most.
     pub fn bestiary_thing(&self, app: &AppHandle, key: &str) -> Result<Option<item_art::Thing>, String> {

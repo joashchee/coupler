@@ -1853,9 +1853,46 @@ pub fn face(sitter: &Sitter) -> Art {
     face_in(sitter, &Moment::default())
 }
 
-/// A creature's face as it is now: its mood, its hurt, what's on it and
-/// where it is.
-pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
+/// A creature drawn on a clear canvas of its own, as it feels and is
+/// hurt now, with what's on it: everything but the place behind it.
+struct Drawn {
+    figure: Canvas,
+    /// Where it's laid: an animal low in the frame, its back running off
+    /// the side.
+    offset: (i32, i32),
+    crown: (i32, i32),
+    feeling: Mood,
+    effects: Vec<Effect>,
+    animal: bool,
+    fish: bool,
+    /// The color behind it when it's nowhere known.
+    backdrop: u8,
+    rng: Rng,
+}
+
+impl Drawn {
+    fn invisible(&self) -> bool {
+        self.effects.contains(&Effect::Invisible)
+    }
+
+    /// Lays it on `c` (its own size), then what shows around it.
+    fn lay_on(&mut self, c: &mut Canvas, light: Option<&figure::Place>) {
+        let invisible = self.invisible();
+        figure::lay(c, &self.figure, self.offset, &|x, y| invisible && (x + y) % 2 == 1);
+        if let (Some(light), false) = (light, invisible) {
+            figure::light(c, light);
+        }
+        let crown = (self.crown.0 - self.offset.0, self.crown.1 + self.offset.1);
+        around(c, &self.effects, crown, &mut self.rng);
+        if self.feeling == Mood::Asleep {
+            let (x, y) = ((crown.0 + 6).min(W - 3), (crown.1 - 2).max(0));
+            c.glyph(x, y, 'z', WHITE);
+            c.glyph(x + 2, (y - 2).max(0), 'Z', WHITE);
+        }
+    }
+}
+
+fn drawn(sitter: &Sitter, moment: &Moment) -> Drawn {
     let look = read(sitter);
     let name = key(&sitter.name);
     let effects: Vec<Effect> = moment.effects.iter().filter_map(|e| effect(e)).collect();
@@ -1865,28 +1902,6 @@ pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
         Mood::Calm if effects.contains(&Effect::Raging) => Mood::Angry,
         m => m,
     };
-    // The place: where it is now, else where it's most seen (the wild for
-    // an animal), else a fish's water, else a backdrop of one color.
-    let fish = look.shape == Shape::Scaled(Scales::Fish);
-    let place = if let Some(scene) = &moment.scene {
-        Some(figure::place(&name, scene, SIZE.0, SIZE.1))
-    } else if let Some(t) = sitter.terrain.as_deref().filter(|t| !t.is_empty()) {
-        let t = if look.animal { figure::wild(t, &name) } else { t.to_string() };
-        Some(figure::terrain(&name, if fish { "underwater" } else { &t }, SIZE.0, SIZE.1))
-    } else if fish {
-        Some(figure::terrain(&name, "underwater", SIZE.0, SIZE.1))
-    } else {
-        None
-    };
-    let (mut canvas, light) = match place {
-        Some((canvas, light)) => (canvas, Some(light)),
-        None => {
-            let mut c = Canvas::new(SIZE.0, SIZE.1);
-            backdrop(&mut c, look.backdrop);
-            (c, None)
-        }
-    };
-    // The creature on a clear canvas of its own.
     let mut figure = figure::clear(SIZE.0, SIZE.1);
     let mut rng = Rng::new(seed("face-stuff", &name, 0));
     let anchors = match look.shape {
@@ -1900,22 +1915,68 @@ pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
     };
     mood(&mut figure, &anchors, feeling, &look);
     on_figure(&mut figure, &effects);
-    // An animal low in the frame, its back running off the side.
     let offset = if look.animal { (3, 2) } else { (0, 0) };
     hurt(&mut figure, &look, &sitter.name, moment.hurt, offset);
-    let invisible = effects.contains(&Effect::Invisible);
-    figure::lay(&mut canvas, &figure, offset, &|x, y| invisible && (x + y) % 2 == 1);
-    if let (Some(light), false) = (&light, invisible) {
-        figure::light(&mut canvas, light);
-    }
-    let crown = (anchors.crown.0 - offset.0, anchors.crown.1 + offset.1);
-    around(&mut canvas, &effects, crown, &mut rng);
-    if feeling == Mood::Asleep {
-        let (x, y) = ((crown.0 + 6).min(W - 3), (crown.1 - 2).max(0));
-        canvas.glyph(x, y, 'z', WHITE);
-        canvas.glyph(x + 2, (y - 2).max(0), 'Z', WHITE);
-    }
+    Drawn { figure, offset, crown: anchors.crown, feeling, effects, animal: look.animal, fish: look.shape == Shape::Scaled(Scales::Fish), backdrop: look.backdrop, rng }
+}
+
+/// A creature's face as it is now: its mood, its hurt, what's on it and
+/// where it is.
+pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
+    let name = key(&sitter.name);
+    let mut drawn = drawn(sitter, moment);
+    let fish = drawn.fish;
+    // The place: where it is now, else where it's most seen (the wild for
+    // an animal), else a fish's water, else a backdrop of one color.
+    let place = if let Some(scene) = &moment.scene {
+        Some(figure::place(&name, scene, SIZE.0, SIZE.1))
+    } else if let Some(t) = sitter.terrain.as_deref().filter(|t| !t.is_empty()) {
+        let t = if drawn.animal { figure::wild(t, &name) } else { t.to_string() };
+        Some(figure::terrain(&name, if fish { "underwater" } else { &t }, SIZE.0, SIZE.1))
+    } else if fish {
+        Some(figure::terrain(&name, "underwater", SIZE.0, SIZE.1))
+    } else {
+        None
+    };
+    let (mut canvas, light) = match place {
+        Some((canvas, light)) => (canvas, Some(light)),
+        None => {
+            let mut c = Canvas::new(SIZE.0, SIZE.1);
+            backdrop(&mut c, drawn.backdrop);
+            (c, None)
+        }
+    };
+    drawn.lay_on(&mut canvas, light.as_ref());
     canvas.art()
+}
+
+/// A creature as it is now on a clear canvas of the face's size, with
+/// nothing behind it, to stand in a picture of its own (the Fight panel,
+/// `fight_art.rs`). Unlit: the picture it stands in lights it.
+pub(crate) fn standing(sitter: &Sitter, moment: &Moment) -> Canvas {
+    let mut c = figure::clear(SIZE.0, SIZE.1);
+    drawn(sitter, moment).lay_on(&mut c, None);
+    c
+}
+
+/// A creature known by its name alone (one the Bestiary hasn't met): the
+/// race its name says, else a person, plain rather than made up.
+pub fn sitter_named(name: &str) -> Sitter {
+    let race = crate::bestiary::race_in_name(name);
+    Sitter { name: name.to_string(), race: race.map(|r| r.name.to_string()), category: race.map(|r| r.category.to_string()), ..Sitter::default() }
+}
+
+/// The player's character: their race from `char.base`, nothing else
+/// asked of the game for it.
+pub fn player(name: &str, race: Option<&str>) -> Sitter {
+    let known = race.and_then(crate::bestiary::race_named);
+    Sitter {
+        name: name.to_string(),
+        race: race.map(str::to_string),
+        category: known.map(|r| r.category.to_string()),
+        skilled: true,
+        ..Sitter::default()
+    }
 }
 
 #[cfg(test)]

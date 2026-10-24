@@ -1,7 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.38.0 (2026-10-24)
 
+- **The Fight** (2026-10-24): in a fight, a panel of its own faces you
+  off against your foe over the room you're fighting in, painted by
+  Coupler's painter: you on the left (your character's race, turned to
+  face them), the foe on the right (as the Bestiary knows it, else from
+  its name), each angry, in pain, afraid or dead and hurt in five steps
+  as your health and theirs fall. Health bars meet in the middle (a
+  loss leaves a strip that drains away), with your mana and moves, the
+  fight's clock, the range and, at the end, KO. Over the picture in
+  Workshop and Immersive, over the Control Panel in Terminal; also on
+  the tablet and the web. Cmd+Shift+F or gear → Pictures… hides it.
 - **Faces in their place, with moods, wounds and effects** (2026-10-24):
   a creature's face in the Bestiary stands in the area it's seen in
   most, painted by the room painter a shade darker (an animal in the

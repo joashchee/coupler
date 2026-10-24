@@ -44,6 +44,8 @@ mod daytime;
 mod echo;
 #[path = "../../src-tauri/src/face.rs"]
 mod face;
+#[path = "../../src-tauri/src/fight_art.rs"]
+mod fight_art;
 mod ffi;
 #[path = "../../src-tauri/src/figure.rs"]
 mod figure;

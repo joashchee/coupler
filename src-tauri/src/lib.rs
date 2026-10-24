@@ -54,6 +54,7 @@ mod ports;
 mod painter;
 mod portrait;
 mod face;
+mod fight_art;
 mod figure;
 mod item_art;
 mod screen_reader;
@@ -258,6 +259,15 @@ fn bestiary_mob(app: AppHandle, key: String, session: State<'_, Session>) -> Res
 #[tauri::command]
 fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
     Ok(session.bestiary_sitter(&app, &key)?.map(|s| face::face_in(&s, &moment.unwrap_or_default())))
+}
+
+/// The Fight panel's picture by Coupler's painter (fight_art.rs): the
+/// room, the player on the left and `foe` on the right, each as their
+/// moment has them, `columns` wide.
+#[tauri::command]
+fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, session: State<'_, Session>) -> Result<ansi_art::Art, String> {
+    let (you, foe, scene) = session.fighters(&app, &foe)?;
+    Ok(fight_art::paint(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns))
 }
 
 /// An item's picture by Coupler's painter (item_art.rs), from all that's
@@ -1096,6 +1106,7 @@ pub fn run() {
             picture_paint,
             portrait_paint,
             bestiary_face,
+            fight_paint,
             bestiary_item_art,
             assets_list,
             assets_import,

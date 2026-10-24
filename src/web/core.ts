@@ -449,6 +449,7 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
     case "bestiary_items":
     case "bestiary_item":
     case "bestiary_face":
+    case "fight_paint":
     case "bestiary_item_art":
     case "bestiary_auto_look":
     case "automation_set":

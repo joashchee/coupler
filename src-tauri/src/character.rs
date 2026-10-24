@@ -37,6 +37,8 @@ pub enum Left {
 pub struct Character {
     /// The character playing now, from `char.base`; None until one comes in.
     name: Option<String>,
+    /// Their race, from `char.base`: the Fight panel's face (`fight_art.rs`).
+    race: Option<String>,
     /// The unfinished line last seen, so only a prompt that's new arms a logout.
     last_partial: Option<String>,
     /// The game has just asked whether to log out.
@@ -60,9 +62,15 @@ impl Character {
         let asked = std::mem::take(&mut self.logout_asked);
         if asked && line.trim_start().starts_with(['y', 'Y']) {
             self.name = None;
+            self.race = None;
             return Some(Left::Logout);
         }
         None
+    }
+
+    /// The character playing now and their race, as `char.base` gave them.
+    pub fn now(&self) -> (Option<&str>, Option<&str>) {
+        (self.name.as_deref(), self.race.as_deref())
     }
 
     /// A GMCP message: a `char.base` naming someone else is a switch.
@@ -71,6 +79,7 @@ impl Character {
             return None;
         }
         let value: serde_json::Value = serde_json::from_str(data).ok()?;
+        self.race = value.get("race").and_then(|r| r.as_str()).map(str::trim).filter(|r| !r.is_empty()).map(str::to_string);
         let name = value.get("name")?.as_str()?.trim();
         if name.is_empty() {
             return None;
@@ -125,7 +134,8 @@ mod tests {
         let mut c = Character::default();
         // The first is just coming in.
         assert_eq!(c.gmcp("Char.Base", r#"{"name":"Ada","class":"Fighter"}"#), None);
-        assert_eq!(c.gmcp("char.base", r#"{"name":"Ada","class":"Fighter"}"#), None);
+        assert_eq!(c.gmcp("char.base", r#"{"name":"Ada","class":"Fighter","race":"Elf"}"#), None);
+        assert_eq!(c.now(), (Some("Ada"), Some("Elf")));
         assert_eq!(c.gmcp("char.base", r#"{"name":"Bo"}"#), Some(Left::Switch("Bo".into())));
         assert_eq!(c.gmcp("char.vitals", r#"{"name":"Cy"}"#), None);
         assert_eq!(c.gmcp("char.base", "not json"), None);

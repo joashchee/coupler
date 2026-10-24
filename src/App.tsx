@@ -30,6 +30,7 @@ import * as automation from "./lib/automation";
 import { PriorityDialog } from "./components/PriorityDialog";
 import { DisplayDialog } from "./components/DisplayDialog";
 import { PicturePanel } from "./components/PicturePanel";
+import { FightPanel } from "./components/FightPanel";
 import { VitalsPanel } from "./components/VitalsPanel";
 import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
@@ -53,6 +54,7 @@ import * as echoes from "./lib/echoes";
 import * as account from "./lib/account";
 import { CONTROLS, loadArranging, loadControls, saveArranging, saveControls, type ControlId, type Controls } from "./lib/controlPanel";
 import { useImmersive } from "./lib/immersive";
+import { useBout } from "./lib/fight";
 import { ExitsReader, promptCut } from "./lib/output";
 import * as mud from "./lib/mud";
 import * as updates from "./lib/updates";
@@ -134,6 +136,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
           vitals: { at: { x: 680, y: 288 }, size: { width: 600, height: 64 } },
           map: { at: { x: 680, y: 352 }, size: { width: 600, height: 336 } },
           picture: { at: { x: 680, y: 352 }, size: { width: 600, height: 256 } },
+          fight: { at: { x: 680, y: 16 }, size: { width: 600, height: 304 } },
           heard: { at: { x: 680, y: 528 }, size: { width: 600, height: 160 } },
           journal: { at: { x: 680, y: 688 } },
           log: { at: { x: 680, y: 704 } },
@@ -149,6 +152,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
           vitals: { at: { x: 732, y: 318 }, size: { width: 536, height: 66 } },
           map: { at: { x: 732, y: 392 }, size: { width: 536, height: 280 } },
           picture: { at: { x: 732, y: 392 }, size: { width: 536, height: 260 } },
+          fight: { at: { x: 732, y: 50 }, size: { width: 536, height: 340 } },
           heard: { at: { x: 732, y: 532 }, size: { width: 536, height: 140 } },
           journal: { at: { x: 732, y: 680 } },
           log: { at: { x: 732, y: 700 } },
@@ -162,6 +166,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
     ? {
         ...bar,
         scene: { at: { x: 0, y: 16 }, size: { width: 600, height: 640 } },
+        fight: { at: { x: 0, y: 16 }, size: { width: 600, height: 304 } },
         ports: { at: { x: 0, y: 16 }, size: { width: 600, height: 640 } },
         terminal: { at: { x: 608, y: 16 } },
         heard: { at: { x: 608, y: 432 }, size: { width: 672, height: 224 } },
@@ -174,6 +179,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
     : {
         ...bar,
         scene: { at: { x: 12, y: 62 }, size: { width: 541, height: 545 } },
+        fight: { at: { x: 12, y: 62 }, size: { width: 541, height: 340 } },
         ports: { at: { x: 12, y: 62 }, size: { width: 541, height: 545 } },
         terminal: { at: { x: 561, y: 62 } },
         heard: { at: { x: 561, y: 544 }, size: { width: 707, height: 63 } },
@@ -325,6 +331,7 @@ function tabletLayout(theme: Theme, columns: number, rows: number, showing: Show
     map: lower,
     scene: lower,
     picture: { at: lower.at, size: { width: inner, height: Math.min(part, 256) } },
+    fight: { at: lower.at, size: { width: inner, height: ansi ? 304 : 340 } },
     journal: { at: { x: edge, y: bottom + (ansi ? 0 : 4) } },
     log: { at: { x: edge + (ansi ? 136 : 148), y: bottom + (ansi ? 0 : 4) } },
     hooks: { at: { x: edge + (ansi ? 272 : 296), y: bottom + (ansi ? 0 : 4) } },
@@ -417,6 +424,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
       scene: { at: { x: 864, y: 16 }, size: { width: 416, height: 672 } },
       heard: { at: { x: 0, y: 16 }, size: { width: main, height: 192 } },
       picture: { at: { x: 864, y: 16 }, size: { width: 416, height: 256 } },
+      fight: { at: { x: 864, y: 16 }, size: { width: 416, height: 304 } },
       vitals: { at: { x: 0, y: 16 }, size: { width: 704, height: 64 } },
     };
   }
@@ -445,6 +453,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
     scene: { at: { x: 868, y: 62 }, size: { width: 400, height: 610 } },
     heard: { at: { x: 12, y: 62 }, size: { width: main, height: 128 } },
     picture: { at: { x: 868, y: 62 }, size: { width: 400, height: 260 } },
+    fight: { at: { x: 868, y: 62 }, size: { width: 400, height: 340 } },
     vitals: { at: { x: 12, y: 62 }, size: { width: 720, height: 66 } },
   };
 }
@@ -452,6 +461,8 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
 const PANEL_LEAST = { width: 208, height: 128 };
 /** The game output made smallest in Workshop: 20 columns by 5 rows, the least NAWS sends (components/Terminal.tsx). */
 const TERMINAL_LEAST = { width: 208, height: 96 };
+/** The Fight: its rows and its picture, in a frame at least 40 cells across (fight_art.rs). */
+const FIGHT_LEAST = { width: 352, height: 304 };
 /** You is two lines of gauges in its frame. */
 const VITALS_LEAST = { width: 208, height: 64 };
 /** Whether Workshop mode is on (things can be moved and resized): only "on" means it is. */
@@ -478,6 +489,7 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Say where you are and the exits", "Cmd+Shift+L"],
   ["Say your health, mana and movement", "Cmd+Shift+V"],
   ["Say who you're fighting", "Cmd+Shift+E"],
+  ["Show or hide The Fight, the face-off in a fight", "Cmd+Shift+F"],
   ["Say who's online", "Cmd+Shift+W"],
   ["Say what the game said since your last command", "Cmd+Shift+O"],
   ["Stop Coupler's voice and everything waiting to be said", "Cmd+Period"],
@@ -1068,6 +1080,8 @@ function App() {
   const showTerminal = connected || lines.length > 0;
   const pictureLandmark = !!pictureScene && snapshot?.room?.id === pictureScene.room && !!snapshot.room.landmark;
   const pictureOn = pictureShows(pictureSettings, pictureScene, pictureLandmark, pictureAskedFor);
+  /** The fight, for The Fight panel: from Combat mode's start to a moment after its end (lib/fight.ts). */
+  const bout = useBout(opponent, connected);
   /** Big text is Terminal's: the other ways to play have too much on the screen for it. */
   const textSize: TextSize = ux === "terminal" ? display.textSize : 1;
   /** Whether a thing is on this way to play's screen. */
@@ -1776,6 +1790,13 @@ function App() {
     setError(null);
     setStatus(on ? "Arranging: drag or Tab to a corner, then the arrow keys. Untick Arrange when done." : "Arranging done.");
   }, []);
+
+  const toggleFight = useCallback(() => {
+    const next = { ...pictureSettings, fight: !pictureSettings.fight };
+    setPictureSettings(next);
+    savePictures(next);
+    setStatus(next.fight ? "The Fight shows in a fight." : "The Fight hidden.");
+  }, [pictureSettings]);
 
   const toggleMap = useCallback(() => {
     if (controlPanel) return toggleControl("map", !controls.map);
@@ -2499,6 +2520,9 @@ function App() {
       } else if (chord && key === "m") {
         e.preventDefault();
         toggleMap();
+      } else if (chord && key === "f") {
+        e.preventDefault();
+        toggleFight();
       } else if (chord && key === "h") {
         e.preventDefault();
         setHooksOpen(true);
@@ -2531,7 +2555,7 @@ function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFullscreen, stopEverything, paintRoom, changeTabletText]);
+  }, [anyDialogOpen, gearOpen, connected, creationStep, accountMenu, accountHidden, showStatus, whereAmI, sayUnheard, playUnheard, sayVitals, sayOpponent, sayWho, sayRecent, sayNow, reviewStep, reviewLive, chooseUx, toggleMap, toggleFight, toggleFullscreen, stopEverything, paintRoom, changeTabletText]);
 
   useEffect(() => {
     if (!gearOpen) return;
@@ -3376,6 +3400,12 @@ function App() {
           </Movable>
         )}
 
+        {/* The Fight: over the picture in every way to play, the phone's strip still to come. */}
+        {bout && pictureSettings.fight && !PHONE && usual.fight && (
+          <Movable id="fight" label="The Fight panel" usual={usual.fight} least={FIGHT_LEAST} tier={1} frontOnShow announce={announcePanel}>
+            <FightPanel bout={bout} vitals={vitals} settings={pictureSettings} scene={pictureScene} />
+          </Movable>
+        )}
         {ux !== "immersive" && has("picture") && (
           <Movable id="picture" label="Picture panel" usual={usual.picture} least={PANEL_LEAST} tier={1} announce={announcePanel}>
             <PicturePanel scene={pictureScene} settings={pictureSettings} shows={pictureOn} />

@@ -25,6 +25,8 @@ export interface PictureSettings {
   style: PictureStyle;
   when: PictureWhen;
   portraits: PortraitSource;
+  /** The Fight panel (components/FightPanel.tsx) opens in a fight; Cmd+Shift+F shows or hides it. */
+  fight: boolean;
 }
 
 export const PORTRAIT_SOURCES: { id: PortraitSource; name: string; summary: string }[] = [
@@ -49,7 +51,7 @@ export const PICTURE_WHENS: { id: PictureWhen; name: string; summary: string }[]
 ];
 
 const KEY = "coupler.pictures";
-const DEFAULT: PictureSettings = { engine: "painter", style: "fantasy", when: "every", portraits: "painter" };
+const DEFAULT: PictureSettings = { engine: "painter", style: "fantasy", when: "every", portraits: "painter", fight: true };
 
 export function loadPictures(): PictureSettings {
   try {
@@ -59,6 +61,7 @@ export function loadPictures(): PictureSettings {
       style: PICTURE_STYLES.some((s) => s.id === kept.style) ? (kept.style as PictureStyle) : DEFAULT.style,
       when: PICTURE_WHENS.some((w) => w.id === kept.when) ? (kept.when as PictureWhen) : DEFAULT.when,
       portraits: PORTRAIT_SOURCES.some((p) => p.id === kept.portraits) ? (kept.portraits as PortraitSource) : DEFAULT.portraits,
+      fight: typeof kept.fight === "boolean" ? kept.fight : DEFAULT.fight,
     };
   } catch {
     return { ...DEFAULT };

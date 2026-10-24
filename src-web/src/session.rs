@@ -1316,6 +1316,16 @@ impl Coupler {
         Ok(Some(sitter))
     }
 
+    /// The Fight panel's two fighters (`fight_art.rs`): the player by
+    /// their race, the foe as the Bestiary knows it, else by its name
+    /// alone; and the room they're in.
+    pub fn fighters(&self, foe: &str) -> Result<(crate::face::Sitter, crate::face::Sitter, Option<Scene>), String> {
+        let (name, race) = self.character.now();
+        let you = crate::face::player(name.unwrap_or("you"), race);
+        let foe = self.bestiary_sitter(&letters_and_digits(foe))?.unwrap_or_else(|| crate::face::sitter_named(foe));
+        Ok((you, foe, self.scene()))
+    }
+
     /// An item as its picture is painted, in the terrain of the area it's
     /// been found in most.
     pub fn bestiary_thing(&self, key: &str) -> Result<Option<crate::item_art::Thing>, String> {

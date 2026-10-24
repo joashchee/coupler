@@ -395,6 +395,48 @@ impl Canvas {
         }
     }
 
+    /// The canvas as in a mirror, left for right: a fighter on the left
+    /// of the Fight panel faces the one on the right (`fight_art.rs`).
+    pub(crate) fn mirrored(&self) -> Canvas {
+        let mut m = Canvas::new(self.w as usize, (self.h / 2) as usize);
+        for y in 0..self.h {
+            for x in 0..self.w {
+                let i = (y * self.w + x) as usize;
+                m.put(self.w - 1 - x, y, self.pixels[i], self.lit[i], self.parts[i]);
+            }
+        }
+        for row in 0..self.h / 2 {
+            for x in 0..self.w {
+                m.glyphs[(row * self.w + self.w - 1 - x) as usize] = self.glyphs[(row * self.w + x) as usize];
+            }
+        }
+        m
+    }
+
+    /// Lays `other` on this canvas with its top left at pixel (`at`, 0):
+    /// every pixel of it that isn't `clear`, and its characters; what was
+    /// written over those pixels goes.
+    pub(crate) fn stamp(&mut self, other: &Canvas, at: i32, clear: u8) {
+        for y in 0..other.h.min(self.h) {
+            for x in 0..other.w {
+                let i = (y * other.w + x) as usize;
+                if other.pixels[i] != clear && self.inside(x + at, y) {
+                    self.put(x + at, y, other.pixels[i], other.lit[i], other.parts[i]);
+                    self.unglyph(x + at, y);
+                }
+            }
+        }
+        for row in 0..(other.h / 2).min(self.h / 2) {
+            for x in 0..other.w {
+                if let Some(g) = other.glyphs[(row * other.w + x) as usize] {
+                    if self.inside(x + at, row * 2) {
+                        self.glyphs[(row * self.w + x + at) as usize] = Some(g);
+                    }
+                }
+            }
+        }
+    }
+
     /// The cells as lines of styled characters.
     pub(crate) fn art(&self) -> Art {
         let rows = (self.h / 2) as usize;

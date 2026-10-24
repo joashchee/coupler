@@ -6,6 +6,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { parseColor, readable, rgbCss, type GameColors } from "./display";
+import type { FaceMoment } from "./fight";
 
 export type Color = { kind: "index"; index: number } | { kind: "rgb"; r: number; g: number; b: number };
 
@@ -418,6 +419,13 @@ export const bestiaryMobs = (query: string) => invoke<MobRow[]>("bestiary_mobs",
 export const bestiaryMob = (key: string) => invoke<MobEntry | null>("bestiary_mob", { key });
 /** A creature's face by Coupler's painter (src-tauri/src/face.rs): 25 by 12 cells, 200 by 192. */
 export const bestiaryFace = (key: string) => invoke<AnsiArt | null>("bestiary_face", { key });
+/**
+ * The Fight panel's picture by Coupler's painter (src-tauri/src/fight_art.rs):
+ * the room, the player on the left and `foe` on the right, each as their
+ * moment has them; `columns` wide (at least 40), 12 rows.
+ */
+export const fightPaint = (foe: string, youNow: FaceMoment, foeNow: FaceMoment, style: PictureStyle, columns: number) =>
+  invoke<AnsiArt>("fight_paint", { foe, youNow, foeNow, style, columns });
 /** An item's picture by Coupler's painter (src-tauri/src/item_art.rs), the same size as a face, and its slot in words (written on it). */
 export const bestiaryItemArt = (key: string) => invoke<{ art: AnsiArt; slot: string } | null>("bestiary_item_art", { key });
 export const bestiaryItems = (query: string) => invoke<ItemRow[]>("bestiary_items", { query });

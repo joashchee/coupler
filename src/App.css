@@ -714,6 +714,16 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .gauge-warn { color: var(--accent); }
 .gauge-low { color: var(--warn); }
 .gauge-foe { color: #ff55ff; }
+/* The Fight (FightPanel.tsx): rows of cells in the VGA font, as its picture is, so the two keep one grid. */
+.fight-panel { display: flex; flex-direction: column; }
+.fight-body { flex: 1 1 auto; min-height: 0; overflow: hidden; font-family: "ansiapps VGA", monospace; font-size: 16px; line-height: 16px; white-space: pre; color: var(--text); }
+.fight-row { margin: 0; height: 16px; overflow: hidden; }
+.fight-muted { color: var(--muted); }
+.gauge-ghost { color: var(--text); }
+.gauge-thin { color: var(--accent); }
+.fight-ko { color: var(--accent); }
+.fight-picture { background: #000000; overflow: hidden; user-select: none; }
+.fight-picture-row { height: 16px; }
 /* You: two columns, Health and Mana over Moves and the fight, to fit above the game output. */
 .vitals-panel { display: flex; flex-direction: column; padding: 8px 16px; }
 .vitals-panel .scene-body { display: grid; grid-template-columns: repeat(2, max-content); column-gap: 24px; row-gap: 2px; overflow: hidden; }

@@ -40,6 +40,15 @@ pub(crate) fn place(key: &str, scene: &Scene, columns: usize, rows: usize) -> (C
     (canvas, Place { indoors: !ambient::has_sky(&terrain), night: scene.time.as_deref() == Some("night") })
 }
 
+/// The room itself as its picture shows it (the same look), darkened:
+/// the Fight panel's scene (`fight_art.rs`).
+pub(crate) fn room(scene: &Scene, style: Style, columns: usize, rows: usize) -> (Canvas, Place) {
+    let mut canvas = draw(scene, style, columns, rows, scene.look);
+    canvas.recede();
+    let terrain = scene.terrain.to_ascii_lowercase();
+    (canvas, Place { indoors: !ambient::has_sky(&terrain), night: scene.time.as_deref() == Some("night") })
+}
+
 /// A place from the terrain alone, by day.
 pub(crate) fn terrain(key: &str, terrain: &str, columns: usize, rows: usize) -> (Canvas, Place) {
     place(key, &Scene { terrain: terrain.into(), ..Scene::default() }, columns, rows)
