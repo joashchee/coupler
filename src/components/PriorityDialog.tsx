@@ -133,17 +133,15 @@ export function PriorityDialog({ open, onClose, onStatus }: PriorityDialogProps)
         {list.length === 0 ? "Nothing is Priority Audio: everything waits its turn." : `${list.length} ${list.length === 1 ? "thing" : "things"} on the list.`}
       </p>
       <div className="hooks-head priority-row" aria-hidden="true">
+        <span />
         <span>What</span>
         <span>Kind</span>
-        <span />
       </div>
       <ul className="hooks-list priority-list" data-testid="priority-list" aria-label="Priority Audio: what, then its kind">
         {list.map((e) => {
           const name = nameOf(e, listing);
           return (
             <li key={`${e.kind}:${e.kind === "line" ? e.text : e.id}`} className="priority-row">
-              <span className="hook-key">{name}</span>
-              <span className="hook-value">{KINDS[e.kind]}</span>
               <button
                 type="button"
                 className="hook-edit"
@@ -156,6 +154,8 @@ export function PriorityDialog({ open, onClose, onStatus }: PriorityDialogProps)
               >
                 Remove
               </button>
+              <span className="hook-key">{name}</span>
+              <span className="hook-value">{KINDS[e.kind]}</span>
             </li>
           );
         })}

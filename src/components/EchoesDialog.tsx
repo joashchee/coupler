@@ -135,10 +135,10 @@ export function EchoesDialog({ open, onClose, onStatus }: EchoesDialogProps) {
         </p>
         {/* The columns' names, for the eye; each Edit button says its row. */}
         <div className="hooks-head echoes-row" aria-hidden="true">
+          <span />
           <span>Command</span>
           <span>The game writes</span>
           <span>The narrator says</span>
-          <span />
         </div>
         <ul className="hooks-list echoes-list" data-testid="echoes-list" tabIndex={0} aria-label="Answers: the command, what the game writes, then what the narrator says">
           {open &&
@@ -149,15 +149,15 @@ export function EchoesDialog({ open, onClose, onStatus }: EchoesDialogProps) {
               const line = echoes.shownLine(e.line);
               return (
                 <li key={e.id} className="echoes-row">
+                  <button type="button" className="hook-edit" data-testid={`echoes-edit-${e.id}`} aria-label={`Edit: ${line} The narrator says: ${says}`} onClick={() => setEditing(e)}>
+                    Edit…
+                  </button>
                   <span className="hook-value">{calledBy(e, listing)}</span>
                   <span className="hook-key">{line}</span>
                   <span className={mine ? "hook-sets-off" : "hook-value"}>
                     {echoes.shownLine(says.replace(/\{\d\}/g, "*"))}
                     {mine ? ", set by you" : ""}
                   </span>
-                  <button type="button" className="hook-edit" data-testid={`echoes-edit-${e.id}`} aria-label={`Edit: ${line} The narrator says: ${says}`} onClick={() => setEditing(e)}>
-                    Edit…
-                  </button>
                 </li>
               );
             })}

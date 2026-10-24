@@ -363,15 +363,22 @@ impl Who {
         (QUIET_AFTER_TYPING..IDLE_AFTER).contains(&since_typed)
     }
 
-    /// Whether the player's rules may send on their own now (a ticker,
+    /// Whether the player's rules may send on their own (a ticker,
     /// `automation.rs`): a character in the game, no password being
-    /// typed, nothing being made, no WHO waiting, and the player not
-    /// away 9 minutes (it would defeat the game's idle timers).
+    /// typed, nothing being made, and the player not away 9 minutes (it
+    /// would defeat the game's idle timers). A WHO waiting is `awaiting`.
     pub fn present(&self, now: Instant) -> bool {
-        if self.me.is_empty() || self.secret || self.creating || self.listing.is_some() || self.asked.is_some() {
+        if self.me.is_empty() || self.secret || self.creating {
             return false;
         }
         self.typed_at.is_some_and(|typed| now.saturating_duration_since(typed) < IDLE_AFTER)
+    }
+
+    /// Whether Coupler's WHO is waiting for its reply, or the reply is
+    /// still coming: a ticker waits till it's done rather than send into
+    /// it (its answer would be hidden with WHO's).
+    pub fn awaiting(&self) -> bool {
+        self.listing.is_some() || self.asked.is_some()
     }
 
     /// Whether a trigger may send now: a character in the game, no
@@ -688,8 +695,12 @@ mod tests {
     fn present_for_the_tickers() {
         let t = Instant::now();
         let mut who = playing(t);
-        assert!(who.present(t + secs(1)) && who.acting());
+        assert!(who.present(t + secs(1)) && who.acting() && !who.awaiting());
         assert!(!who.present(t + IDLE_AFTER));
+        // WHO waiting: still present, but awaited.
+        let mut asking = playing(t);
+        assert!(asking.due(t + secs(60)));
+        assert!(asking.present(t + secs(61)) && asking.awaiting());
         who.echo(true);
         assert!(!who.present(t + secs(1)) && !who.acting());
         assert!(!Who::default().present(t) && !Who::default().acting());

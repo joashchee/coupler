@@ -43,6 +43,7 @@ use crate::songbook::{self, Finder, Poster};
 use crate::music;
 use crate::ansi::{Line, Screen};
 use crate::automation::{self, Automation};
+use crate::channels::Channels;
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
@@ -341,6 +342,8 @@ pub struct Session {
     automation: Mutex<Automation>,
     /// Portals, ships and caravans, read from the exits text (`ways.rs`).
     ways: Mutex<Ways>,
+    /// The game's channels, turned on and off by its own commands (`channels.rs`).
+    channels: Mutex<Channels>,
 }
 
 /// Something Coupler held back of the player's rules: too much at once.
@@ -520,6 +523,7 @@ impl Session {
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
+        self.channels.lock().unwrap().closed();
         self.automation.lock().unwrap().closed();
         *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
 
@@ -679,6 +683,44 @@ impl Session {
         Ok(freed)
     }
 
+    // ---- The game's channels (channels.rs) ----
+
+    /// Reads the game's channels: its answer comes as `channels`.
+    pub fn channels_ask(&self, app: &AppHandle) -> Result<(), String> {
+        self.channel_commands(app, |c, now| c.ask(now))
+    }
+
+    /// Turns a channel on or off with the game's own commands.
+    pub fn channel_set(&self, app: &AppHandle, name: &str, on: bool) -> Result<(), String> {
+        self.channel_commands(app, |c, now| c.turn(name, on, now))
+    }
+
+    /// Turns every channel on or off.
+    pub fn channels_all(&self, app: &AppHandle, on: bool) -> Result<(), String> {
+        self.channel_commands(app, |c, now| c.all(on, now))
+    }
+
+    /// Sends what `make` gives, as the player's own commands: only with a
+    /// character in the game, never into a password or a WRITE.
+    fn channel_commands(&self, app: &AppHandle, make: impl FnOnce(&mut Channels, Instant) -> Vec<String>) -> Result<(), String> {
+        if !self.who.lock().unwrap().acting() {
+            return Err("The channels are your character's: enter the game first.".into());
+        }
+        if self.songbook.lock().unwrap().poster.is_some() {
+            return Err("A journal entry is being written: the channels wait till it's done.".into());
+        }
+        let now = Instant::now();
+        let lines = make(&mut self.channels.lock().unwrap(), now);
+        if lines.is_empty() {
+            return Err("That isn't a channel's name.".into());
+        }
+        for line in lines {
+            self.send_command(app, &line)?;
+            self.who.lock().unwrap().typed(&line, now);
+        }
+        Ok(())
+    }
+
     // ---- The player's rules (automation.rs) ----
 
     pub fn automation_set(&self, rules: automation::Rules) {
@@ -697,8 +739,11 @@ impl Session {
 
     /// Sends the tickers that are due (`who_tick`, each second).
     fn automation_tick(&self, app: &AppHandle, now: Instant) {
-        let present = self.who.lock().unwrap().present(now);
-        let due = self.automation.lock().unwrap().tick(now, present);
+        let (present, awaiting) = {
+            let who = self.who.lock().unwrap();
+            (who.present(now), who.awaiting())
+        };
+        let due = self.automation.lock().unwrap().tick(now, present, awaiting);
         for line in due {
             self.send_auto(app, &line);
         }
@@ -723,6 +768,10 @@ impl Session {
         // A WRITE under way takes the next lines as its answers: nothing
         // of Coupler's own (WHO, WEATHER, a look, a ticker) goes till it's done.
         if self.songbook.lock().unwrap().poster.is_some() {
+            return;
+        }
+        // Nor while the answer to a channel command is still coming (channels.rs).
+        if self.channels.lock().unwrap().awaiting(now) {
             return;
         }
         self.automation_tick(app, now);
@@ -1512,6 +1561,7 @@ impl Session {
         self.echoes.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
+        self.channels.lock().unwrap().closed();
         self.bestiary.lock().unwrap().reader.clear();
         let message = match &left {
             Left::Logout => {
@@ -2306,6 +2356,17 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         let (learned, died, mut hidden_lines) = session.bestiary_lines(app, &texts, prompted);
         bestiary_changed |= learned;
         cries.extend(died.into_iter().map(|(c, cry)| (c, cry, None)));
+        // The answers to Coupler's channel commands aren't shown either (channels.rs).
+        {
+            let mut channels = session.channels.lock().unwrap();
+            let now = Instant::now();
+            hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| channels.line(text, now)).map(|(i, _)| i));
+            if let Some(listing) = channels.take_listing() {
+                let _ = app.emit("channels", listing);
+            }
+        }
+        hidden_lines.sort_unstable();
+        hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
             let before = (0..first).rev().find(|&i| !texts[i].trim().is_empty() || i == 0);
             let prompt = shown_partial.as_ref().map(|line| line.iter().map(|span| span.text.as_str()).collect::<String>());

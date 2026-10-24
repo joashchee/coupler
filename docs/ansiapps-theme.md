@@ -135,6 +135,12 @@ for free.
 - **Selection**: list rows are borderless lines, and the selected one
   is a cyan bar with black text, as in a file panel. Menus highlight
   in green.
+- **A row's own buttons come first** (decided 2026-10-24, Coupler):
+  a button that acts on one entry of a list (Show..., Play, Edit...,
+  Delete) sits at the row's left edge, before its name and its `[ ]`
+  box, and the head row's blank cell with it. The eye and the Tab key
+  meet it first, at the same column on every row, however long the
+  name. Not yet ported to the sister apps.
 - **Controls**: checkboxes render as `[ ]` / `[X]`. Text inputs are
   black command-line strips. Focus is a dashed white outline.
 - **No easing, but ANSI animation is welcome**: no fades, slides or

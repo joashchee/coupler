@@ -494,12 +494,12 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .hooks-list li { display: grid; grid-template-columns: 16px 280px 1fr; gap: 0 12px; align-items: start; overflow-wrap: anywhere; }
 .hooks-list input[type="checkbox"] { width: 14px; height: 14px; margin: 2px 0 0; accent-color: var(--accent); }
 .hook-key { color: var(--text); }
-/* The hooks list with what each pair sets off (HooksDialog.tsx): name,
-   value, then SFX, BGM, its loop box, ART and the picture's column and
-   row. The head row names the columns and lines up with them. */
+/* The hooks list with what each pair sets off (HooksDialog.tsx): Edit
+   (a row's own buttons come first), its box, name, value, then what it
+   sets off. The head row names the columns and lines up with them. */
 .dialog-box.dialog-hooks { max-width: 1216px; }
 .hooks-head,
-.hooks-list.hooks-list-assets li { display: grid; grid-template-columns: 16px 190px minmax(0, 1fr) 440px 64px; gap: 0 12px; align-items: start; }
+.hooks-list.hooks-list-assets li { display: grid; grid-template-columns: 64px 16px 190px minmax(0, 1fr) 440px; gap: 0 12px; align-items: start; }
 .hook-sets-off { color: var(--text); }
 .hook-edit { padding: 1px 8px; font-size: 12px; }
 /* The hook editor (HookEditor.tsx): a row a kind, its name, its asset,
@@ -525,16 +525,16 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
   font-size: 12px;
 }
 .hook-loop { display: flex; align-items: center; gap: 4px; }
-/* The Assets tab: a bullet in green (the theme's --good) beside each
-   asset a hook uses, then its name, kind, file, what plays it (a MIDI
-   file's SoundFont menu), its uses in words, and Play or Show. */
+/* The Assets tab: Play or Show, a bullet in green (the theme's --good)
+   beside each asset a hook uses, then its name, kind, file, what plays it
+   (a MIDI file's SoundFont menu) and its uses in words. */
 .hooks-head.assets-row,
-.hooks-list.assets-list li { grid-template-columns: 12px 200px 72px minmax(0, 1fr) 176px 136px 64px; gap: 0 12px; }
-/* CoffeeMUD's Sounds: a bullet beside each default the player's own
-   sound replaces, the pair's name and value, the bank's sound, the
-   player's, then Play and Edit. Each group is a heading row across. */
+.hooks-list.assets-list li { grid-template-columns: 64px 12px 200px 72px minmax(0, 1fr) 176px 136px; gap: 0 12px; }
+/* CoffeeMUD's Sounds: Play and Edit, a bullet beside each default the
+   player's own sound replaces, the pair's name and value, the bank's
+   sound, then the player's. Each group is a heading row across. */
 .hooks-head.bank-row,
-.hooks-list.bank-list li { grid-template-columns: 12px 160px minmax(0, 1fr) 280px 280px 56px 64px; gap: 0 12px; }
+.hooks-list.bank-list li { grid-template-columns: 56px 64px 12px 160px minmax(0, 1fr) 280px 280px; gap: 0 12px; }
 .hooks-list.bank-list li.bank-group { display: block; margin-top: 12px; color: var(--text); font-weight: 600; }
 .hooks-list.bank-list li.bank-group:first-child { margin-top: 0; }
 /* A picture tried (AssetPreview.tsx) or made (CreateAssetDialog.tsx):
@@ -551,26 +551,26 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .create-asset-rules { margin: 0; padding: 0 0 0 18px; font-size: 13px; line-height: 1.5; color: var(--text); }
 .asset-dot { color: var(--good); text-align: center; }
 .hooks-add { flex: 0 0 auto; }
-/* Characters' Voices (CastDialog.tsx): name, NPC or player, the voice in
-   short, then Edit. The voice editor's sliders are the Mixer's. */
+/* Characters' Voices (CastDialog.tsx): Try It and Edit, then name, NPC
+   or player and the voice in short. The voice editor's sliders are the Mixer's. */
 .hooks-head.cast-row,
 .cast-narrator,
-.hooks-list.cast-list li { display: grid; grid-template-columns: 240px 64px minmax(0, 1fr) 64px 64px; gap: 0 12px; align-items: start; }
+.hooks-list.cast-list li { display: grid; grid-template-columns: 64px 64px 240px 64px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 .cast-narrator { margin: 10px 16px 0 0; }
-/* Cues (CuesDialog.tsx): the cue, its group, how it is now, then Edit. */
+/* Cues (CuesDialog.tsx): Edit, then the cue, its group, how it is now. */
 .hooks-head.cues-row,
-.hooks-list.cues-list li { display: grid; grid-template-columns: 200px 64px minmax(0, 1fr) 64px; gap: 0 12px; align-items: start; }
+.hooks-list.cues-list li { display: grid; grid-template-columns: 64px 200px 64px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 .voice-slider { width: 100%; accent-color: var(--accent); }
-/* The Journal and the Log (JournalDialog.tsx): the unheard bullet, when,
-   who (or the channel), what was said, then Play. */
+/* The Journal and the Log (JournalDialog.tsx): Play, the unheard bullet,
+   when, who (or the channel), then what was said. */
 .hooks-head.journal-row,
-.hooks-list.journal-list li { display: grid; grid-template-columns: 12px 100px 160px minmax(0, 1fr) 56px; gap: 0 12px; align-items: start; }
+.hooks-list.journal-list li { display: grid; grid-template-columns: 56px 12px 100px 160px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 .journal-when { white-space: pre; }
 .hooks-search .journal-who { flex: 0 0 240px; width: 240px; }
-/* The Bestiary (BestiaryDialog.tsx): the name, its race or level, where
-   it's found, then Show. What's known of one is a fact a line. */
+/* The Bestiary (BestiaryDialog.tsx): Show, then the name, its race or
+   level and where it's found. What's known of one is a fact a line. */
 .hooks-head.bestiary-row,
-.hooks-list.bestiary-list li { display: grid; grid-template-columns: 280px 160px minmax(0, 1fr) 64px; gap: 0 12px; align-items: start; }
+.hooks-list.bestiary-list li { display: grid; grid-template-columns: 64px 280px 160px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 /* The name as the game output shows it: its colors on black. */
 .hooks-list.bestiary-list .bestiary-name { background: #000000; color: #aaaaaa; }
 .bestiary-facts { list-style: none; margin: 10px 0 0; padding: 0; height: 320px; overflow-y: auto; font-size: 13px; line-height: 1.5; color: var(--text); user-select: text; }
@@ -795,14 +795,14 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .desk.text-2x .status-bar .status-message,
 .desk.text-3x .status-bar .error,
 .desk.text-3x .status-bar .status-message { line-height: 1.3; -webkit-line-clamp: 1; }
-/* Narrator's Answers (EchoesDialog.tsx): the command, the game's line,
-   what the narrator says, then Edit. */
+/* Narrator's Answers (EchoesDialog.tsx): Edit, then the command, the
+   game's line and what the narrator says. */
 .hooks-head.echoes-row,
-.hooks-list.echoes-list li { display: grid; grid-template-columns: 136px minmax(0, 1fr) 200px 64px; gap: 0 12px; align-items: start; }
+.hooks-list.echoes-list li { display: grid; grid-template-columns: 64px 136px minmax(0, 1fr) 200px; gap: 0 12px; align-items: start; }
 .echoes-on { margin: 10px 0 0; }
 /* Triggers, Gags, Aliases and Tickers (AutomationDialog.tsx): the game's
-   last lines with a button each, then the rules: on, the pattern, word or
-   wait, what it does, Edit and Delete. */
+   last lines, each after its button, then the rules: Edit and Delete, on,
+   the pattern, word or wait, and what it does. */
 .automation-heading { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text); }
 .automation-bar { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin: 12px 0 0; }
 .automation-bar p { margin: 0; }
@@ -811,10 +811,10 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .hooks-list.automation-recent li.automation-empty,
 .hooks-list.automation-rules li.automation-empty { display: block; }
 .hooks-list.automation-recent { height: 160px; }
-.hooks-list.automation-recent li { display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 0 12px; align-items: start; }
+.hooks-list.automation-recent li { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 .hooks-list.automation-rules { height: 160px; }
-.hooks-list.automation-rules li { display: grid; grid-template-columns: 16px minmax(0, 1fr) 240px 64px 64px; gap: 0 12px; align-items: start; }
-.hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 16px minmax(0, 1fr) 240px 64px; }
+.hooks-list.automation-rules li { display: grid; grid-template-columns: 64px 64px 16px minmax(0, 1fr) 240px; gap: 0 12px; align-items: start; }
+.hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 64px 16px minmax(0, 1fr) 240px; }
 .automation-patterns .hook-key { font-family: var(--font-mono); }
 .automation-own,
 .automation-commands textarea {
@@ -835,12 +835,12 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .automation-tips { display: flex; flex-wrap: wrap; gap: 6px; }
 .automation-row-button { justify-self: start; }
 .automation-tip { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; }
-/* Priority Audio (PriorityDialog.tsx): what, its kind, then Remove. */
+/* Priority Audio (PriorityDialog.tsx): Remove, then what and its kind. */
 .hooks-head.priority-row,
-.hooks-list.priority-list li { display: grid; grid-template-columns: minmax(0, 1fr) 96px 64px; gap: 0 12px; align-items: start; }
-/* Storage: the kind, its size and files, and Delete… when it can be. */
+.hooks-list.priority-list li { display: grid; grid-template-columns: 64px minmax(0, 1fr) 96px; gap: 0 12px; align-items: start; }
+/* Storage: Delete… when it can be, then the kind, its size and files. */
 .hooks-head.storage-row,
-.hooks-list.storage-list li { display: grid; grid-template-columns: minmax(0, 1fr) 200px 80px; gap: 0 12px; align-items: start; }
+.hooks-list.storage-list li { display: grid; grid-template-columns: 80px minmax(0, 1fr) 200px; gap: 0 12px; align-items: start; }
 .storage-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
 .priority-add { margin-top: 10px; }

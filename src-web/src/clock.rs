@@ -13,9 +13,11 @@ extern "C" {
     fn coupler_unix_ms() -> f64;
 }
 
-/// Milliseconds since the page started.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct Instant(f64);
+/// Microseconds since the page started: whole numbers, so adding the
+/// same wait twice lands exactly where adding it doubled does (a ticker's
+/// next time is its last plus its wait).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Instant(i64);
 
 #[cfg(not(target_arch = "wasm32"))]
 fn start() -> std::time::Instant {
@@ -28,13 +30,13 @@ impl Instant {
     pub fn now() -> Instant {
         #[cfg(target_arch = "wasm32")]
         // SAFETY: a plain function the page provides, with no arguments.
-        return Instant(unsafe { coupler_now_ms() });
+        return Instant((unsafe { coupler_now_ms() } * 1000.0).round() as i64);
         #[cfg(not(target_arch = "wasm32"))]
-        Instant(start().elapsed().as_secs_f64() * 1000.0)
+        Instant(start().elapsed().as_micros() as i64)
     }
 
     pub fn saturating_duration_since(&self, earlier: Instant) -> Duration {
-        Duration::from_secs_f64(((self.0 - earlier.0) / 1000.0).max(0.0))
+        Duration::from_micros((self.0 - earlier.0).max(0) as u64)
     }
 
     pub fn duration_since(&self, earlier: Instant) -> Duration {
@@ -49,7 +51,7 @@ impl Instant {
 impl Add<Duration> for Instant {
     type Output = Instant;
     fn add(self, d: Duration) -> Instant {
-        Instant(self.0 + d.as_secs_f64() * 1000.0)
+        Instant(self.0 + d.as_micros() as i64)
     }
 }
 

@@ -452,6 +452,9 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
     case "bestiary_item_art":
     case "bestiary_auto_look":
     case "automation_set":
+    case "channels_ask":
+    case "channel_set":
+    case "channels_all":
     case "automation_recent":
     case "automation_suggest":
     case "automation_match":

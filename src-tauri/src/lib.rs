@@ -10,6 +10,7 @@ use tauri::{AppHandle, Manager, State};
 mod account;
 mod ambient;
 mod automation;
+mod channels;
 // Public for the web mirror tool (examples/web_mirror.rs), not an API.
 #[doc(hidden)]
 pub mod ansi;
@@ -158,6 +159,24 @@ fn mud_send(app: AppHandle, line: String, session: State<'_, Session>) -> Result
 #[tauri::command]
 fn automation_set(rules: automation::Rules, session: State<'_, Session>) {
     session.automation_set(rules);
+}
+
+/// Reads the game's channels (`channels.rs`); the list comes as `channels`.
+#[tauri::command]
+fn channels_ask(app: AppHandle, session: State<'_, Session>) -> Result<(), String> {
+    session.channels_ask(&app)
+}
+
+/// Turns one of the game's channels on or off (NO<NAME>, <NAME> ON).
+#[tauri::command]
+fn channel_set(app: AppHandle, name: String, on: bool, session: State<'_, Session>) -> Result<(), String> {
+    session.channel_set(&app, &name, on)
+}
+
+/// Turns every channel on or off (CHANNELS ON, CHANNELS OFF).
+#[tauri::command]
+fn channels_all(app: AppHandle, on: bool, session: State<'_, Session>) -> Result<(), String> {
+    session.channels_all(&app, on)
 }
 
 /// The last lines seen, gagged or not, the newest last.
@@ -1021,6 +1040,9 @@ pub fn run() {
             server_info,
             mud_connect,
             automation_set,
+            channels_ask,
+            channel_set,
+            channels_all,
             automation_recent,
             automation_suggest,
             automation_match,

@@ -266,6 +266,16 @@ fn call(input: &[u8]) -> Result<Value, String> {
             app.automation_set(serde_json::from_value(args.get("rules").cloned().unwrap_or_default()).map_err(|e| e.to_string())?);
             Ok(Value::Null)
         }
+        "channels_ask" => app.channel_commands(|c, now| c.ask(now)).map(|_| Value::Null),
+        "channel_set" => {
+            let on = args.get("on").and_then(Value::as_bool).unwrap_or(true);
+            let name = s("name");
+            app.channel_commands(|c, now| c.turn(&name, on, now)).map(|_| Value::Null)
+        }
+        "channels_all" => {
+            let on = args.get("on").and_then(Value::as_bool).unwrap_or(true);
+            app.channel_commands(|c, now| c.all(on, now)).map(|_| Value::Null)
+        }
         "automation_recent" => json(app.automation_recent()),
         "automation_suggest" => json(app.automation_suggest(&s("line"))),
         "automation_match" => Ok(serde_json::json!(crate::automation::Pattern::new(&s("pattern")).captures(&s("line")))),

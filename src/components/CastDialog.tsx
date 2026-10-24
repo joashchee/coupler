@@ -116,15 +116,15 @@ export const CastDialog = memo(function CastDialog({ open, onClose, onStatus, on
           higher for a pixie, slower when old. In Immersive, what they say is spoken in their voice. Edit changes a voice; your changes are kept.
         </p>
         <div className="cast-row cast-narrator">
-          <span className="hook-key">Narrator</span>
-          <span className="hook-value">Coupler</span>
-          <span className={narratorEdited ? "hook-sets-off" : "hook-value"}>{narratorSummary}</span>
           <button type="button" className="hook-edit" data-testid="narrator-try" aria-label="Try the narrator's voice" onClick={() => tryVoice(narratorMember, true)}>
             Try It
           </button>
           <button type="button" className="hook-edit" data-testid="narrator-edit" aria-label={`Edit the narrator's voice: ${narratorSummary}`} onClick={() => setEditing(NARRATOR)}>
             Edit…
           </button>
+          <span className="hook-key">Narrator</span>
+          <span className="hook-value">Coupler</span>
+          <span className={narratorEdited ? "hook-sets-off" : "hook-value"}>{narratorSummary}</span>
         </div>
         <div className="hooks-search">
           <label htmlFor={`${id}-search`}>Search</label>
@@ -147,25 +147,25 @@ export const CastDialog = memo(function CastDialog({ open, onClose, onStatus, on
         </p>
         {/* The columns' names, for the eye; each control says its own. */}
         <div className="hooks-head cast-row" aria-hidden="true">
+          <span />
+          <span />
           <span>Name</span>
           <span>Who</span>
           <span>Voice</span>
-          <span />
-          <span />
         </div>
         <ul className="hooks-list cast-list" data-testid="cast-list" tabIndex={0} aria-label="Characters: name, NPC or player, then their voice">
           {open &&
             shown.map((c) => (
               <li key={c.key} className="cast-row">
-                <span className="hook-key">{c.name}</span>
-                <span className="hook-value">{WHO[c.who]}</span>
-                <span className={c.edited ? "hook-sets-off" : "hook-value"}>{voiceSummary(c)}</span>
                 <button type="button" className="hook-edit" data-testid="cast-try" aria-label={`Try ${c.name}'s voice`} onClick={() => tryVoice(c, false)}>
                   Try It
                 </button>
                 <button type="button" className="hook-edit" data-testid="cast-edit" aria-label={`Edit ${c.name}'s voice: ${voiceSummary(c)}`} onClick={() => setEditing(c.key)}>
                   Edit…
                 </button>
+                <span className="hook-key">{c.name}</span>
+                <span className="hook-value">{WHO[c.who]}</span>
+                <span className={c.edited ? "hook-sets-off" : "hook-value"}>{voiceSummary(c)}</span>
               </li>
             ))}
         </ul>

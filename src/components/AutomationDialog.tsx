@@ -27,6 +27,7 @@ import * as words from "../lib/commandWords";
 import * as mud from "../lib/mud";
 import * as assets from "../lib/assets";
 import * as voice from "../lib/voice";
+import { WEB } from "../lib/web";
 import { Dialog } from "./Dialog";
 
 type Tab = "triggers" | "gags" | "aliases" | "tickers";
@@ -120,13 +121,13 @@ export function AutomationDialog({ open, onClose, onStatus, onError }: Automatio
       {lines.length === 0 && <li className="hook-value automation-empty">No lines from the game yet. Play a little, and the last {SHOWN} show here.</li>}
       {lines.map((r, i) => (
         <li key={`${i}-${r.text}`}>
+          <button type="button" className="hook-edit" aria-label={`${button}: ${r.text}`} onClick={() => act(r)}>
+            {button}
+          </button>
           <span className={r.gagged ? "hook-value" : "hook-key"}>
             {r.text}
             {r.gagged ? " (gagged)" : ""}
           </span>
-          <button type="button" className="hook-edit" aria-label={`${button}: ${r.text}`} onClick={() => act(r)}>
-            {button}
-          </button>
         </li>
       ))}
     </ul>
@@ -288,6 +289,7 @@ export function AutomationDialog({ open, onClose, onStatus, onError }: Automatio
                 <p>
                   A ticker sends commands every so often while a character is in the game: every {mud.MIN_EVERY} seconds at most, and it waits while
                   you've been away 9 minutes, so the game's idle timers still work.
+                  {WEB && " In a browser tab you aren't looking at, the browser may hold one back up to a minute."}
                 </p>
                 <button type="button" data-testid="automation-new-ticker" onClick={() => setTicker({ id: automation.newId(), every: 300, send: "", on: true })}>
                   New Ticker…
@@ -332,9 +334,6 @@ function RuleList({ kind, rows, empty, onToggle, onEdit, onDelete }: { kind: str
       {rows.length === 0 && <li className="hook-value automation-empty">{empty}</li>}
       {rows.map((r) => (
         <li key={r.id}>
-          <input type="checkbox" checked={r.on} aria-label={`On: ${r.name}`} onChange={(e) => onToggle(r.id, e.currentTarget.checked)} />
-          <span className={r.on ? "hook-key" : "hook-value"}>{r.name}</span>
-          <span className="hook-value">{r.does}</span>
           {onEdit && (
             <button type="button" className="hook-edit" aria-label={`Edit: ${r.name}`} onClick={() => onEdit(r.id)}>
               Edit…
@@ -343,6 +342,9 @@ function RuleList({ kind, rows, empty, onToggle, onEdit, onDelete }: { kind: str
           <button type="button" className="hook-edit" aria-label={`Delete: ${r.name}`} onClick={() => onDelete(r.id)}>
             Delete
           </button>
+          <input type="checkbox" checked={r.on} aria-label={`On: ${r.name}`} onChange={(e) => onToggle(r.id, e.currentTarget.checked)} />
+          <span className={r.on ? "hook-key" : "hook-value"}>{r.name}</span>
+          <span className="hook-value">{r.does}</span>
         </li>
       ))}
     </ul>

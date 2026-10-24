@@ -23,6 +23,7 @@ use serde_json::{json, Value};
 use crate::ambient::{self, Ambience, Ambient};
 use crate::ansi::{Line, Screen};
 use crate::automation::{self, Automation};
+use crate::channels::Channels;
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
@@ -162,6 +163,8 @@ pub struct Coupler {
     creation: Creation,
     /// Portals, ships and caravans, read from the exits text (`ways.rs`).
     ways: Ways,
+    /// The game's channels, turned on and off by its own commands (`channels.rs`).
+    channels: Channels,
     /// The unfinished line last sent, kept while a hidden WHO is cut off mid-row.
     shown_partial: Option<Line>,
     /// The tip about SOUNDS was given this connection.
@@ -225,6 +228,7 @@ impl Coupler {
             long_look: LongLook::default(),
             creation: Creation::default(),
             ways: Ways::default(),
+            channels: Channels::default(),
             shown_partial: None,
             told_sounds_off: false,
             comings: Comings::default(),
@@ -334,6 +338,26 @@ impl Coupler {
         }
     }
 
+    // ---- The game's channels (channels.rs), as the desktop's ----
+
+    /// Sends what `make` gives, as the player's own commands, only with a
+    /// character in the game; the list comes as `channels`.
+    pub fn channel_commands(&mut self, make: impl FnOnce(&mut Channels, Instant) -> Vec<String>) -> Result<(), String> {
+        if self.telnet.is_none() || !self.who.acting() {
+            return Err("The channels are your character's: enter the game first.".into());
+        }
+        let now = Instant::now();
+        let lines = make(&mut self.channels, now);
+        if lines.is_empty() {
+            return Err("That isn't a channel's name.".into());
+        }
+        for line in lines {
+            self.send_command(&line);
+            self.who.typed(&line, now);
+        }
+        Ok(())
+    }
+
     // ---- The player's rules (automation.rs), as the desktop's ----
 
     pub fn automation_set(&mut self, rules: automation::Rules) {
@@ -369,7 +393,11 @@ impl Coupler {
             return;
         }
         let now = Instant::now();
-        let due = self.automation.tick(now, self.who.present(now));
+        // Nothing of Coupler's own while a channel command's answer is coming (channels.rs).
+        if self.channels.awaiting(now) {
+            return;
+        }
+        let due = self.automation.tick(now, self.who.present(now), self.who.awaiting());
         for line in due {
             self.send_command(&line);
         }
@@ -526,6 +554,14 @@ impl Coupler {
         let (learned, died, mut hidden_lines) = self.bestiary_lines(&texts, prompted);
         bestiary_changed |= learned;
         cries.extend(died.into_iter().map(|(c, cry)| (c, cry, None)));
+        // The answers to Coupler's channel commands aren't shown either (channels.rs).
+        let now = Instant::now();
+        hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| self.channels.line(text, now)).map(|(i, _)| i));
+        if let Some(listing) = self.channels.take_listing() {
+            self.emit("channels", json!(listing));
+        }
+        hidden_lines.sort_unstable();
+        hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
             let before = (0..first).rev().find(|&i| !texts[i].trim().is_empty() || i == 0);
             let prompt = self.shown_partial.as_ref().map(|line| line.iter().map(|span| span.text.as_str()).collect::<String>());
@@ -869,6 +905,7 @@ impl Coupler {
         self.echoes.clear();
         self.long_look.clear();
         self.ways.clear();
+        self.channels.closed();
         self.beasts.reader.clear();
         let message = match &left {
             Left::Logout => {

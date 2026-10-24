@@ -181,9 +181,9 @@ export function StorageDialog({ open, onClose, connected, musicFile, exportBacku
             : "Measuring…"}
         </p>
         <div className="hooks-head storage-row" aria-hidden="true">
+          <span />
           <span>What</span>
           <span>Size</span>
-          <span />
         </div>
         <ul className="hooks-list storage-list" data-testid="storage-list" aria-label="What Coupler keeps: each kind, then its size">
           {ROWS.map((row) => {
@@ -191,8 +191,6 @@ export function StorageDialog({ open, onClose, connected, musicFile, exportBacku
             const size = u.files === 0 ? "nothing" : `${mud.sizeInWords(u.bytes)}, ${filesInWords(u.files)}`;
             return (
               <li key={row.id} className="storage-row" data-testid={`storage-${row.id}`}>
-                <span className="hook-key">{row.cache ? `${row.name} (cache)` : row.name}</span>
-                <span className="hook-value">{size}</span>
                 {row.forget && u.files > 0 ? (
                   <button
                     type="button"
@@ -208,6 +206,8 @@ export function StorageDialog({ open, onClose, connected, musicFile, exportBacku
                 ) : (
                   <span />
                 )}
+                <span className="hook-key">{row.cache ? `${row.name} (cache)` : row.name}</span>
+                <span className="hook-value">{size}</span>
               </li>
             );
           })}

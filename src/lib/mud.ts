@@ -493,6 +493,27 @@ export const onAutomationRecent = (f: (recent: RecentLine[]) => void): Promise<U
 export const onAutomationFired = (f: (fired: AutomationFired) => void): Promise<UnlistenFn> => listen<AutomationFired>("automation-fired", (e) => f(e.payload));
 export const onAutomationHeld = (f: (message: string) => void): Promise<UnlistenFn> => listen<string>("automation-held", (e) => f(e.payload));
 
+/** One of the game's channels and whether it's on for this character (channels.rs). */
+export interface GameChannel {
+  name: string;
+  on: boolean;
+}
+/** What the game's CHANNELS answered. */
+export interface ChannelListing {
+  channels: GameChannel[];
+  /** Why none are listed, in the game's words (all turned off, or QUIET). */
+  none: string | null;
+  /** The game's words when it refused a turn. */
+  refused: string | null;
+}
+/** Asks the game for its channels; the list comes by `onChannels`. */
+export const channelsAsk = () => invoke<void>("channels_ask");
+/** Turns a channel off (NO<NAME>) or on (<NAME> ON); the new list comes by `onChannels`. */
+export const channelSet = (name: string, on: boolean) => invoke<void>("channel_set", { name, on });
+/** Turns every channel on or off (CHANNELS ON, CHANNELS OFF). */
+export const channelsAll = (on: boolean) => invoke<void>("channels_all", { on });
+export const onChannels = (f: (listing: ChannelListing) => void): Promise<UnlistenFn> => listen<ChannelListing>("channels", (e) => f(e.payload));
+
 // ---- The account menu (src-tauri/src/account.rs) ----
 
 /** One of the account's characters, as the game's list shows it. */

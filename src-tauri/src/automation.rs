@@ -346,14 +346,16 @@ impl Automation {
 
     /// The tickers due now: their commands, aliases expanded. `present`:
     /// a character in the game, no password, the player not away
-    /// (`Who::present`). A ticker that comes due while not is skipped,
-    /// never saved up.
-    pub fn tick(&mut self, now: Instant, present: bool) -> Vec<String> {
+    /// (`Who::present`); a ticker that comes due while not is skipped,
+    /// never saved up. `awaiting`: Coupler's WHO is waiting for its reply
+    /// (`Who::awaiting`); a ticker due then goes once it's done, so WHO's
+    /// minute never makes it miss its turn.
+    pub fn tick(&mut self, now: Instant, present: bool, awaiting: bool) -> Vec<String> {
         let mut due = Vec::new();
         for ticker in self.rules.tickers.iter().filter(|t| t.on) {
             let every = ticker.every.max(MIN_EVERY);
             let next = self.next.entry(ticker.id.clone()).or_insert((now + Duration::from_secs(every.into()), ticker.every));
-            if now < next.0 {
+            if now < next.0 || (present && awaiting) {
                 continue;
             }
             next.0 = now + Duration::from_secs(every.into());
@@ -560,18 +562,84 @@ mod tests {
         let mut a = Automation::default();
         a.set(rules());
         let t = Instant::now();
-        assert!(a.tick(t, true).is_empty());
-        assert!(a.tick(t + Duration::from_secs(29), true).is_empty());
-        assert_eq!(a.tick(t + Duration::from_secs(30), true), ["drink skin"]);
+        assert!(a.tick(t, true, false).is_empty());
+        assert!(a.tick(t + Duration::from_secs(29), true, false).is_empty());
+        assert_eq!(a.tick(t + Duration::from_secs(30), true, false), ["drink skin"]);
         // Away: skipped, not saved up.
-        assert!(a.tick(t + Duration::from_secs(60), false).is_empty());
-        assert!(a.tick(t + Duration::from_secs(61), true).is_empty());
-        assert_eq!(a.tick(t + Duration::from_secs(90), true), ["drink skin"]);
+        assert!(a.tick(t + Duration::from_secs(60), false, false).is_empty());
+        assert!(a.tick(t + Duration::from_secs(61), true, false).is_empty());
+        assert_eq!(a.tick(t + Duration::from_secs(90), true, false), ["drink skin"]);
+        // WHO awaited: it waits for it, then goes, and keeps its time from then.
+        assert!(a.tick(t + Duration::from_secs(120), true, true).is_empty());
+        assert!(a.tick(t + Duration::from_secs(125), true, true).is_empty());
+        assert_eq!(a.tick(t + Duration::from_secs(126), true, false), ["drink skin"]);
+        assert!(a.tick(t + Duration::from_secs(155), true, false).is_empty());
+        assert_eq!(a.tick(t + Duration::from_secs(156), true, false), ["drink skin"]);
         // Never more often than MIN_EVERY.
         a.set(Rules { tickers: vec![Ticker { id: "q".into(), every: 1, send: "look".into(), on: true }], ..Rules::default() });
-        assert!(a.tick(t + Duration::from_secs(100), true).is_empty());
-        assert!(a.tick(t + Duration::from_secs(105), true).is_empty());
-        assert_eq!(a.tick(t + Duration::from_secs(115), true), ["look"]);
+        assert!(a.tick(t + Duration::from_secs(100), true, false).is_empty());
+        assert!(a.tick(t + Duration::from_secs(105), true, false).is_empty());
+        assert_eq!(a.tick(t + Duration::from_secs(115), true, false), ["look"]);
+    }
+
+    /// Two hours played, second by second, as `session.rs` runs them:
+    /// the tickers, then WHO's clock, its reply a second later (now and
+    /// then none). The player types every minute or two. Every ticker
+    /// goes within a WHO's wait of when it's due, never while a WHO's
+    /// reply is awaited (it would be hidden with it), and none is lost.
+    #[test]
+    fn tickers_keep_time_beside_who() {
+        use crate::who::Who;
+        const PROMPT: &str = "<100hp 50m 80mv> ";
+        let start = Instant::now();
+        let at = |s: u64| start + Duration::from_secs(s);
+        for every in [15u32, 20, 30, 45, 59, 60, 61, 90, 120, 300, 480] {
+            let mut who = Who::default();
+            who.character("bob", at(0));
+            who.typed("look", at(0));
+            for _ in 0..3 {
+                who.partial(Some(PROMPT), at(0));
+            }
+            let mut a = Automation::default();
+            a.set(Rules { tickers: vec![Ticker { id: "k".into(), every, send: "drink skin".into(), on: true }], ..Rules::default() });
+            let mut sent = Vec::new();
+            let mut reply_at = None;
+            let mut whos = 0;
+            for s in 1..2 * 60 * 60 {
+                let now = at(s);
+                // The player, every 70 to 130 seconds.
+                if s % (70 + (s / 7 % 61)) == 0 {
+                    who.typed("look", now);
+                    who.partial(Some(PROMPT), now);
+                }
+                let due = a.tick(now, who.present(now), who.awaiting());
+                if !due.is_empty() {
+                    assert!(reply_at.is_none(), "every {every}: a ticker went while WHO's reply was awaited, at {s}");
+                    sent.push(s);
+                    who.partial(Some(PROMPT), now);
+                }
+                if reply_at == Some(s) {
+                    reply_at = None;
+                    for line in [PROMPT, "[Race         Class        Level  ] Character name", "[Human        Fighter      5      ] Ann", ""] {
+                        who.line(line, now);
+                    }
+                    who.partial(Some(PROMPT), now);
+                }
+                if who.due(now) {
+                    whos += 1;
+                    // One WHO in five goes unanswered.
+                    reply_at = (whos % 5 != 0).then_some(s + 1);
+                }
+            }
+            assert!(whos > 100, "every {every}: WHO was asked {whos} times");
+            let late = u64::from(every) + 12;
+            assert!(sent[0] <= late, "every {every}: first sent at {}", sent[0]);
+            for pair in sent.windows(2) {
+                let gap = pair[1] - pair[0];
+                assert!(gap >= u64::from(every.max(MIN_EVERY)), "every {every}: sent {gap} s apart at {}", pair[1]);
+                assert!(gap <= late, "every {every}: {gap} s between sends at {}", pair[1]);
+            }
+        }
     }
 
     #[test]

@@ -11,13 +11,19 @@
  * screen reader hears "Not heard yet" instead. Play says a line in its
  * speaker's voice at once, cutting off anything being said; Play Unheard
  * says every unheard line in order; Cmd+Period stops it all. Lines
- * played to the end lose their bullet.
+ * played to the end lose their bullet. On a channel's tab, Mute Channel
+ * turns it off with the game's own NO<NAME> (lib/channels.ts), so the
+ * game stops sending it; Unmute Channel turns it back on. On Every
+ * Channel, Channels… lists them all, on and off (ChannelsDialog.tsx).
+ * Opening the Log asks the game which are off, its answer not shown.
  *
  * The list isn't a live region: talk arrives all the time while playing.
  */
 import * as keys from "../lib/keys";
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import * as mud from "../lib/mud";
+import * as gameChannels from "../lib/channels";
+import { ChannelsDialog } from "./ChannelsDialog";
 import { Dialog } from "./Dialog";
 
 interface JournalDialogProps {
@@ -58,6 +64,14 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
   const [who, setWho] = useState("");
   const [listing, setListing] = useState<mud.JournalListing | null>(null);
   const list = useRef<HTMLUListElement>(null);
+  // The game's channels, on and off, as it last said (lib/channels.ts).
+  const [, setChannelList] = useState(gameChannels.current());
+  useEffect(() => gameChannels.onListing(setChannelList), []);
+  useEffect(() => {
+    if (open && log) void gameChannels.ask();
+  }, [open, log]);
+  const [choosing, setChoosing] = useState(false);
+  const [turning, setTurning] = useState(false);
 
   const read = useCallback(() => {
     mud
@@ -113,7 +127,13 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
         }`;
 
   /** The log's tabs: every channel, then each one. */
-  const tabs = [{ key: "", name: "Every Channel", unheard: unheard.log }, ...speakers.map((s) => ({ key: s.key, name: s.name || "Someone", unheard: s.unheard }))];
+  const tabs = [
+    { key: "", name: "Every Channel", channel: "", unheard: unheard.log, muted: false },
+    ...speakers.map((s) => ({ key: s.key, name: s.name || "Someone", channel: s.name, unheard: s.unheard, muted: s.name !== "" && gameChannels.isOn(s.name) === false })),
+  ];
+  /** The channel whose tab is chosen, if one is. */
+  const channel = (log && tabs.find((t) => t.key === who)?.channel) || null;
+  const channelMuted = channel !== null && gameChannels.isOn(channel) === false;
   function onTabKey(e: KeyboardEvent<HTMLButtonElement>) {
     const at = tabs.findIndex((t) => t.key === who);
     const to = e.key === "ArrowRight" ? at + 1 : e.key === "ArrowLeft" ? at - 1 + tabs.length : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : -1;
@@ -139,6 +159,19 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
     }
   }
 
+  async function mute(muting: boolean) {
+    if (!channel) return;
+    setTurning(true);
+    onStatus(`Asking the game to turn ${channel} ${muting ? "off" : "on"}…`);
+    try {
+      onStatus(await gameChannels.turn(channel, !muting));
+    } catch (e) {
+      onError(String(e));
+    } finally {
+      setTurning(false);
+    }
+  }
+
   async function markAll() {
     try {
       await mud.journalHeardAll(book);
@@ -149,130 +182,144 @@ export const JournalDialog = memo(function JournalDialog({ book, open, onClose, 
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title={title}
-      className="dialog-wide dialog-hooks"
-      actions={
-        <>
-          <button type="button" data-testid={`${book}-mark-all`} disabled={waiting === 0} onClick={() => void markAll()}>
-            Mark All Heard
-          </button>
-          <button type="button" data-testid={`${book}-play-unheard`} disabled={waiting === 0} onClick={() => void playUnheard()}>
-            Play Unheard
-          </button>
-          <button type="button" className="primary" onClick={onClose}>
-            Close
-          </button>
-        </>
-      }
-    >
-      <p>
-        {log
-          ? "What's said outside the game: OOC, INFO and every other channel. These lines aren't spoken as they come; each is a soft blip, a note of its channel's own."
-          : "What's said in the game, to you and around you, by who said it and when. Someone repeating a line they've said before is kept once."}{" "}
-        {keys.keys("A green bullet is a line not yet heard to the end. Play says one now; Cmd+Period stops.")}
-      </p>
-      {log && (
-        <div className="hooks-tabs journal-tabs" role="tablist" aria-label="Channels">
-          {tabs.map((t, i) => (
-            <button
-              key={t.key || "every"}
-              type="button"
-              role="tab"
-              id={`${id}-tab-${i}`}
-              className={`hooks-tab${who === t.key ? " selected" : ""}`}
-              data-testid={`log-tab-${t.key || "every"}`}
-              aria-selected={who === t.key}
-              aria-controls={`${id}-panel`}
-              aria-label={`${t.name}${t.unheard > 0 ? `, ${t.unheard} unheard` : ""}`}
-              tabIndex={who === t.key ? 0 : -1}
-              onClick={() => setWho(t.key)}
-              onKeyDown={onTabKey}
-            >
-              <span className="hooks-tab-mark" aria-hidden="true">
-                •
-              </span>
-              {t.unheard > 0 ? `${t.name} (${t.unheard})` : t.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="hooks-search" role={log ? "tabpanel" : undefined} id={log ? `${id}-panel` : undefined}>
-        <label htmlFor={`${id}-search`}>Search</label>
-        <input
-          id={`${id}-search`}
-          type="text"
-          data-testid={`${book}-search`}
-          aria-describedby={`${id}-summary`}
-          placeholder="Words, or a name"
-          value={query}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-        />
-        {!log && (
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        title={title}
+        className="dialog-wide dialog-hooks"
+        covered={open && choosing}
+        actions={
           <>
-            <label htmlFor={`${id}-who`}>Who</label>
-            <select id={`${id}-who`} className="hook-asset journal-who" data-testid={`${book}-who`} value={who} onChange={(e) => setWho(e.currentTarget.value)}>
-              <option value="">Everyone</option>
-              {speakers.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {`${s.name || "Someone"} (${s.lines}${s.unheard > 0 ? `, ${s.unheard} unheard` : ""})`}
-                </option>
-              ))}
-            </select>
+            {log && !channel && (
+              <button type="button" data-testid="log-channels" onClick={() => setChoosing(true)}>
+                Channels…
+              </button>
+            )}
+            {channel && (
+              <button type="button" data-testid="log-mute" aria-pressed={channelMuted} disabled={turning} onClick={() => void mute(!channelMuted)}>
+                {channelMuted ? "Unmute Channel" : "Mute Channel"}
+              </button>
+            )}
+            <button type="button" data-testid={`${book}-mark-all`} disabled={waiting === 0} onClick={() => void markAll()}>
+              Mark All Heard
+            </button>
+            <button type="button" data-testid={`${book}-play-unheard`} disabled={waiting === 0} onClick={() => void playUnheard()}>
+              Play Unheard
+            </button>
+            <button type="button" className="primary" onClick={onClose}>
+              Close
+            </button>
           </>
-        )}
-      </div>
-      <p id={`${id}-summary`} className="hooks-summary" data-testid={`${book}-summary`}>
-        {summary}
-      </p>
-      {/* The columns' names, for the eye; each row says its own. */}
-      <div className="hooks-head journal-row" aria-hidden="true">
-        <span />
-        <span>When</span>
-        <span>{log ? "Channel" : "Who"}</span>
-        <span>What was said</span>
-        <span />
-      </div>
-      <ul
-        ref={list}
-        className="hooks-list journal-list"
-        data-testid={`${book}-list`}
-        tabIndex={0}
-        aria-label={`${title}: when, ${log ? "the channel" : "who"}, and what was said, oldest first`}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          following.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
-        }}
+        }
       >
-        {open &&
-          entries.map((e) => {
-            const name = log ? e.channel : e.mine ? "You" : e.speaker || "Someone";
-            return (
-              <li key={e.id} className={`journal-row${e.heard ? "" : " unheard"}`} data-testid="journal-entry">
-                <span className="asset-dot" aria-hidden="true">
-                  {e.heard ? "" : "•"}
+        <p>
+          {log
+            ? "What's said outside the game: OOC, INFO and every other channel. These lines aren't spoken as they come; each is a soft blip, a note of its channel's own. On a channel's tab, Mute Channel has the game stop sending it; Channels… lists them all."
+            : "What's said in the game, to you and around you, by who said it and when. Someone repeating a line they've said before is kept once."}{" "}
+          {keys.keys("A green bullet is a line not yet heard to the end. Play says one now; Cmd+Period stops.")}
+        </p>
+        {log && (
+          <div className="hooks-tabs journal-tabs" role="tablist" aria-label="Channels">
+            {tabs.map((t, i) => (
+              <button
+                key={t.key || "every"}
+                type="button"
+                role="tab"
+                id={`${id}-tab-${i}`}
+                className={`hooks-tab${who === t.key ? " selected" : ""}`}
+                data-testid={`log-tab-${t.key || "every"}`}
+                aria-selected={who === t.key}
+                aria-controls={`${id}-panel`}
+                aria-label={`${t.name}${t.muted ? ", off" : ""}${t.unheard > 0 ? `, ${t.unheard} unheard` : ""}`}
+                tabIndex={who === t.key ? 0 : -1}
+                onClick={() => setWho(t.key)}
+                onKeyDown={onTabKey}
+              >
+                <span className="hooks-tab-mark" aria-hidden="true">
+                  •
                 </span>
-                <span className="hook-value journal-when" aria-hidden="true">
-                  {when(e.at)}
-                </span>
-                <span className="hook-key">{name}</span>
-                <span className="hook-sets-off">
-                  <span className="sr-only">{`${e.heard ? "" : "Not heard yet. "}${whenWords(e.at)}. `}</span>
-                  {e.text}
-                </span>
-                <button type="button" className="hook-edit" data-testid="journal-play" aria-label={`Play: ${e.text}`} onClick={() => void play([e], `Playing: ${e.text}`)}>
-                  Play
-                </button>
-              </li>
-            );
-          })}
-      </ul>
-    </Dialog>
+                {`${t.name}${t.muted ? " (off)" : ""}${t.unheard > 0 ? ` (${t.unheard})` : ""}`}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="hooks-search" role={log ? "tabpanel" : undefined} id={log ? `${id}-panel` : undefined}>
+          <label htmlFor={`${id}-search`}>Search</label>
+          <input
+            id={`${id}-search`}
+            type="text"
+            data-testid={`${book}-search`}
+            aria-describedby={`${id}-summary`}
+            placeholder="Words, or a name"
+            value={query}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+          />
+          {!log && (
+            <>
+              <label htmlFor={`${id}-who`}>Who</label>
+              <select id={`${id}-who`} className="hook-asset journal-who" data-testid={`${book}-who`} value={who} onChange={(e) => setWho(e.currentTarget.value)}>
+                <option value="">Everyone</option>
+                {speakers.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {`${s.name || "Someone"} (${s.lines}${s.unheard > 0 ? `, ${s.unheard} unheard` : ""})`}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+        <p id={`${id}-summary`} className="hooks-summary" data-testid={`${book}-summary`}>
+          {summary}
+        </p>
+        {/* The columns' names, for the eye; each row says its own. */}
+        <div className="hooks-head journal-row" aria-hidden="true">
+          <span />
+          <span />
+          <span>When</span>
+          <span>{log ? "Channel" : "Who"}</span>
+          <span>What was said</span>
+        </div>
+        <ul
+          ref={list}
+          className="hooks-list journal-list"
+          data-testid={`${book}-list`}
+          tabIndex={0}
+          aria-label={`${title}: when, ${log ? "the channel" : "who"}, and what was said, oldest first`}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            following.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+          }}
+        >
+          {open &&
+            entries.map((e) => {
+              const name = log ? e.channel : e.mine ? "You" : e.speaker || "Someone";
+              return (
+                <li key={e.id} className={`journal-row${e.heard ? "" : " unheard"}`} data-testid="journal-entry">
+                  <button type="button" className="hook-edit" data-testid="journal-play" aria-label={`Play: ${e.text}`} onClick={() => void play([e], `Playing: ${e.text}`)}>
+                    Play
+                  </button>
+                  <span className="asset-dot" aria-hidden="true">
+                    {e.heard ? "" : "•"}
+                  </span>
+                  <span className="hook-value journal-when" aria-hidden="true">
+                    {when(e.at)}
+                  </span>
+                  <span className="hook-key">{name}</span>
+                  <span className="hook-sets-off">
+                    <span className="sr-only">{`${e.heard ? "" : "Not heard yet. "}${whenWords(e.at)}. `}</span>
+                    {e.text}
+                  </span>
+                </li>
+              );
+            })}
+        </ul>
+      </Dialog>
+      {log && <ChannelsDialog open={open && choosing} onClose={() => setChoosing(false)} onStatus={onStatus} onError={onError} />}
+    </>
   );
 });

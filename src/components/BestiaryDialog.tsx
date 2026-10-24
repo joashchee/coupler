@@ -208,15 +208,18 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
         </p>
         {/* The columns' names, for the eye; each row says its own. */}
         <div className="hooks-head bestiary-row" aria-hidden="true">
+          <span />
           <span>Name</span>
           <span>{what}</span>
           <span>Found in</span>
-          <span />
         </div>
         <ul className="hooks-list bestiary-list" data-testid="bestiary-list" tabIndex={0} aria-label={`${creatures ? "Creatures" : "Items"}: name, ${what.toLowerCase()}, and where found`}>
           {open &&
             shown.map((r) => (
               <li key={r.key} className="bestiary-row">
+                <button type="button" className="hook-edit" data-testid="bestiary-show" aria-label={`Show everything known of ${r.name}`} onClick={() => setShowing(r.key)}>
+                  Show…
+                </button>
                 <span className="hook-key bestiary-name">
                   {r.styled.length === 0
                     ? r.name
@@ -234,9 +237,6 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
                   <span className="sr-only">Found in </span>
                   {r.areas || "Nowhere known"}
                 </span>
-                <button type="button" className="hook-edit" data-testid="bestiary-show" aria-label={`Show everything known of ${r.name}`} onClick={() => setShowing(r.key)}>
-                  Show…
-                </button>
               </li>
             ))}
         </ul>

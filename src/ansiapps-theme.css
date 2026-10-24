@@ -539,12 +539,13 @@
 /* 18 rows, not 20: with an intro of up to four lines, the tabs, search, summary
    and head, that fills the 608px box exactly, so the body never scrolls. */
 :root[data-theme="ansiapps"] .dialog-hooks .hooks-list { height: 288px; }
-/* A row is its [ ] box (3 cells), the name (24), the value (the rest,
-   about 46), what it sets off (56, wrapping onto more rows when it's
-   long) and its Edit... button (7), two cells between. A hook that sets
+/* A row is its Edit... button (7 cells; a row's own buttons come first),
+   its [ ] box (3), the name (24), the value (the rest, about 46) and what
+   it sets off (56, wrapping onto more rows when it's long), two cells
+   between. A hook that sets
    off something says so in black, Nothing in blue like the values. */
 :root[data-theme="ansiapps"] .hooks-head,
-:root[data-theme="ansiapps"] .hooks-list.hooks-list-assets li { grid-template-columns: 24px 192px minmax(0, 1fr) 448px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.hooks-list-assets li { grid-template-columns: 56px 24px 192px minmax(0, 1fr) 448px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .hook-sets-off { color: var(--dos-black); }
 :root[data-theme="ansiapps"] .dialog-box button.hook-edit { min-height: 0; padding: 0 8px; }
 /* The hook editor: 100 cells wide like the other wide dialogs. A row is
@@ -562,40 +563,40 @@
 :root[data-theme="ansiapps"] .hook-asset,
 :root[data-theme="ansiapps"] .hook-place { appearance: none; -webkit-appearance: none; height: 16px; padding: 0 8px; border: none; border-radius: 0; background: var(--dos-black); color: var(--dos-lightgray); font-family: var(--font-mono); font-size: inherit; line-height: 16px; }
 :root[data-theme="ansiapps"] .hook-loop { gap: 8px; align-items: flex-start; }
-/* The Assets tab: a row is the bullet's cell, the name (24 cells), the
-   kind (9), the file (the rest), what plays it (22: a MIDI file's
-   SoundFont menu), its uses (18) and Play or Show... (7), two cells
-   between; the head names them.
+/* The Assets tab: a row is Play or Show... (7 cells), the bullet's cell,
+   the name (24), the kind (9), the file (the rest), what plays it (22: a
+   MIDI file's SoundFont menu) and its uses (18), two cells between; the
+   head names them.
    The bullet is light green on its own black cell (rank 4): green is
    only readable on black (the contrast list), and the cell is there,
    empty, on a row not in use, so the columns stay put. */
-/* Characters' Voices: a row is the name (30 cells), NPC, Player or
-   Unknown (7), the voice in short (the rest) and Edit... (7), two cells
-   between. The narrator's row, above the list, is the same, a blank
+/* Characters' Voices: a row is Try It (8 cells), Edit... (7), the name
+   (30), NPC, Player or Unknown (7) and the voice in short (the rest), two
+   cells between. The narrator's row, above the list, is the same, a blank
    row above it. */
 :root[data-theme="ansiapps"] .cast-narrator { margin: 16px 16px 0 0; }
 :root[data-theme="ansiapps"] .cast-narrator,
 :root[data-theme="ansiapps"] .hooks-head.cast-row,
-:root[data-theme="ansiapps"] .hooks-list.cast-list li { grid-template-columns: 240px 56px minmax(0, 1fr) 64px 56px; gap: 0 16px; }
-/* Cues: the cue (24 cells), its group (8), how it is now (the rest) and Edit... (7). */
+:root[data-theme="ansiapps"] .hooks-list.cast-list li { grid-template-columns: 64px 56px 240px 56px minmax(0, 1fr); gap: 0 16px; }
+/* Cues: Edit... (7 cells), the cue (24), its group (8) and how it is now (the rest). */
 :root[data-theme="ansiapps"] .hooks-head.cues-row,
-:root[data-theme="ansiapps"] .hooks-list.cues-list li { grid-template-columns: 192px 64px minmax(0, 1fr) 56px; gap: 0 16px; }
-/* Narrator's Answers: the command (17 cells), the game's line (the rest),
-   what the narrator says (25) and Edit... (7). */
+:root[data-theme="ansiapps"] .hooks-list.cues-list li { grid-template-columns: 56px 192px 64px minmax(0, 1fr); gap: 0 16px; }
+/* Narrator's Answers: Edit... (7 cells), the command (17), the game's line
+   (the rest) and what the narrator says (25). */
 :root[data-theme="ansiapps"] .hooks-head.echoes-row,
-:root[data-theme="ansiapps"] .hooks-list.echoes-list li { grid-template-columns: 136px minmax(0, 1fr) 200px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.echoes-list li { grid-template-columns: 56px 136px minmax(0, 1fr) 200px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .echoes-on { margin: 16px 0 0; }
-/* Triggers, Gags, Aliases and Tickers: the last lines (10 rows), each with
-   its button (9 cells); the rules (10 rows): on (3 cells), the rest, what it does
-   (30 cells), Edit... (7) and Delete (8). */
+/* Triggers, Gags, Aliases and Tickers: the last lines (10 rows), each
+   after its button (9 cells); the rules (10 rows): Edit... (7 cells) and
+   Delete (8), on (3), the rest and what it does (30). */
 :root[data-theme="ansiapps"] .automation-heading { margin: 16px 0 0; font-size: 16px; line-height: 16px; font-weight: normal; }
 :root[data-theme="ansiapps"] .automation-bar { gap: 16px; margin: 16px 0 0; }
 :root[data-theme="ansiapps"] .automation-bar .automation-heading { margin: 0; }
 :root[data-theme="ansiapps"] .hooks-list.automation-recent,
 :root[data-theme="ansiapps"] .hooks-list.automation-rules { height: 160px; margin-top: 0; }
-:root[data-theme="ansiapps"] .hooks-list.automation-recent li { grid-template-columns: minmax(0, 1fr) 72px; gap: 0 16px; }
-:root[data-theme="ansiapps"] .hooks-list.automation-rules li { grid-template-columns: 24px minmax(0, 1fr) 240px 56px 64px; gap: 0 16px; }
-:root[data-theme="ansiapps"] .hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 24px minmax(0, 1fr) 240px 64px; }
+:root[data-theme="ansiapps"] .hooks-list.automation-recent li { grid-template-columns: 72px minmax(0, 1fr); gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.automation-rules li { grid-template-columns: 56px 64px 24px minmax(0, 1fr) 240px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.automation-rules.automation-rules-fixed li { grid-template-columns: 64px 24px minmax(0, 1fr) 240px; }
 :root[data-theme="ansiapps"] .automation-own,
 :root[data-theme="ansiapps"] .automation-commands textarea { border: none; border-radius: 0; font-size: 16px; line-height: 16px; padding: 0 8px; }
 :root[data-theme="ansiapps"] .automation-commands textarea { height: 64px; margin: 16px 0; }
@@ -609,25 +610,25 @@
 :root[data-theme="ansiapps"] .automation-known { min-height: 16px; }
 :root[data-theme="ansiapps"] .automation-tips { gap: 0 8px; }
 :root[data-theme="ansiapps"] .automation-tip { font-size: 16px; line-height: 16px; padding: 0 8px; }
-/* Priority Audio: what (the rest), its kind (10 cells) and Remove (7);
+/* Priority Audio: Remove (7 cells), what (the rest) and its kind (10);
    its menus 60 cells wide. */
 :root[data-theme="ansiapps"] .hooks-head.priority-row,
-:root[data-theme="ansiapps"] .hooks-list.priority-list li { grid-template-columns: minmax(0, 1fr) 80px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.priority-list li { grid-template-columns: 56px minmax(0, 1fr) 80px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .hooks-search .priority-pick { flex: 0 0 480px; width: 480px; }
-/* Storage: the kind (the rest), its size and files (25 cells) and
-   Delete... (9), two cells between; the buttons under it a row down. */
+/* Storage: Delete... (9 cells), the kind (the rest) and its size and
+   files (25), two cells between; the buttons under it a row down. */
 :root[data-theme="ansiapps"] .hooks-head.storage-row,
-:root[data-theme="ansiapps"] .hooks-list.storage-list li { grid-template-columns: minmax(0, 1fr) 200px 72px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.storage-list li { grid-template-columns: 72px minmax(0, 1fr) 200px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .storage-actions { gap: 16px; margin-top: 16px; }
 :root[data-theme="ansiapps"] .priority-add { margin-top: 16px; }
 :root[data-theme="ansiapps"] .hooks-head.assets-row,
-:root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 8px 192px 72px minmax(0, 1fr) 176px 144px 56px; gap: 0 16px; }
-/* CoffeeMUD's Sounds: the bullet's cell, the name (20 cells), the value
-   (the rest), the bank's sound (33), the player's (33), Play (7) and
-   Edit... (7), two cells between. A group's heading is white on blue
+:root[data-theme="ansiapps"] .hooks-list.assets-list li { grid-template-columns: 56px 8px 192px 72px minmax(0, 1fr) 176px 144px; gap: 0 16px; }
+/* CoffeeMUD's Sounds: Play (7 cells), Edit... (7), the bullet's cell, the
+   name (20), the value (the rest), the bank's sound (33) and the player's
+   (33), two cells between. A group's heading is white on blue
    (rank 5) across the row, a blank row above it. */
 :root[data-theme="ansiapps"] .hooks-head.bank-row,
-:root[data-theme="ansiapps"] .hooks-list.bank-list li { grid-template-columns: 8px 160px minmax(0, 1fr) 264px 264px 56px 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.bank-list li { grid-template-columns: 56px 56px 8px 160px minmax(0, 1fr) 264px 264px; gap: 0 16px; }
 :root[data-theme="ansiapps"] .hooks-list.bank-list li.bank-group { display: block; margin-top: 16px; padding: 0 8px; background: var(--dos-blue); color: var(--dos-white); font-weight: inherit; }
 :root[data-theme="ansiapps"] .hooks-list.bank-list li.bank-group:first-child { margin-top: 0; }
 /* A picture tried or made: 80 cells by 25 rows on black (18 in Create
@@ -645,18 +646,18 @@
 :root[data-theme="ansiapps"] .create-asset-rules li { margin: 0; text-indent: -16px; }
 :root[data-theme="ansiapps"] .create-asset-rules li::before { content: "- " / ""; }
 :root[data-theme="ansiapps"] .asset-dot { background: var(--dos-black); color: var(--dos-lightgreen); }
-/* The Journal and the Log: a row is the bullet's cell, when (12 cells),
-   who or the channel (20), what was said (the rest) and Play (6), two
+/* The Journal and the Log: a row is Play (6 cells), the bullet's cell,
+   when (12), who or the channel (20) and what was said (the rest), two
    cells between; Who is a 30-cell field beside Search. */
 :root[data-theme="ansiapps"] .hooks-head.journal-row,
-:root[data-theme="ansiapps"] .hooks-list.journal-list li { grid-template-columns: 8px 96px 160px minmax(0, 1fr) 48px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.journal-list li { grid-template-columns: 48px 8px 96px 160px minmax(0, 1fr); gap: 0 16px; }
 :root[data-theme="ansiapps"] .hooks-search .journal-who { flex: 0 0 240px; width: 240px; }
 :root[data-theme="ansiapps"] .journal-button .asset-dot { width: 8px; }
-/* The Bestiary: a row is the name (35 cells), its race or level (20),
-   where it's found (the rest) and Show... (7), two cells between. What's
+/* The Bestiary: a row is Show... (7 cells), the name (35), its race or
+   level (20) and where it's found (the rest), two cells between. What's
    known of one is a fact a line, 20 rows scrolling inside the frame. */
 :root[data-theme="ansiapps"] .hooks-head.bestiary-row,
-:root[data-theme="ansiapps"] .hooks-list.bestiary-list li { grid-template-columns: 280px 160px minmax(0, 1fr) 56px; gap: 0 16px; }
+:root[data-theme="ansiapps"] .hooks-list.bestiary-list li { grid-template-columns: 56px 280px 160px minmax(0, 1fr); gap: 0 16px; }
 :root[data-theme="ansiapps"] .hooks-list.bestiary-list .bestiary-name { background: var(--dos-black); color: var(--dos-lightgray); }
 :root[data-theme="ansiapps"] .bestiary-facts { margin: 16px 0 0; height: 320px; font-size: inherit; line-height: 16px; color: var(--dos-black); }
 :root[data-theme="ansiapps"] .bestiary-facts li + li { margin-top: 0; }

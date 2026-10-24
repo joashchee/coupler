@@ -74,10 +74,10 @@ export function CuesDialog({ open, onClose, onStatus }: CuesDialogProps) {
           {changed === 0 ? `${earcons.CUES.length} cues, all as Coupler made them.` : `${earcons.CUES.length} cues, ${changed} changed by you.`}
         </p>
         <div className="hooks-head cues-row" aria-hidden="true">
+          <span />
           <span>Cue</span>
           <span>Group</span>
           <span>Now</span>
-          <span />
         </div>
         <ul className="hooks-list cues-list" data-testid="cues-list" aria-label="Cues: name, group, then how it is now">
           {earcons.CUES.map((c) => {
@@ -85,15 +85,15 @@ export function CuesDialog({ open, onClose, onStatus }: CuesDialogProps) {
             const mine = !earcons.cueIsDefault(c.id);
             return (
               <li key={c.id} className="cues-row">
+                <button type="button" className="hook-edit" data-testid={`cues-edit-${c.id}`} aria-label={`Edit ${c.name}: ${summary}`} onClick={() => setEditing(c.id)}>
+                  Edit…
+                </button>
                 <span className="hook-key">{c.name}</span>
                 <span className="hook-value">{c.group}</span>
                 <span className={mine ? "hook-sets-off" : "hook-value"}>
                   {summary}
                   {mine ? ", set by you" : ""}
                 </span>
-                <button type="button" className="hook-edit" data-testid={`cues-edit-${c.id}`} aria-label={`Edit ${c.name}: ${summary}`} onClick={() => setEditing(c.id)}>
-                  Edit…
-                </button>
               </li>
             );
           })}

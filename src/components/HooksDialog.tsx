@@ -475,14 +475,14 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
             <>
               <div className="hooks-head bank-row" aria-hidden="true">
                 <span />
+                <span />
+                <span />
                 <span>Name</span>
                 <span>Value</span>
                 <span>CoffeeMUD's sound</span>
                 <span>Yours instead</span>
-                <span />
-                <span />
               </div>
-              <ul ref={listRef} className="hooks-list bank-list" data-testid="bank-list" tabIndex={0} aria-label="CoffeeMUD's sounds by group: name, value, the sound it plays, your own in its place, then Play and Edit">
+              <ul ref={listRef} className="hooks-list bank-list" data-testid="bank-list" tabIndex={0} aria-label="CoffeeMUD's sounds by group: Play and Edit, then name, value, the sound it plays and your own in its place">
                 {open &&
                   shownDefaults.map((d, row) => {
                     const heading = row === 0 || shownDefaults[row - 1].group !== d.group;
@@ -495,13 +495,6 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
                         </li>
                       ),
                       <li key={`${pair}\n${d.sound}`} className={d.yours ? "in-use" : undefined}>
-                        <span className="asset-dot" aria-hidden="true">
-                          {d.yours ? "•" : ""}
-                        </span>
-                        <span className="hook-key">{d.key || "In a fight"}</span>
-                        <span className="hook-value">{d.key ? [d.value, d.when].filter(Boolean).join(", ") : "anywhere your own BGN is None"}</span>
-                        <span className={d.yours ? "hook-value" : "hook-sets-off"}>{`${d.bus} ${bankPlays(d)}`}</span>
-                        <span className={d.yours ? "hook-sets-off" : "hook-value"}>{yoursInWords(d)}</span>
                         <button
                           type="button"
                           className="hook-edit"
@@ -525,6 +518,13 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
                         ) : (
                           <span />
                         )}
+                        <span className="asset-dot" aria-hidden="true">
+                          {d.yours ? "•" : ""}
+                        </span>
+                        <span className="hook-key">{d.key || "In a fight"}</span>
+                        <span className="hook-value">{d.key ? [d.value, d.when].filter(Boolean).join(", ") : "anywhere your own BGN is None"}</span>
+                        <span className={d.yours ? "hook-value" : "hook-sets-off"}>{`${d.bus} ${bankPlays(d)}`}</span>
+                        <span className={d.yours ? "hook-sets-off" : "hook-value"}>{yoursInWords(d)}</span>
                       </li>,
                     ];
                   })}
@@ -534,14 +534,14 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
             <>
               <div className="hooks-head assets-row" aria-hidden="true">
                 <span />
+                <span />
                 <span>Name</span>
                 <span>Kind</span>
                 <span>File</span>
                 <span>Plays through</span>
                 <span>Used</span>
-                <span />
               </div>
-              <ul ref={listRef} className="hooks-list assets-list" data-testid="assets-list" tabIndex={0} aria-label="Assets: name, kind, file, what plays it, how many hooks use it, then Play or Show">
+              <ul ref={listRef} className="hooks-list assets-list" data-testid="assets-list" tabIndex={0} aria-label="Assets: Play or Show, then name, kind, file, what plays it and how many hooks use it">
                 {open &&
                   shownAssets.map((a) => {
                     const chosen = fonts[a.path] ?? "";
@@ -550,6 +550,22 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
                     const isPlaying = trying === a.path;
                     return (
                       <li key={a.path} className={a.uses > 0 ? "in-use" : undefined}>
+                        {a.kind === "art" ? (
+                          <button type="button" className="hook-edit" data-testid="asset-show" aria-label={`Show ${a.shown}`} onClick={() => setShowing(a.path)}>
+                            Show…
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="hook-edit"
+                            data-testid="asset-play"
+                            aria-label={`${isPlaying ? "Stop" : "Play"} ${a.kind === "soundfont" ? `a sample tune through ${a.shown}` : a.shown}`}
+                            aria-pressed={isPlaying}
+                            onClick={() => void playOrStop(a)}
+                          >
+                            {isPlaying ? "Stop" : "Play"}
+                          </button>
+                        )}
                         <span className="asset-dot" aria-hidden="true">
                           {a.uses > 0 ? "•" : ""}
                         </span>
@@ -577,22 +593,6 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
                           <span className="hook-value">{a.kind === "art" ? "" : a.kind === "soundfont" ? "a sample tune" : "as it is"}</span>
                         )}
                         <span className="hook-key">{a.uses > 0 ? `in use by ${plural(a.uses, "hook", "hooks")}` : "not in use"}</span>
-                        {a.kind === "art" ? (
-                          <button type="button" className="hook-edit" data-testid="asset-show" aria-label={`Show ${a.shown}`} onClick={() => setShowing(a.path)}>
-                            Show…
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="hook-edit"
-                            data-testid="asset-play"
-                            aria-label={`${isPlaying ? "Stop" : "Play"} ${a.kind === "soundfont" ? `a sample tune through ${a.shown}` : a.shown}`}
-                            aria-pressed={isPlaying}
-                            onClick={() => void playOrStop(a)}
-                          >
-                            {isPlaying ? "Stop" : "Play"}
-                          </button>
-                        )}
                       </li>
                     );
                   })}
@@ -603,22 +603,22 @@ export const HooksDialog = memo(function HooksDialog({ open, onClose, count, ass
               {/* The columns' names, for the eye; each control says its own. */}
               <div className="hooks-head" aria-hidden="true">
                 <span />
+                <span />
                 <span>Name</span>
                 <span>Value</span>
                 <span>Sets off</span>
-                <span />
               </div>
               <ul ref={listRef} className="hooks-list hooks-list-assets" data-testid="hooks-list" tabIndex={0} aria-label="Hooks: name, value, then what each sets off">
                 {open &&
                   listing?.pairs.map((p, row) => (
                     <li key={`${p.key}\n${p.value}`}>
+                      <button type="button" className="hook-edit" data-testid="hook-edit" aria-label={`Edit what ${said(p)} sets off: ${summaryOf(p.trigger)}`} onClick={() => setEditing(p)}>
+                        Edit…
+                      </button>
                       <input type="checkbox" checked={false} aria-label={`Move ${p.key} to the Filtered list`} onChange={() => void move(p.key, true, row)} />
                       <span className="hook-key">{p.key}</span>
                       <span className="hook-value">{p.value}</span>
                       <span className={p.trigger ? "hook-sets-off" : "hook-value"}>{summaryOf(p.trigger)}</span>
-                      <button type="button" className="hook-edit" data-testid="hook-edit" aria-label={`Edit what ${said(p)} sets off: ${summaryOf(p.trigger)}`} onClick={() => setEditing(p)}>
-                        Edit…
-                      </button>
                     </li>
                   ))}
               </ul>

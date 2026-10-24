@@ -1,7 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.37.0 (2026-10-24)
 
+- **Mute a channel in the Log, by the game's own commands** (2026-10-24):
+  on a channel's tab (OOC, ZCHAT…), Mute Channel, left of Mark All Heard,
+  sends CoffeeMUD's NO<channel>, so the game stops sending it to the
+  character, in Coupler or any client; Unmute Channel sends <channel> ON.
+  The tab says (off) as the game says. On Every Channel, **Channels…**
+  opens a dialog of every channel the character may use, each on or off
+  to turn, with Turn All On and Turn All Off (CHANNELS ON and OFF). The
+  game's answers (its CHANNELS list, read when the Log opens and after
+  each change) aren't shown in the output; a refusal (QUIET mode) is
+  told in the status bar.
+- **The web build's clock counts whole microseconds** (2026-10-24): it
+  kept fractions of a millisecond, so a ticker's next time could fall a
+  hair after the second it was due and wait one more.
+- **A row's own buttons come first** (2026-10-24): every list's buttons
+  for one entry are at the left of its rows, before the name, so they
+  sit in one column however long the names: the Bestiary's Show…, the
+  Journal's and Log's Play, the hooks' Edit…, the Assets' Play or Show…,
+  CoffeeMUD's Sounds' Play and Edit…, Characters' Voices, Cues,
+  Narrator's Answers, the triggers, gags, aliases and tickers (and their
+  last lines), Priority Audio and Storage.
+- **Tickers keep their time** (2026-10-24): a ticker that came due while
+  Coupler's WHO waited for its answer (about 10 seconds of every minute)
+  skipped its whole turn, so one every 15 seconds missed about one in
+  twenty, and one every 61 seconds could fall in step with WHO and go
+  six minutes unsent. Now it waits for the answer and goes then, within
+  12 seconds of its time. A two-hour test of tickers from 15 seconds to
+  8 minutes beside WHO's clock checks it.
+- **`CLAUDE.md` trimmed** (2026-10-24): from about 1,050 lines to 380.
+  The rules and conventions are kept whole; "Where things live" is now
+  a short map by area, keeping each module's do's and don'ts and leaving
+  the details to the code and its headers.
 - **The Bestiary's names in the game's colors** (2026-10-24): the Name
   column is black, as the game output is, and each name is drawn in the
   colors the game gave it (CoffeeMUD's `^` codes, which showed as
