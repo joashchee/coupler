@@ -802,10 +802,23 @@ export interface Loop {
   volume: number;
 }
 
-/** What should be looping now: background noise and weather. */
+/**
+ * The place's music: a BGM hooked to the room (`room.info.id`) or its
+ * area (`room.info.zone`), playing while the player is there, quiet in
+ * a fight (src-tauri/src/ambient.rs).
+ */
+export interface PlaceMusic {
+  path: string;
+  volume: number;
+  looping: boolean;
+  place: "room" | "area";
+}
+
+/** What should be playing now for the place: background noise and weather, and its music. */
 export interface Ambience {
   bgn: Loop | null;
   bgw: Loop | null;
+  bgm?: PlaceMusic | null;
 }
 
 /** What's looping now, for a frontend that has just started. */

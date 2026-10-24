@@ -599,6 +599,7 @@ impl Coupler {
         self.update_picture();
         self.update_combat();
         self.update_vitals();
+        ambient::without_place_music(&mut fired);
         if !fired.is_empty() {
             self.emit("hook-fired", json!(fired));
         }
@@ -923,6 +924,10 @@ impl Coupler {
             let fighting = self.combat.opponent().is_some();
             let a = &self.ambient;
             soundbank::fill_ambience(&mut now, a.room.as_ref().map(|r| r.terrain.as_str()), a.weather_overhead(), night, fighting);
+        }
+        // The place's music goes quiet in a fight, and starts again after.
+        if self.combat.opponent().is_some() {
+            now.bgm = None;
         }
         if now != self.ambience_sent {
             self.ambience_sent = now.clone();

@@ -17,6 +17,9 @@
  * (src-tauri/src/ambient.rs, the `ambient` event) and `setLoop` makes it
  * so, fading the old loop out and the new one in, and leaving one that's
  * already playing as it is (only its volume follows).
+ * The place's music (a BGM hooked to the room or its area) comes the
+ * same way, in the `ambient` event: `setPlaceMusic` fades it in and out
+ * as the player comes and goes, and out for a fight.
  * Leaving the game stops everything at once (`stopAll`); leaving a
  * character for another, or for the account menu, fades it out (`fadeAll`).
  * One more bus, CUE, carries Immersive mode's own sounds, made here
@@ -170,7 +173,8 @@ export async function playEffect(path: string, percent = 100, place?: mud.Place)
 
 // ---- Music: one piece at a time ----
 
-let music: { path: string; looping: boolean; percent: number; playing: { source: AudioBufferSourceNode; gain: GainNode } | null } | null = null;
+/** The music playing: set off by a trigger, or the place's (`place`, `setPlaceMusic`). */
+let music: { path: string; looping: boolean; percent: number; playing: { source: AudioBufferSourceNode; gain: GainNode } | null; place?: boolean } | null = null;
 /** Bumped by every music request, so one that finishes loading late doesn't start. */
 let musicTurn = 0;
 const musicListeners = new Set<(path: string | null) => void>();
@@ -227,6 +231,90 @@ export function stopMusic() {
     musicChanged();
   }
 }
+
+/** Fades the music out and forgets it, the way a loop goes (`FADE`). */
+function fadeMusic() {
+  musicTurn++;
+  const was = music?.playing;
+  music = null;
+  if (was) {
+    was.source.onended = null;
+    fadeOut(was);
+    musicChanged();
+  }
+}
+
+/**
+ * The place's music (src-tauri/src/ambient.rs: a BGM hooked to the room
+ * or its area), as Rust says it should be: the same piece plays on (its
+ * volume follows); another fades in as whatever played fades out; none
+ * fades the place's music out (a room or area left, a fight begun), but
+ * not music a trigger set off. Starting again after a fight, it starts
+ * from the top.
+ */
+export async function setPlaceMusic(want: mud.PlaceMusic | null) {
+  if (want && music && music.path === want.path) {
+    music.percent = want.volume;
+    music.place = true;
+    if (music.playing) {
+      const gain = music.playing.gain.gain;
+      const t = audio().context.currentTime;
+      gain.cancelScheduledValues(t);
+      gain.setValueAtTime(gain.value, t);
+      gain.linearRampToValueAtTime(want.volume / 100, t + FADE);
+    }
+    return;
+  }
+  if (!want) {
+    if (music?.place) fadeMusic();
+    return;
+  }
+  fadeMusic();
+  const turn = ++musicTurn;
+  music = { path: want.path, looping: want.looping, percent: want.volume, playing: null, place: true };
+  let buffer: AudioBuffer;
+  try {
+    buffer = await load(want.path, want.looping);
+  } catch (e) {
+    if (turn === musicTurn) music = null;
+    throw e;
+  }
+  const now = music;
+  if (turn !== musicTurn || !now) return;
+  const playing = start(buffer, "bgm", 0, want.looping);
+  caption(`♪ Music for this ${want.place}: ${mud.assetTitle(want.path)}`);
+  const t = audio().context.currentTime;
+  playing.gain.gain.setValueAtTime(0, t);
+  playing.gain.gain.linearRampToValueAtTime(now.percent / 100, t + FADE);
+  now.playing = playing;
+  playing.source.onended = () => {
+    if (music?.playing === playing) {
+      music = null;
+      musicChanged();
+    }
+  };
+  musicChanged();
+}
+
+// ---- Played from a buffer: the Music Editor's song (lib/musicEditor.ts) ----
+
+/** Plays a buffer on the BGM bus from `offset` seconds, once or over and over. */
+export function playBuffer(buffer: AudioBuffer, looping: boolean, offset: number): { source: AudioBufferSourceNode; gain: GainNode } {
+  const { context, buses } = audio();
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = looping;
+  const gain = context.createGain();
+  source.connect(gain).connect(buses.bgm);
+  source.start(0, Math.max(0, Math.min(offset, buffer.duration)));
+  return { source, gain };
+}
+
+/** Decodes WAV bytes (rendered music) into a buffer to play. */
+export const decode = (bytes: ArrayBuffer) => audio().context.decodeAudioData(bytes);
+
+/** The audio clock, seconds. */
+export const audioTime = () => audio().context.currentTime;
 
 // ---- Ambience: one loop each on BGN and BGW ----
 

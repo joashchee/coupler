@@ -63,6 +63,11 @@
 //! ([`SoundFont::neumetik`]), turns a DLS bank into one, trims a bank to
 //! what a song plays, or builds one from your own samples.
 //!
+//! **And it keeps music as text**: [`tmf`], the Text Music Format, writes
+//! a [`Score`] (a MIDI file as an editor has it: parts, bars and notes)
+//! as a short run of plain characters that survives being typed into a
+//! game and printed back wrapped, and reads it back exactly.
+//!
 //! Rendering never allocates, locks or panics, and the same MIDI always
 //! makes the same samples.
 
@@ -77,10 +82,12 @@ mod output;
 mod patch;
 mod player;
 mod sampled;
+pub mod score;
 mod sequencer;
 mod smf;
 pub mod soundfont;
 mod synth;
+pub mod tmf;
 mod voice;
 
 pub use bank::{Instrument, SoundBank, SoundBankKind};
@@ -88,6 +95,7 @@ pub use error::Error;
 pub use output::wav;
 pub use patch::Patch;
 pub use player::{PlayState, Player, Song};
+pub use score::Score;
 pub use sequencer::Sequencer;
 pub use soundfont::SoundFont;
 pub use synth::{Synth, MAX_RATE, MIN_RATE};

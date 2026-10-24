@@ -27,6 +27,8 @@ pub enum Error {
     Unwritable,
     /// It isn't a WAV file of PCM or float samples.
     NotWav,
+    /// It isn't TMF text, or it was damaged ([`crate::tmf`]).
+    NotTmf,
 }
 
 impl Error {
@@ -42,6 +44,7 @@ impl Error {
             Error::CompressedSoundFont => -8,
             Error::Unwritable => -9,
             Error::NotWav => -10,
+            Error::NotTmf => -11,
         }
     }
 }
@@ -58,6 +61,7 @@ impl fmt::Display for Error {
             Error::CompressedSoundFont => "it's a compressed SoundFont (SF3), which can't be played: use an SF2",
             Error::Unwritable => "it can't be written as a SoundFont: something in it is missing or too big",
             Error::NotWav => "it isn't a WAV file of PCM or float samples",
+            Error::NotTmf => "it isn't TMF music, or it was damaged on the way",
         })
     }
 }

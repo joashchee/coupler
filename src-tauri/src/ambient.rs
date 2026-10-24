@@ -252,6 +252,40 @@ pub struct Loop {
 pub struct Ambience {
     pub bgn: Option<Loop>,
     pub bgw: Option<Loop>,
+    /// The place's music (`PLACE_MUSIC`).
+    pub bgm: Option<Music>,
+}
+
+/// **The place's music**: a BGM trigger on the room (`room.info.id`)
+/// or else its area (`room.info.zone`). It isn't set off each time the
+/// pair comes, as other music is (`without_place_music`): it plays
+/// while the player is there, like the ambience, so it fades out when
+/// the place's music changes (a room or an area with other music, or
+/// none), goes quiet in a fight and starts again when it's over
+/// (`session.rs`).
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Music {
+    pub path: String,
+    pub volume: u8,
+    /// Over and over, or once each time the player comes.
+    pub looping: bool,
+    /// `"room"` or `"area"`: what it's hooked to.
+    pub place: &'static str,
+}
+
+/// The pairs whose BGM is the place's music, the room's first, and what each is called.
+pub const PLACE_MUSIC: [(&str, &str); 2] = [("room.info.id", "room"), ("room.info.zone", "area")];
+
+/// Takes the place's music out of what a message set off: it plays as
+/// the ambience says, not each time the room's pairs come.
+pub fn without_place_music(fired: &mut Vec<crate::hooks::Fired>) {
+    for f in fired.iter_mut() {
+        if PLACE_MUSIC.iter().any(|(key, _)| f.key == *key) {
+            f.trigger.bgm = None;
+        }
+    }
+    fired.retain(|f| !f.trigger.is_empty());
 }
 
 /// Where the player is, from `room.info`.
@@ -370,7 +404,21 @@ impl Ambient {
             let t = trigger(WEATHER_KEY, &json_text(kind))?;
             Some(Loop { path: t.bgw?, volume: t.bgw_volume })
         });
-        Ambience { bgn, bgw }
+        let bgm = PLACE_MUSIC.iter().find_map(|(key, place)| {
+            let value = if *key == "room.info.id" { &room.id } else { &room.zone };
+            let t = trigger(key, &json_text(value))?;
+            Some(Music { path: t.bgm?, volume: t.bgm_volume, looping: t.bgm_loop, place })
+        });
+        Ambience { bgn, bgw, bgm }
+    }
+
+    /// Where the player is, as the place's music is hooked: the pair's
+    /// key and value for `"room"` or `"area"`, and the place in words.
+    pub fn place(&self, scope: &str) -> Option<(&'static str, String, String)> {
+        let room = self.room.as_ref()?;
+        let (key, _) = PLACE_MUSIC.iter().find(|(_, place)| *place == scope)?;
+        let (value, words) = if scope == "room" { (&room.id, format!("this room ({})", room.id)) } else { (&room.zone, format!("the area {}", room.zone)) };
+        (!value.is_empty()).then(|| (*key, json_text(value), words))
     }
 
     /// `ambience`, from the hooks database.
@@ -419,6 +467,42 @@ mod ask_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_rooms_music_before_the_areas() {
+        let mut a = Ambient::default();
+        let music = |path: &str| Trigger { bgm: Some(path.into()), bgm_loop: true, bgm_volume: 80, ..Trigger::default() };
+        let triggers = |key: &str, value: &str| match (key, value) {
+            ("room.info.id", "\"Midgaard#3001\"") => Some(music("mid/temple.mid")),
+            ("room.info.zone", "\"Midgaard\"") => Some(music("mid/city.mid")),
+            _ => None,
+        };
+        assert_eq!(a.ambience(triggers).bgm, None, "nowhere");
+        a.enter(Room { id: "Midgaard#3001".into(), zone: "Midgaard".into(), terrain: "city".into() });
+        assert_eq!(a.ambience(triggers).bgm, Some(Music { path: "mid/temple.mid".into(), volume: 80, looping: true, place: "room" }));
+        a.enter(Room { id: "Midgaard#3002".into(), zone: "Midgaard".into(), terrain: "city".into() });
+        assert_eq!(a.ambience(triggers).bgm.map(|m| (m.path, m.place)), Some(("mid/city.mid".into(), "area")));
+        a.enter(Room { id: "Woods#1".into(), zone: "Woods".into(), terrain: "woods".into() });
+        assert_eq!(a.ambience(triggers).bgm, None, "no music here: what played fades");
+        assert_eq!(a.place("room").map(|p| p.0), Some("room.info.id"));
+        assert_eq!(a.place("area").map(|p| (p.0, p.1)), Some(("room.info.zone", "\"Woods\"".to_string())));
+        assert_eq!(a.place("house"), None);
+    }
+
+    #[test]
+    fn the_places_music_isnt_set_off_by_its_pairs() {
+        use crate::hooks::Fired;
+        let both = Trigger { sfx: Some("wav/bell.wav".into()), bgm: Some("mid/city.mid".into()), ..Trigger::default() };
+        let mut fired = vec![
+            Fired { key: "room.info.zone".into(), value: "\"Midgaard\"".into(), trigger: both.clone(), place: None },
+            Fired { key: "room.info.id".into(), value: "\"x\"".into(), trigger: Trigger { bgm: Some("mid/a.mid".into()), ..Trigger::default() }, place: None },
+            Fired { key: "char.status.state".into(), value: "1".into(), trigger: both.clone(), place: None },
+        ];
+        without_place_music(&mut fired);
+        assert_eq!(fired.len(), 2, "the room's had only music");
+        assert_eq!((fired[0].trigger.sfx.is_some(), fired[0].trigger.bgm.is_none()), (true, true));
+        assert_eq!(fired[1].trigger, both, "music on another pair is set off as before");
+    }
 
     #[test]
     fn terrains_are_indoors_or_outdoors() {

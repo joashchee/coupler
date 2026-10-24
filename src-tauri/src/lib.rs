@@ -57,6 +57,7 @@ mod item_art;
 mod screen_reader;
 mod senses;
 mod session;
+mod songbook;
 pub mod soundbank;
 mod speech;
 mod stretch;
@@ -778,6 +779,28 @@ fn music_instruments(app: AppHandle, font: Option<String>) -> Result<music::Inst
     Ok(music::instruments(bank))
 }
 
+/// Writes the song into a journal as TMF (`songbook.rs`): WRITE sent
+/// and its questions answered as they come; `music-written` says how it
+/// ended. Returns the music's length as text, in characters.
+#[tauri::command]
+fn music_write(journal: String, song: music::Song, title: String, session: State<'_, Session>) -> Result<usize, String> {
+    session.music_write(&journal, &song, &title)
+}
+
+/// The song as TMF text, and how long it is.
+#[tauri::command]
+fn music_tmf(song: music::Song, title: String) -> String {
+    music::to_tmf(&song, &title)
+}
+
+/// Hooks a MIDI asset to where the player is (`scope`: "room" or
+/// "area") as the place's music, or unhooks it (no `path`). Returns the
+/// place in words.
+#[tauri::command]
+fn music_hook(app: AppHandle, scope: String, path: Option<String>, session: State<'_, Session>) -> Result<String, String> {
+    session.music_hook(&app, &scope, path.as_deref())
+}
+
 // ---- Coupler Backup (backup.rs) ----
 
 /// Writes a Coupler Backup to `path`: app data's kept files and
@@ -994,6 +1017,9 @@ pub fn run() {
             music_save_as,
             music_render,
             music_instruments,
+            music_write,
+            music_tmf,
+            music_hook,
             backup_export,
             backup_inspect,
             backup_restore,

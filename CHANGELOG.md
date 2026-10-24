@@ -1,6 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.35.0 (2026-10-24)
+
+- **Music in the game's journals** (2026-10-24): the Music Editor's
+  song written into a journal entry as TMF, the Text Music Format
+  (`#write journal`), and read back by anyone with Coupler who READs
+  it: the song opens in the Music Editor (`#load` if it had changes
+  unsaved), the code itself neither shown nor said. A clan's journal
+  (Clan Crafting's) is its forum, so a clan shares music there. TMF
+  is Neumetik's (`neumetik_midi::tmf`): only letters, digits, `-` and
+  `_`, wrapped any way the game likes, checked by a CRC, a 16-bar song
+  of about 200 notes in about 180 characters. Coupler answers WRITE's
+  questions one at a time, and stops if the WRITE fails.
+- **Coupler's own commands, after `#`** (2026-10-24): `#play`, `#pause`,
+  `#rewind`, `#loop`, `#stop` and `#save` for the Music Editor's song,
+  open or closed; `#hook room` and `#hook area` make it the music of
+  where you are (`#unhook` takes it off); `#prefix` picks another
+  character; `#help` lists them. They're never sent to the game or
+  written in its output: a soft tick says one was taken, the status bar
+  what it did, two notes when a slow one's done. `##` sends a `#` to
+  the game.
+- **Music for a room or an area** (2026-10-24): a BGM hooked to a room
+  or its area plays while you're there and fades out when you leave for
+  a place with other music or none, goes quiet in a fight and starts
+  again after.
 
 ## 0.34.0 (2026-10-24)
 

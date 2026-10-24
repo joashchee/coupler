@@ -319,7 +319,12 @@ and its order is in the roadmap's phase 2.
   or TR-808); the `after` notes and comments may name them.
   `assets.rs` renders MIDI through it unless the player chose a
   SoundFont for the file. Its ignored `neumetik_demo` test writes a
-  tour of the banks (`OUT`).
+  tour of the banks (`OUT`). `score.rs` is a MIDI file as an editor has
+  it (`Score`: parts, bars, notes, what's kept; `music.rs`'s `Song` is
+  it with serde) and `tmf.rs` **TMF, the Text Music Format**: a score
+  and title as `TMF1`, base64url groups and `=` (LEB128 deltas on the
+  score's grid, its own LZ77, a CRC-32), read back exactly however it's
+  wrapped.
 - `src-tauri/src/codecs.rs`: WAV reading, and Opus (libopus via
   `opusic-sys`, Ogg pages by `ogg`, `rubato` to 48 kHz) and WavPack
   (`wavpack-sys`, vendored in `src-tauri/vendor/wavpack-sys` to link it
@@ -364,6 +369,22 @@ and its order is in the roadmap's phase 2.
   with the GS variation tones as their own banks),
   Save… and Save as… (`music_save`, `music_save_as`, never over another
   file). Desktop only.
+- `src-tauri/src/songbook.rs`: **music in the game's journals**, pure
+  and unit-tested: a clan's journal is its forum (Clan Crafting's
+  `GenJournal`; `CLANFORUMDATA`). `Poster` answers WRITE's questions
+  one at a time with the song's TMF (`music_write`, `music-written`;
+  a refusal stops it, `REFUSALS`), `Finder` reads TMF out of the game's
+  lines (a line starting `TMF1` to its `=`), not shown or said, and
+  `session.rs` emits `music-found` with the song. Desktop only.
+- **Coupler's own commands** (`src/lib/commands.ts`, `#` or
+  `coupler.commandPrefix`): never sent or written in the output, a cue
+  (`commandHeard`, `commandDone`) and the status bar instead; `##` is
+  for the game. `runCommand` in `App.tsx` runs them. Today the Music
+  Editor's: its song lives in `src/lib/musicEditor.ts` (and its player:
+  play, pause, rewind, loop, stop), so it plays and saves with the
+  dialog closed; `#write`, `#load`, `#hook`/`#unhook room|area`
+  (`music_hook`). The music commands are desktop only (the iPhone and
+  iPad have the commands, with music read from a journal).
 - `src-tauri/src/ambient.rs`: ambience, pure and unit-tested: BGN
   (background noise) and BGW (background weather), two more trigger
   slots that loop while they apply. Works out the room type (indoors or
@@ -373,7 +394,10 @@ and its order is in the roadmap's phase 2.
   and `coupler.weather`. Picks the BGN (room id, then terrain, then room
   type) and the BGW (under the sky); `session.rs` emits `ambient` when
   that changes and `lib/assets.ts` `setLoop` fades between them on the
-  BGN and BGW buses.
+  BGN and BGW buses. **The place's music** too: a BGM on `room.info.id`
+  or else `room.info.zone` (`PLACE_MUSIC`) is the ambience's `bgm`, not
+  set off as a trigger (`without_place_music`), quiet in a fight;
+  `setPlaceMusic` fades it in and out.
 - `src-tauri/src/soundbank.rs`: **coffeemud.sf2**, CoffeeMUD's
   sounds as a SoundFont (CC0, made by ansiapps' Neumetik, its original
   in that repository's `coffeemud/`): 210 slots, each an event on a
@@ -856,7 +880,7 @@ and its order is in the roadmap's phase 2.
   in `src-web` too or joins `DESKTOP_ONLY`, with a row in the web build's table (the private notes).
 - `src-tauri/src/session.rs`: the socket, the reader thread,
   the events (`mud-output`, `mud-echo`, `mud-gmcp`, `mud-closed`,
-  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`, `automation-fired`, `automation-recent`, `automation-held`). It feeds the mapper, saves one map per
+  `character-left`, `creation`, `vitals`, `talk`, `journal-changed`, `cast-changed`, `map-changed`, `map-walk`, `bestiary-changed`, `hooks-changed`, `hook-fired`, `ambient`, `combat`, `picture`, `who`, `sounds-off`, `automation-fired`, `automation-recent`, `automation-held`, `music-found`, `music-written`). It feeds the mapper, saves one map per
   world to `maps/<world>.json` in app data, and walks a route one step
   at a time, each sent only after the game confirms the last.
 - `src-tauri/src/lib.rs`: the commands (`server_info`, `mud_connect`
@@ -871,7 +895,7 @@ and its order is in the roadmap's phase 2.
   `assets_import`, `assets_compress`, `assets_keep`, `asset_set_font`,
   `asset_create_art`, `asset_create_music`, `asset_audio`, `soundbank_list`, `soundbank_defaults`, `asset_picture`, `asset_ansi`,
   `music_open`, `music_new`, `music_save`, `music_save_as`, `music_render`,
-  `music_instruments`, `bestiary_mobs`, `bestiary_mob`, `bestiary_items`,
+  `music_instruments`, `music_write`, `music_tmf`, `music_hook`, `bestiary_mobs`, `bestiary_mob`, `bestiary_items`,
   `bestiary_item`, `backup_export`, `backup_inspect`, `backup_restore`,
   `app_restart`, `window_set_fullscreen`,
   `window_is_fullscreen`).

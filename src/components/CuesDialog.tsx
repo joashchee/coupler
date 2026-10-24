@@ -259,6 +259,7 @@ function captionExample(info: earcons.CueInfo, words: string): string {
     loggedOff: "Hassan",
     logLine: "OOC",
     logReminder: "12 lines",
+    musicFound: "The Clan Anthem",
   };
   const d = detail[info.id];
   return `Reads: ♪ ${d ? `${words}: ${d}` : words}`;

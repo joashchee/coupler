@@ -6,7 +6,10 @@ music played without a SoundFont or samples. Three small engines
 Karplus-Strong plucked strings), an SVF filter, envelopes, an LFO,
 chorus and reverb, every drum a recipe. Since 0.2.0 it also plays
 through a SoundFont 2 or DLS bank (`SoundBank`), its own instruments
-filling in what the bank hasn't. Standard library only.
+filling in what the bank hasn't. It also reads and writes TMF,
+the Text Music Format (`tmf`): a `Score` (a MIDI file as an editor has
+it) as plain characters a game can store and print back. Standard
+library only.
 
 ## License
 

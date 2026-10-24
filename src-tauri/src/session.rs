@@ -39,6 +39,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::ambient::{self, Ambience, Ambient};
+use crate::songbook::{self, Finder, Poster};
+use crate::music;
 use crate::ansi::{Line, Screen};
 use crate::automation::{self, Automation};
 use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
@@ -257,6 +259,32 @@ struct PictureStore {
     world: Option<&'static str>,
 }
 
+/// Music in the journals (`songbook.rs`): TMF read out of the game's
+/// lines, and a song being written into a journal.
+#[derive(Default)]
+struct Songbook {
+    finder: Finder,
+    poster: Option<Poster>,
+}
+
+/// What `music-found` sends: music read in the game, a journal entry's
+/// TMF, as a song for the Music Editor, or why it couldn't be read.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct MusicFound {
+    title: String,
+    song: Option<music::Song>,
+    characters: usize,
+    problem: Option<String>,
+}
+
+/// What `music-written` sends: whether the journal entry was added, in words.
+#[derive(Serialize, Clone)]
+struct MusicWritten {
+    ok: bool,
+    message: String,
+}
+
 /// The fight (`combat.rs`) and what was last sent.
 #[derive(Default)]
 struct CombatStore {
@@ -279,6 +307,8 @@ pub struct Session {
     character: Mutex<Character>,
     /// Who the player is fighting; new each connection.
     combat: Mutex<CombatStore>,
+    /// Music in the journals (`songbook.rs`); new each connection.
+    songbook: Mutex<Songbook>,
     /// The vitals and talk (`senses.rs`); new each connection.
     senses: Mutex<SensesStore>,
     /// Everyone met and their voices (`cast.rs`), the world's.
@@ -477,6 +507,7 @@ impl Session {
         }
         *self.character.lock().unwrap() = Character::default();
         *self.combat.lock().unwrap() = CombatStore::default();
+        *self.songbook.lock().unwrap() = Songbook::default();
         *self.senses.lock().unwrap() = SensesStore::default();
         *self.counted.lock().unwrap() = false;
         *self.who.lock().unwrap() = Who::default();
@@ -519,6 +550,9 @@ impl Session {
     /// takes over from a walk in progress.
     pub fn send_line(&self, app: &AppHandle, line: &str) -> Result<(), String> {
         self.stop_walk(app, "Stopped walking: you typed a command.");
+        if self.songbook.lock().unwrap().poster.take().is_some() {
+            let _ = app.emit("music-written", MusicWritten { ok: false, message: "You typed a command, so Coupler stopped writing the music: answer the game's question yourself.".into() });
+        }
         let acting = self.who.lock().unwrap().acting();
         let expanded = if acting { self.automation.lock().unwrap().expand(line) } else { None };
         for line in expanded.unwrap_or_else(|| vec![line.to_string()]) {
@@ -532,6 +566,11 @@ impl Session {
     /// typed, but it isn't the player at the keyboard (`Who::typed`), so
     /// it never keeps an away player "here".
     fn send_auto(&self, app: &AppHandle, line: &str) {
+        // Not into a WRITE's questions (songbook.rs).
+        if self.songbook.lock().unwrap().poster.is_some() {
+            log::info!("a rule's command waits out a WRITE: not sent");
+            return;
+        }
         if let Err(e) = self.send_command(app, line) {
             log::warn!("{e}");
         }
@@ -628,6 +667,12 @@ impl Session {
     fn who_tick(&self, app: &AppHandle) {
         let now = Instant::now();
         self.keep_alive(now);
+        self.songbook_tick(app, now);
+        // A WRITE under way takes the next lines as its answers: nothing
+        // of Coupler's own (WHO, WEATHER, a look, a ticker) goes till it's done.
+        if self.songbook.lock().unwrap().poster.is_some() {
+            return;
+        }
         self.automation_tick(app, now);
         if self.who.lock().unwrap().due(now) {
             if let Err(e) = self.write(&telnet::encode_line("who")) {
@@ -1331,6 +1376,11 @@ impl Session {
         self.cast.lock().unwrap().cast.leave();
         self.save_cast(app, true);
         self.who.lock().unwrap().leave();
+        let mut songbook = self.songbook.lock().unwrap();
+        songbook.finder.leave();
+        if songbook.poster.take().is_some() {
+            let _ = app.emit("music-written", MusicWritten { ok: false, message: "The connection ended before the music was written.".into() });
+        }
     }
 
     /// Emits `vitals` when they changed: null when nothing is known.
@@ -1585,6 +1635,92 @@ impl Session {
         Ok(cleared)
     }
 
+    // ---- Music in the journals (songbook.rs) ----
+
+    /// Starts writing a song into a journal as TMF: WRITE is sent, and
+    /// each of its questions answered as it comes (`songbook_read`).
+    /// Returns how many characters the music is as text.
+    pub fn music_write(&self, journal: &str, song: &music::Song, title: &str) -> Result<usize, String> {
+        if !self.who.lock().unwrap().acting() {
+            return Err("Music is written into a journal from the game: come into it first.".into());
+        }
+        let mut songbook = self.songbook.lock().unwrap();
+        if songbook.poster.is_some() {
+            return Err("Coupler is writing music into a journal already.".into());
+        }
+        let text = music::to_tmf(song, title);
+        let (poster, first) = Poster::new(journal, title, text, Instant::now())?;
+        let characters = poster.characters();
+        self.write(&telnet::encode_line(&first))?;
+        songbook.poster = Some(poster);
+        Ok(characters)
+    }
+
+    /// A read's lines and prompt, for the WRITE under way: its next
+    /// answer sent, unechoed, or how it ended.
+    fn songbook_read(&self, app: &AppHandle, texts: &[String], prompt: Option<&str>) {
+        let mut songbook = self.songbook.lock().unwrap();
+        let Some(poster) = songbook.poster.as_mut() else { return };
+        match poster.read(texts, prompt, Instant::now()) {
+            Some(songbook::Step::Send(line)) => {
+                drop(songbook);
+                if let Err(e) = self.write(&telnet::encode_line(&line)) {
+                    self.songbook.lock().unwrap().poster = None;
+                    let _ = app.emit("music-written", MusicWritten { ok: false, message: e });
+                }
+            }
+            Some(songbook::Step::Done(done)) => {
+                songbook.poster = None;
+                let (ok, message) = match done {
+                    Ok(()) => (true, "The music is in the journal: anyone who reads that entry with Coupler gets the song.".to_string()),
+                    Err(e) => (false, e),
+                };
+                let _ = app.emit("music-written", MusicWritten { ok, message });
+            }
+            None => {}
+        }
+    }
+
+    /// Gives up a WRITE the game stopped answering.
+    fn songbook_tick(&self, app: &AppHandle, now: Instant) {
+        let mut songbook = self.songbook.lock().unwrap();
+        if let Some(why) = songbook.poster.as_ref().and_then(|p| p.timed_out(now)) {
+            songbook.poster = None;
+            let _ = app.emit("music-written", MusicWritten { ok: false, message: why });
+        }
+    }
+
+    /// Music found in the game's lines, for the Music Editor.
+    fn music_found(app: &AppHandle, text: &str, subject: Option<String>) {
+        let found = match music::from_tmf(text) {
+            Ok((song, title)) => {
+                let title = if title.trim().is_empty() { subject.unwrap_or_else(|| "Music from a journal".into()) } else { title };
+                MusicFound { title, song: Some(song), characters: text.len(), problem: None }
+            }
+            Err(e) => MusicFound { title: subject.unwrap_or_else(|| "Music from a journal".into()), song: None, characters: text.len(), problem: Some(e) },
+        };
+        let _ = app.emit("music-found", found);
+    }
+
+    /// Hooks music (an asset's path) to where the player is, the room or
+    /// its area, as the place's music (`ambient.rs`); None unhooks it.
+    /// Returns the place in words.
+    pub fn music_hook(&self, app: &AppHandle, scope: &str, path: Option<&str>) -> Result<String, String> {
+        let (key, value, words) = self.ambient.lock().unwrap().ambient.place(scope).ok_or_else(|| match scope {
+            "room" | "area" => "Coupler doesn't know where you are yet: LOOK, then try again.".to_string(),
+            _ => format!("Music is hooked to a room or an area, not \"{scope}\"."),
+        })?;
+        let mut trigger = self.hook_store(app).hooks.as_ref().ok_or("The hooks database couldn't be opened.")?.trigger(key, &value).cloned().unwrap_or_default();
+        if path.is_none() && trigger.bgm.is_none() {
+            return Err(format!("No music is hooked to {words}."));
+        }
+        trigger.bgm = path.map(str::to_string);
+        trigger.bgm_loop = true;
+        self.hooks_set_trigger(app, key, &value, trigger)?;
+        self.hooks_changed(app);
+        Ok(words)
+    }
+
     // ---- Ambience: BGN and BGW (ambient.rs) ----
 
     /// A `room.info`: where the player is now, for the ambience, and its
@@ -1660,6 +1796,10 @@ impl Session {
         if app.state::<soundbank::Sounds>().available() {
             let a = &ambient.ambient;
             soundbank::fill_ambience(&mut now, a.room.as_ref().map(|r| r.terrain.as_str()), a.weather_overhead(), night, fighting);
+        }
+        // The place's music goes quiet in a fight, and starts again after.
+        if fighting {
+            now.bgm = None;
         }
         if now != ambient.sent {
             ambient.sent = now.clone();
@@ -1929,6 +2069,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // Creatures' cries, and whether the Bestiary learned anything.
         let mut cries: Vec<(Creature, Cry, Option<Place>)> = Vec::new();
         let mut bestiary_changed = false;
+        // Journal entries' music read whole (songbook.rs): its text and the entry's subject.
+        let mut music_found: Vec<(String, Option<String>)> = Vec::new();
         let session = app.state::<Session>();
         for event in out.events {
             match event {
@@ -1946,6 +2088,18 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                         let mut who = session.who.lock().unwrap();
                         let now = Instant::now();
                         done.retain(|line| who.line(&line.iter().map(|span| span.text.as_str()).collect::<String>(), now) == Seen::Show);
+                    }
+                    // Music in a journal entry (songbook.rs): its TMF isn't shown or said.
+                    {
+                        let mut songbook = session.songbook.lock().unwrap();
+                        done.retain(|line| match songbook.finder.line(&line.iter().map(|span| span.text.as_str()).collect::<String>()) {
+                            songbook::Seen::Show | songbook::Seen::Broken => true,
+                            songbook::Seen::Hide => false,
+                            songbook::Seen::Done { text, subject } => {
+                                music_found.push((text, subject));
+                                false
+                            }
+                        });
                     }
                     let mut answer = Vec::new();
                     for (i, line) in done.iter().enumerate() {
@@ -2147,7 +2301,9 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         session.update_picture(app);
         session.update_combat(app);
         session.update_vitals(app);
-        // The frontend plays and shows them (src/lib/assets.ts).
+        // The frontend plays and shows them (src/lib/assets.ts); the
+        // place's music plays as the ambience says.
+        ambient::without_place_music(&mut fired);
         if !fired.is_empty() {
             let _ = app.emit("hook-fired", fired);
         }
@@ -2168,6 +2324,10 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         shown_partial = partial.clone();
         session.who_changed(app);
         session.character.lock().unwrap().partial(prompt.as_deref());
+        for (text, subject) in music_found {
+            Session::music_found(app, &text, subject);
+        }
+        session.songbook_read(app, &texts, prompt.as_deref());
         let fighting = session.combat.lock().unwrap().combat.opponent().is_some();
         let mut line_kinds = kinds.lines(&texts, prompt.as_deref(), fighting, Instant::now());
         let playing = !session.senses.lock().unwrap().senses.name().is_empty();

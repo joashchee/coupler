@@ -59,6 +59,7 @@ export type CueId =
   | "fightStarts" | "fightEnds" | "opponentAt"
   | "tell" | "loggedOn" | "loggedOff" | "logLine" | "logReminder" | "journalWaiting"
   | "problem" | "modeChanged" | "priorityBell" | "thinking"
+  | "commandHeard" | "commandDone" | "musicFound"
   | "creationStep" | "creationDone";
 
 export interface CueInfo {
@@ -98,6 +99,9 @@ export const CUES: CueInfo[] = [
   { id: "problem", group: "Coupler", name: "A problem", words: "A problem", summary: "A low buzz when something went wrong." },
   { id: "priorityBell", group: "Coupler", name: "The priority bell", words: "Priority", summary: "Rung before priority audio when it cuts into speech; its sound is chosen in Priority Audio." },
   { id: "thinking", group: "Coupler", name: "Getting the answer ready", words: "Getting the answer ready", summary: "A soft, high ping each second while Coupler's voice gets your answer ready, until it speaks: your command was heard." },
+  { id: "commandHeard", group: "Coupler", name: "A command of Coupler's", words: "Coupler's command", summary: "A soft woody tick when Coupler takes one of its own commands (#play, #write…), which aren't written in the game's output." },
+  { id: "commandDone", group: "Coupler", name: "A command done", words: "Done", summary: "Two soft rising notes when one of Coupler's commands that takes a while (#write, #save, #hook) is done." },
+  { id: "musicFound", group: "Coupler", name: "Music in a journal", words: "Music found", summary: "Three bright notes, a little tune, when a journal entry you read holds music: it's in the Music Editor." },
   { id: "modeChanged", group: "Coupler", name: "A new way to play", words: "A new way to play", summary: "Three rising notes when you choose a way to play." },
   { id: "creationStep", group: "Create", name: "The next question", words: "The next question", summary: "A soft page turn when the game asks the next question about your new character." },
   { id: "creationDone", group: "Create", name: "Into the game", words: "Your character is in the game", summary: "A rising fanfare when your new character first comes into the game." },
@@ -599,6 +603,31 @@ export function thinking(first = true) {
 }
 voice.setThinkingSound((first) => thinking(first));
 
+/** One of Coupler's own commands taken (lib/commands.ts): a soft woody tick. */
+export function commandHeard() {
+  play("commandHeard", [
+    { freq: 1200, at: 0, dur: 0.05, wave: "triangle", gain: 0.1, lowpass: 2400 },
+    { freq: 1800, at: 0.035, dur: 0.04, wave: "triangle", gain: 0.05, lowpass: 3000 },
+  ], 0);
+}
+
+/** One of Coupler's commands that took a while is done: two soft rising notes. */
+export function commandDone() {
+  play("commandDone", [
+    { freq: 784, at: 0, dur: 0.1, gain: 0.1 },
+    { freq: 1175, at: 0.09, dur: 0.18, gain: 0.1 },
+  ], 0);
+}
+
+/** Music read in a journal entry, now in the Music Editor: a little tune, plucked. */
+export function musicFound(title: string) {
+  play("musicFound", [
+    { freq: 659, at: 0, dur: 0.16, wave: "triangle", gain: 0.13 },
+    { freq: 880, at: 0.12, dur: 0.16, wave: "triangle", gain: 0.13 },
+    { freq: 1319, at: 0.24, dur: 0.4, wave: "triangle", gain: 0.12 },
+  ], 0, title);
+}
+
 /** A way to play chosen. */
 export function modeChanged() {
   play("modeChanged", [
@@ -692,5 +721,8 @@ export function preview(id: CueId) {
     case "thinking": return thinking();
     case "creationStep": return creationStep();
     case "creationDone": return creationDone();
+    case "commandHeard": return commandHeard();
+    case "commandDone": return commandDone();
+    case "musicFound": return musicFound("The Clan Anthem");
   }
 }

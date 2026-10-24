@@ -76,6 +76,9 @@ import { loadLayers, loadShown, loadUx, storeLayers, storeShown, storeUx, UXES, 
 import * as keys from "./lib/keys";
 import * as screenReader from "./lib/screenReader";
 import * as voice from "./lib/voice";
+import * as commands from "./lib/commands";
+import * as music from "./lib/music";
+import * as musicEditor from "./lib/musicEditor";
 import "./App.css";
 
 /**
@@ -1288,19 +1291,209 @@ function App() {
     }
   }, []);
 
+  // ---- Coupler's own commands (lib/commands.ts) ----
+
+  /** Music read in a journal while the Music Editor had changes unsaved, waiting for #load. */
+  const foundMusic = useRef<music.Found | null>(null);
+  /** The #write under way: settled when the game says how it went (`music-written`). */
+  const writing = useRef<((w: { ok: boolean; message: string }) => void) | null>(null);
+
+  /** Says what a command did: in the status bar, and aloud when Coupler's voice is on. */
+  const tell = useCallback((text: string) => {
+    setError(null);
+    setStatus(text);
+    if (voicedRef.current) voice.speak(text, true);
+  }, []);
+
+  /** Says what went wrong, with the problem cue. */
+  const fail = useCallback((text: string) => {
+    earcons.problem();
+    setError(text);
+    if (voicedRef.current) voice.speak(text, true);
+  }, []);
+
+  /** Puts music read in a journal in the Music Editor, unsaved, under its title. */
+  const loadFound = useCallback((found: music.Found) => {
+    if (!found.song) return;
+    musicEditor.stop();
+    musicEditor.set({ song: found.song, path: null, dirty: true, title: found.title });
+    foundMusic.current = null;
+  }, []);
+
+  async function runCommand(c: Extract<commands.Parsed, { kind: "command" }>) {
+    const p = commands.prefix();
+    if (!c.info) {
+      const could = commands.candidates(c.name);
+      fail(could.length > 1 ? `${p}${c.name} could be ${could.map((n) => p + n).join(" or ")}.` : `Coupler has no command ${p}${c.name}. ${p}help lists them.`);
+      return;
+    }
+    if (c.info.desktop && WEB) {
+      fail(`${p}${c.info.name} works on the Music Editor, which is in Coupler on a computer, not on the web.`);
+      return;
+    }
+    earcons.commandHeard();
+    const loaded = musicEditor.get();
+    const title = musicEditor.titleOf(loaded);
+    const needSong = ["play", "pause", "rewind", "loop", "stop", "save", "write", "hook"].includes(c.info.name);
+    if (needSong && !loaded.song) {
+      fail("The Music Editor has no music loaded: open it from the gear menu (Music Editor…), or READ a journal entry that holds music.");
+      return;
+    }
+    /** Saves the song if it has to be, for a command that needs its file: its path. */
+    const saved = async (name?: string): Promise<string> => {
+      const { song, path, dirty } = musicEditor.get();
+      if (!song) throw new Error("No music is loaded.");
+      if (path && !dirty && !name) return path;
+      if (path && !name) {
+        await music.save(path, song);
+        musicEditor.set({ dirty: false });
+        sound.forgetDecoded();
+        return path;
+      }
+      const made = await music.saveAs(name || title, song);
+      musicEditor.set({ path: made.path, dirty: false });
+      setAssetsVersion((v) => v + 1);
+      return made.path;
+    };
+    try {
+      switch (c.info.name) {
+        case "help":
+          tell(commands.helpText(p, !WEB));
+          return;
+        case "prefix": {
+          const next = c.rest.trim();
+          if (!commands.isPrefix(next)) {
+            fail(`A prefix is one character that isn't a letter, a digit or a space, like ${commands.DEFAULT_PREFIX}. It's ${p} now.`);
+            return;
+          }
+          commands.setPrefix(next);
+          tell(`Coupler's commands now start with ${next}: ${next}help lists them.`);
+          return;
+        }
+        case "play": {
+          const was = musicEditor.playerNow().state;
+          if (was === "playing") {
+            tell(`${title} is playing. ${p}pause pauses it.`);
+            return;
+          }
+          await runActivity(`Getting ${title} ready to play…`, () => musicEditor.play(), "music-player");
+          tell(`${was === "paused" ? "Playing on" : "Playing"}: ${title}${musicEditor.playerNow().looping ? ", looping" : ""}.`);
+          return;
+        }
+        case "pause":
+          if (musicEditor.playerNow().state !== "playing") {
+            tell(`${title} isn't playing. ${p}play plays it.`);
+            return;
+          }
+          musicEditor.pause();
+          tell(`Paused ${title}. ${p}play goes on from here.`);
+          return;
+        case "rewind":
+          await musicEditor.rewind();
+          tell(`Back to the start of ${title}.`);
+          return;
+        case "loop": {
+          const word = c.rest.toLowerCase();
+          const on = word === "on" ? true : word === "off" ? false : !musicEditor.playerNow().looping;
+          musicEditor.setLooping(on);
+          tell(on ? `${title} plays over and over.` : `${title} plays once, to its end.`);
+          return;
+        }
+        case "stop":
+          musicEditor.stop();
+          tell(`Stopped ${title}.`);
+          return;
+        case "save": {
+          const path = await runActivity(`Saving ${title}…`, () => saved(c.rest || undefined), "music-save");
+          earcons.commandDone();
+          tell(`Saved ${mud.assetTitle(path)} in the Assets folder.`);
+          return;
+        }
+        case "load": {
+          const found = foundMusic.current;
+          if (!found) {
+            tell("No music from a journal is waiting. READ an entry that holds music and it opens in the Music Editor.");
+            return;
+          }
+          loadFound(found);
+          tell(`${found.title} is in the Music Editor, unsaved. ${p}play plays it, ${p}save keeps it.`);
+          return;
+        }
+        case "write": {
+          const journal = c.rest.trim();
+          if (!journal) {
+            fail(`Which journal? ${p}write journal, or the journal's name as you'd READ it.`);
+            return;
+          }
+          if (!connected) {
+            fail("Music is written into a journal in the game: connect first.");
+            return;
+          }
+          const result = await runActivity(`Writing ${title} into ${journal}…`, async (update) => {
+            const done = new Promise<{ ok: boolean; message: string }>((resolve) => (writing.current = resolve));
+            const characters = await music.write(journal, loaded.song!, title);
+            update({ label: `Writing ${title} into ${journal}: ${characters.toLocaleString()} characters…` });
+            return done;
+          }, "music-write");
+          writing.current = null;
+          if (result.ok) {
+            earcons.commandDone();
+            tell(result.message);
+          } else fail(result.message);
+          return;
+        }
+        case "hook":
+        case "unhook": {
+          const scope = c.rest.toLowerCase();
+          if (scope !== "room" && scope !== "area") {
+            fail(`${p}${c.info.name} room, or ${p}${c.info.name} area.`);
+            return;
+          }
+          if (c.info.name === "unhook") {
+            const place = await runActivity(`Taking the music off the ${scope}…`, () => music.hook(scope, null), "music-hook");
+            earcons.commandDone();
+            tell(`No music for ${place} now.`);
+            return;
+          }
+          const place = await runActivity(`Hooking ${title} to the ${scope}…`, async () => music.hook(scope, await saved()), "music-hook");
+          earcons.commandDone();
+          tell(`${title} is the music of ${place}: it plays while you're there, fades when you go, and waits out a fight.`);
+          return;
+        }
+      }
+    } catch (e) {
+      writing.current = null;
+      fail(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   /** Sends the command line, or `tapped`, a touch pad's command (never while a password's asked). */
   async function handleSend(tapped?: string) {
     if (tapped !== undefined && secret) return;
-    const line = tapped ?? input;
+    const typed = tapped ?? input;
+    let line = typed;
     if (tapped === undefined) setInput("");
+    // Coupler's own commands (lib/commands.ts): kept in the history, never
+    // sent or written in the output. The prefix twice is for the game.
+    const parsed = secret ? ({ kind: "game" } as const) : commands.parse(line);
+    if (parsed.kind === "command") {
+      if (history.current[history.current.length - 1] !== line) {
+        history.current.push(line);
+        if (history.current.length > HISTORY) history.current.shift();
+      }
+      historyAt.current = history.current.length;
+      await runCommand(parsed);
+      return;
+    }
+    if (parsed.kind === "literal") line = parsed.line;
     sentAt.current = nextLineId.current;
     reviewLive(true);
     if (secret) {
       note("********", "sent");
     } else {
       note(line, "sent");
-      if (line.trim() !== "" && history.current[history.current.length - 1] !== line) {
-        history.current.push(line);
+      if (line.trim() !== "" && history.current[history.current.length - 1] !== typed) {
+        history.current.push(typed);
         if (history.current.length > HISTORY) history.current.shift();
       }
     }
@@ -1686,11 +1879,46 @@ function App() {
     return () => void unlisten.then((f) => f());
   }, []);
 
+  // Music in the game's journals (src-tauri/src/songbook.rs): read, it
+  // opens in the Music Editor (unless that has changes unsaved: then
+  // #load does); written, the #write under way hears how it went.
+  useEffect(() => {
+    if (WEB) return;
+    const p = commands.prefix;
+    const found = music.onFound((f) => {
+      if (!f.song) {
+        fail(`A journal entry held music Coupler couldn't read: ${f.problem ?? "it was damaged"}.`);
+        return;
+      }
+      const parts = `${f.song.parts.length} ${f.song.parts.length === 1 ? "part" : "parts"}, ${f.song.bars} ${f.song.bars === 1 ? "bar" : "bars"}`;
+      earcons.musicFound(f.title);
+      const was = musicEditor.get();
+      if (was.song && was.dirty) {
+        foundMusic.current = f;
+        tell(`Music in the journal: ${f.title} (${parts}). The Music Editor has changes unsaved: ${p()}save keeps them, ${p()}load opens this in their place.`);
+        return;
+      }
+      loadFound(f);
+      tell(`Music in the journal: ${f.title} (${parts}), now in the Music Editor. ${p()}play plays it, ${p()}save keeps it.`);
+    });
+    const written = music.onWritten((w) => {
+      if (writing.current) writing.current(w);
+      else if (w.ok) tell(w.message);
+      else fail(w.message);
+    });
+    return () => {
+      void found.then((f) => f());
+      void written.then((f) => f());
+    };
+  }, [tell, fail, loadFound]);
+
   // Background noise and weather: Rust says what should loop (src-tauri/src/ambient.rs).
   useEffect(() => {
     const apply = (a: mud.Ambience) => {
       sound.setLoop("bgn", a.bgn).catch(triggerFailed);
       sound.setLoop("bgw", a.bgw).catch(triggerFailed);
+      // The place's music: the room's or the area's, quiet in a fight.
+      sound.setPlaceMusic(a.bgm ?? null).catch(triggerFailed);
     };
     mud.ambienceNow().then(apply).catch(triggerFailed);
     const unlisten = mud.onAmbient(apply);

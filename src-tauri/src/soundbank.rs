@@ -1008,7 +1008,7 @@ mod tests {
 
         // The player's own loops stay; only what's silent is filled.
         let own = Loop { path: "BGN/brook.ogg".into(), volume: 40 };
-        let mut a = Ambience { bgn: Some(own.clone()), bgw: None };
+        let mut a = Ambience { bgn: Some(own.clone()), bgw: None, bgm: None };
         fill_ambience(&mut a, Some("woods"), Some("fog"), false, true);
         assert_eq!(a.bgn, Some(own), "the player's own, even in a fight");
         assert_eq!(a.bgw, Some(Loop { path: "bank/Fog".into(), volume: LOOP_VOLUME }));

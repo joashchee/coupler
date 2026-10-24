@@ -7,6 +7,7 @@
  * screen.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { Asset } from "./mud";
 
 export interface Note {
@@ -54,6 +55,26 @@ export const render = (font: string | null, song: Song, from: number, to: number
   invoke<ArrayBuffer>("music_render", { font, song, from, to, looping });
 /** What plays through Neumetik, or through `font` (a SoundFont or DLS asset) with Neumetik for what it hasn't. */
 export const instruments = (font: string | null) => invoke<Instruments>("music_instruments", { font });
+
+// ---- Music in the game's journals (src-tauri/src/songbook.rs) ----
+
+/** The song and its title as TMF, the Text Music Format: what a journal entry holds. */
+export const tmf = (song: Song, title: string) => invoke<string>("music_tmf", { song, title });
+/** Writes the song into a journal (its name as READ takes it); `onWritten` says how it ended. Resolves to its length as text. */
+export const write = (journal: string, song: Song, title: string) => invoke<number>("music_write", { journal, song, title });
+/** Hooks a MIDI asset to the room or area the player is in as its music, or unhooks it (`path` null). Resolves to the place in words. */
+export const hook = (scope: "room" | "area", path: string | null) => invoke<string>("music_hook", { scope, path });
+
+/** Music read in the game: a journal entry's TMF, as a song, or why it couldn't be read. */
+export interface Found {
+  title: string;
+  song: Song | null;
+  characters: number;
+  problem: string | null;
+}
+export const onFound = (f: (found: Found) => void): Promise<UnlistenFn> => listen<Found>("music-found", (e) => f(e.payload));
+/** How a write into a journal ended. */
+export const onWritten = (f: (w: { ok: boolean; message: string }) => void): Promise<UnlistenFn> => listen<{ ok: boolean; message: string }>("music-written", (e) => f(e.payload));
 
 /** The banks' names, by Bank Select MSB. */
 export const BANK_NAMES: Record<number, string> = { 0: "General MIDI", 80: "Classic synths: the 1980s", 81: "Classic synths: the 1990s", 82: "Classic synths: the 2000s to now" };

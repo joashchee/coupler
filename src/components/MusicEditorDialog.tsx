@@ -23,6 +23,10 @@
  * - Save… (over the file, after a yes) and Save as… (a new name in the
  *   Assets folder; nothing is written over). Closing or opening another
  *   with changes unsaved asks first.
+ * - What's loaded stays loaded when it closes (lib/musicEditor.ts), for
+ *   Coupler's commands: #play, #pause, #rewind, #loop, #stop, #save,
+ *   #write (into a journal, as TMF), #hook (to the room or area). Music
+ *   read in a journal comes in here, unsaved, under its title.
  *
  * Both grids are buttons on the 8 by 16 grid with one Tab stop each,
  * named for VoiceOver ("D4, beat 2: a note, 2 steps, velocity 100"), and
@@ -35,6 +39,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
 import * as music from "../lib/music";
+import * as editor from "../lib/musicEditor";
 import { Dialog } from "./Dialog";
 
 interface MusicEditorDialogProps {
@@ -61,11 +66,16 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
   const [files, setFiles] = useState<string[]>([]);
   /** The SoundFonts (and DLS banks) in the Assets folder, and the one chosen to play through ("" is Neumetik, the default). */
   const [fonts, setFonts] = useState<string[]>([]);
-  const [font, setFont] = useState("");
   const [chosen, setChosen] = useState("");
-  const [path, setPath] = useState<string | null>(null);
-  const [song, setSong] = useState<music.Song | null>(null);
-  const [dirty, setDirty] = useState(false);
+  // The song, its file and SoundFont live outside the dialog, so
+  // Coupler's commands play and save it with the dialog closed
+  // (lib/musicEditor.ts).
+  const loaded = editor.useLoaded();
+  const { song, path, dirty, font } = loaded;
+  const setSong = (s: music.Song | null) => editor.set({ song: s });
+  const setPath = (p: string | null) => editor.set({ path: p });
+  const setDirty = (d: boolean) => editor.set({ dirty: d });
+  const setFont = (f: string) => editor.set({ font: f });
   const [inst, setInst] = useState<music.Instruments | null>(null);
   const [part, setPartIndex] = useState(0);
   const [bar, setBar] = useState(0);
@@ -95,7 +105,8 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
         const banks = l.assets.filter((a) => a.kind === "soundfont").map((a) => a.path);
         setFonts(banks);
         // A SoundFont that's left the folder: back to Neumetik.
-        setFont((f) => (f && banks.includes(f) ? f : ""));
+        const f = editor.get().font;
+        if (f && !banks.includes(f)) setFont("");
       })
       .catch((e) => onError(String(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -125,7 +136,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
     if (!open && sound.previewing() === PLAYING_ID) sound.stopPreview();
   }, [open]);
 
-  const title = path ? mud.assetTitle(path) : "New music";
+  const title = editor.titleOf(loaded);
   const current = song?.parts[part] ?? null;
   const steps = song ? music.stepsPerBar(song) : 16;
   const stepTicks = song ? music.stepTicks(song) : 120;
@@ -133,9 +144,8 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
 
   /** Puts a song in the editor, the cursor on its first part and bar. */
   const load = useCallback((s: music.Song, from: string | null) => {
-    setSong(s);
-    setPath(from);
-    setDirty(false);
+    editor.stop();
+    editor.set({ song: s, path: from, dirty: false, title: "" });
     setPartIndex(0);
     setBar(0);
     const key = s.parts[0] ? music.middleKey(s.parts[0]) : 60;
@@ -231,7 +241,7 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
   }
 
   function askSaveAs() {
-    setNewName(path ? `${mud.assetTitle(path)} edit` : "my music");
+    setNewName(path ? `${mud.assetTitle(path)} edit` : loaded.title || "my music");
     setAsk("as");
   }
 
@@ -244,6 +254,8 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
       return;
     }
     const [from, to] = whole ? [0, song.bars] : [bar, bar + 1];
+    // One thing at a time: the song Coupler's commands play pauses.
+    editor.pause();
     try {
       const bytes = await music.render(font || null, song, from, to, true);
       await sound.playPreviewBytes(PLAYING_ID, bytes, whole ? `${title}, the whole song, looping` : `${title}, bar ${bar + 1}, looping`, true);
@@ -251,6 +263,15 @@ export function MusicEditorDialog({ open, onClose, assetsVersion, onSaved, onSta
       onError(String(e));
     }
   }
+
+  // A song put in from outside (music read from a journal): the cursor
+  // goes back where the song has a part and a bar.
+  useEffect(() => {
+    if (!song) return;
+    if (part >= song.parts.length) setPartIndex(0);
+    if (bar >= song.bars) setBar(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song]);
 
   // ---- Telling where the cursor is ----
 
