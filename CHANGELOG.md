@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.43.0 (2026-10-25)
 
 - **Pictures in more colors** (2026-10-25): when you have the game send
   you 256 colors or true color (ANSI 256, ANSI TRUE), Coupler's painter
