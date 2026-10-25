@@ -23,7 +23,7 @@
 //! colors; one the painter doesn't know is made from its name.
 
 use crate::ansi_art::Art;
-use crate::paint::seed;
+use crate::paint::{seed, Colors as GameColors};
 use crate::painter::*;
 
 /// The picture's size in cells, at most and at least.
@@ -481,7 +481,7 @@ fn paint_class(canvas: &mut Canvas, name: &str) {
 
 /// Paints a race's or a class's portrait at a size in cells. `kind` is
 /// `race` or `class`; the name is the game's ("Half Elf", "Fighter").
-pub fn portrait(kind: &str, name: &str, columns: usize, rows: usize) -> Art {
+pub fn portrait(kind: &str, name: &str, columns: usize, rows: usize, game: GameColors) -> Art {
     let (columns, rows) = (columns.clamp(LEAST.0, MOST.0), rows.clamp(LEAST.1, MOST.1));
     let mut canvas = Canvas::new(columns, rows);
     if kind == "class" {
@@ -489,7 +489,7 @@ pub fn portrait(kind: &str, name: &str, columns: usize, rows: usize) -> Art {
     } else {
         paint_race(&mut canvas, name);
     }
-    canvas.art()
+    canvas.art_in(game)
 }
 
 #[cfg(test)]
@@ -517,22 +517,22 @@ mod tests {
     fn every_race_and_class_paints_at_every_size() {
         for (columns, rows) in [(8, 4), (32, 16), (40, 16), (80, 40), (1, 1), (500, 500)] {
             for name in RACES.iter().chain(&["Something New"]) {
-                let art = portrait("race", name, columns, rows);
+                let art = portrait("race", name, columns, rows, GameColors::Sixteen);
                 assert_eq!(art.lines.len(), art.rows);
                 assert!(art.columns >= LEAST.0 && art.rows >= LEAST.1);
             }
             for name in CLASSES.iter().chain(&["Something New"]) {
-                portrait("class", name, columns, rows);
+                portrait("class", name, columns, rows, GameColors::Sixteen);
             }
         }
     }
 
     #[test]
     fn a_portrait_is_the_same_each_time_and_another_differs() {
-        assert_eq!(portrait("race", "Elf", 32, 16), portrait("race", "Elf", 32, 16));
-        assert_ne!(portrait("race", "Elf", 32, 16), portrait("race", "Dwarf", 32, 16));
-        assert_ne!(portrait("class", "Fighter", 32, 16), portrait("class", "Mage", 32, 16));
-        assert_eq!(portrait("race", "Unknownling", 32, 16), portrait("race", "unknownling", 32, 16));
+        assert_eq!(portrait("race", "Elf", 32, 16, GameColors::Sixteen), portrait("race", "Elf", 32, 16, GameColors::Sixteen));
+        assert_ne!(portrait("race", "Elf", 32, 16, GameColors::Sixteen), portrait("race", "Dwarf", 32, 16, GameColors::Sixteen));
+        assert_ne!(portrait("class", "Fighter", 32, 16, GameColors::Sixteen), portrait("class", "Mage", 32, 16, GameColors::Sixteen));
+        assert_eq!(portrait("race", "Unknownling", 32, 16, GameColors::Sixteen), portrait("race", "unknownling", 32, 16, GameColors::Sixteen));
     }
 
     #[test]
@@ -560,15 +560,15 @@ mod tests {
     #[test]
     fn races_that_see_in_the_dark_have_red_eyes() {
         // An elf's skin is pale: red is only its eyes.
-        assert!(colors(&portrait("race", "Elf", 32, 16)).contains(&LIGHTRED));
-        assert!(!colors(&portrait("race", "Half Ogre", 32, 16)).contains(&LIGHTRED));
+        assert!(colors(&portrait("race", "Elf", 32, 16, GameColors::Sixteen)).contains(&LIGHTRED));
+        assert!(!colors(&portrait("race", "Half Ogre", 32, 16, GameColors::Sixteen)).contains(&LIGHTRED));
     }
 
     #[test]
     fn only_the_fonts_characters() {
         let font = crate::ansi_art::CP437;
         for name in RACES {
-            for line in portrait("race", name, 32, 16).lines {
+            for line in portrait("race", name, 32, 16, GameColors::Sixteen).lines {
                 for span in line {
                     assert!(span.text.chars().all(|c| font.contains(c)), "{name}: {:?}", span.text);
                 }
@@ -588,8 +588,8 @@ mod look {
     #[ignore]
     fn show() {
         const VGA: [[u8; 3]; 16] = [[0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170], [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255]];
-        let arts: Vec<Art> = ["Human", "Elf", "Half Elf", "Dwarf", "Gnome", "Halfling", "Half Ogre", "Pixie", "Faerie", "Drow", "Duergar", "Orc", "Tiefling", "Aarakocran"].iter().map(|n| portrait("race", n, 32, 16))
-            .chain(["Fighter", "Mage", "Thief", "Cleric", "Druid", "Bard", "Monk", "Artisan", "Paladin", "Necromancer"].iter().map(|n| portrait("class", n, 32, 16)))
+        let arts: Vec<Art> = ["Human", "Elf", "Half Elf", "Dwarf", "Gnome", "Halfling", "Half Ogre", "Pixie", "Faerie", "Drow", "Duergar", "Orc", "Tiefling", "Aarakocran"].iter().map(|n| portrait("race", n, 32, 16, GameColors::Sixteen))
+            .chain(["Fighter", "Mage", "Thief", "Cleric", "Druid", "Bard", "Monk", "Artisan", "Paladin", "Necromancer"].iter().map(|n| portrait("class", n, 32, 16, GameColors::Sixteen)))
             .collect();
         let (w, h) = (arts.len() * 33, 32);
         let mut px = vec![40u8; w * h * 3];

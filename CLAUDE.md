@@ -334,8 +334,12 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
 ### Pictures
 - `paint.rs` (the `Scene`, `Style`, seed), `painter.rs` (**Coupler's
   painter**, 16 VGA colors, `▀` cells; its ignored `show` test writes a
-  PPM to look at), `RoomPicture.tsx`, `PicturesDialog.tsx`. Looks kept
-  in `pictures/<world>.json`. Not yet: the cache, the worker, brought
+  PPM to look at; `COLORS=256` or `true`), `RoomPicture.tsx`,
+  `PicturesDialog.tsx`. Looks kept in `pictures/<world>.json`. **In the
+  game's colors** (`paint::Colors`, read from its `ANSI 16|256|TRUE`
+  answers; `lib/palette.ts`, `coupler.palette`): with more than 16,
+  `Canvas::art_in` shows gradients, night and Bayer dithers as the
+  colors between; every painter command takes `colors`. Not yet: the cache, the worker, brought
   models.
 - `fight_art.rs`: The Fight's picture, the room with the two faces in
   it (`face::standing`, the player mirrored), and its moments' frames (a

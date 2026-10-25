@@ -88,6 +88,53 @@ pub enum Style {
     High,
 }
 
+/// How many colors the player has the game send them, which the
+/// painter's pictures follow (decided 2026-10-25): 16 until the game
+/// says more. CoffeeMUD keeps it as the `16 COLOR ONLY` and `256 COLOR
+/// ONLY` flags, changed by `ANSI 16`, `ANSI 256` and `ANSI TRUE`
+/// (Commands/ANSI.java) or the account menu's `ANSI16`, `ANSI256`
+/// (Libraries/CharCreation.java), each answered with the colors now on.
+/// The wiki's ANSI page (read 2026-10-25) names only `ANSI 16`; the
+/// source has the other two, and Coupler reads all three.
+/// With more than 16, a picture's dithers and gradients are drawn in
+/// the colors between (`painter::Canvas::art_in`).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Colors {
+    #[default]
+    #[serde(rename = "16")]
+    Sixteen,
+    #[serde(rename = "256")]
+    More,
+    #[serde(rename = "true")]
+    True,
+}
+
+impl Colors {
+    /// The game's answer to a change of colors, read from a line:
+    /// `ANSI 256 colour enabled.`, `ANSI True colour re-enabled.`, `ANSI
+    /// 16 color is already enabled.`, the account menu's `ANSI 16 color
+    /// is now ON.`; `ANSI color is now OFF.` and NOANSI's are 16.
+    pub fn heard(line: &str) -> Option<Colors> {
+        let line = line.trim().to_ascii_lowercase();
+        let line = line.strip_suffix('.').unwrap_or(&line);
+        if line == "ansi color is now off" || line == "ansi colour disabled" {
+            return Some(Colors::Sixteen);
+        }
+        let rest = line.strip_prefix("ansi ")?;
+        let (depth, rest) = rest.split_once(' ')?;
+        let rest = rest.strip_prefix("colour ").or_else(|| rest.strip_prefix("color "))?;
+        if !matches!(rest, "enabled" | "re-enabled" | "is already enabled" | "is now on") {
+            return None;
+        }
+        match depth {
+            "16" => Some(Colors::Sixteen),
+            "256" => Some(Colors::More),
+            "true" => Some(Colors::True),
+            _ => None,
+        }
+    }
+}
+
 /// A room's seed: FNV-1a of its world and ID (as `cast.rs` seeds a
 /// voice), so a room keeps its look from visit to visit. `again` counts
 /// how many times the player asked for a new one.
@@ -110,6 +157,21 @@ mod tests {
         assert_ne!(seed("standard", "Midgaard#3001", 0), seed("standard", "Midgaard#3002", 0));
         assert_ne!(seed("standard", "Midgaard#3001", 0), seed("classic", "Midgaard#3001", 0));
         assert_ne!(seed("standard", "Midgaard#3001", 0), seed("standard", "Midgaard#3001", 1));
+    }
+
+    #[test]
+    fn the_games_answers_tell_its_colors() {
+        // Commands/ANSI.java and NoANSI.java, color codes taken out.
+        assert_eq!(Colors::heard("ANSI 256 colour enabled."), Some(Colors::More));
+        assert_eq!(Colors::heard("ANSI True colour re-enabled."), Some(Colors::True));
+        assert_eq!(Colors::heard("ANSI 16 color is already enabled."), Some(Colors::Sixteen));
+        assert_eq!(Colors::heard("ANSI colour disabled."), Some(Colors::Sixteen));
+        // The account menu (Libraries/CharCreation.java).
+        assert_eq!(Colors::heard("ANSI True color is now ON."), Some(Colors::True));
+        assert_eq!(Colors::heard("ANSI color is now OFF."), Some(Colors::Sixteen));
+        assert_eq!(Colors::heard("ANSI is already enabled."), None);
+        assert_eq!(Colors::heard("Bob says 'ANSI 256 colour enabled.'"), None);
+        assert_eq!(serde_json::to_string(&Colors::More).unwrap(), "\"256\"");
     }
 
     #[test]

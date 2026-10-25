@@ -27,6 +27,7 @@ import * as creation from "../lib/creation";
 import * as creationArt from "../lib/creationArt";
 import * as earcons from "../lib/earcons";
 import * as mud from "../lib/mud";
+import { palette } from "../lib/palette";
 import { spanColors, type CreationChoice, type CreationStats, type CreationStep, type Line } from "../lib/mud";
 import type { PortraitSource } from "../lib/pictures";
 import * as voice from "../lib/voice";
@@ -416,7 +417,7 @@ const painted = new Map<string, Promise<mud.AnsiArt | null>>();
 const PORTRAIT_SIZE = { columns: 32, rows: 16 };
 
 function paintedPortrait(kind: "race" | "class", name: string): Promise<mud.AnsiArt | null> {
-  const k = `${kind}\n${creationArt.key(name)}`;
+  const k = `${kind}\n${creationArt.key(name)}\n${palette()}`;
   let art = painted.get(k);
   if (!art) {
     art = mud.portraitPaint(kind, name, PORTRAIT_SIZE.columns, PORTRAIT_SIZE.rows).catch(() => null);

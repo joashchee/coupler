@@ -41,6 +41,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as mud from "../lib/mud";
+import { usePalette } from "../lib/palette";
 import { bigBlow, BLOW_MS, blowFrames, clock, effectEntries, FLASH_GAP_MS, foeMoment, hurtWords, rangeWords, resultWords, SLIDE_MS, slideFrames, SMALL_FACE, yourMoment, type Bout } from "../lib/fight";
 import type { PictureSettings } from "../lib/pictures";
 
@@ -184,6 +185,8 @@ function Scrolling({ text, width }: { text: string; width: number }) {
 }
 
 export function FightPanel({ bout, vitals, status, settings, scene, onSummary, strip = false }: FightPanelProps) {
+  /** The game's colors: painted again when they change. */
+  const colors = usePalette();
   const boxRef = useRef<HTMLDivElement>(null);
   const [columns, setColumns] = useState(0);
   const [art, setArt] = useState<mud.AnsiArt | null>(null);
@@ -247,7 +250,7 @@ export function FightPanel({ bout, vitals, status, settings, scene, onSummary, s
     };
     // The moments by their parts, so a new object with the same look doesn't paint again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [painting, strip, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey]);
+  }, [painting, strip, foe, you.mood, you.hurt, on.join("|"), theirs.mood, theirs.hurt, settings.style, columns, sceneKey, colors]);
 
   // A big blow, to either: the one hit jolts and flashes.
   const healths = useRef({ mine, theirs: o.percent });

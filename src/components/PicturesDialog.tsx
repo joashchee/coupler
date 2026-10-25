@@ -5,6 +5,7 @@
  * here too, each with where to get it and its license.
  */
 import * as keys from "../lib/keys";
+import { PALETTE_WORDS, usePalette } from "../lib/palette";
 import { PICTURE_ENGINES, PICTURE_STYLES, PICTURE_WHENS, PORTRAIT_SOURCES, type PictureSettings } from "../lib/pictures";
 import { Dialog } from "./Dialog";
 
@@ -18,6 +19,7 @@ interface PicturesDialogProps {
 }
 
 export function PicturesDialog({ open, onClose, settings, onSettings, onForgetLooks }: PicturesDialogProps) {
+  const palette = usePalette();
   return (
     <Dialog
       open={open}
@@ -84,6 +86,10 @@ export function PicturesDialog({ open, onClose, settings, onSettings, onForgetLo
           </label>
         ))}
       </fieldset>
+      <p data-testid="picture-palette">
+        Colors: pictures are painted in {PALETTE_WORDS[palette]}, as many as you have the game send you.
+        {palette === "16" ? " Type ANSI 256 or ANSI TRUE in the game for more, and smoother skies and shadows." : " Type ANSI 16 in the game for the 16 alone."}
+      </p>
       <label className="check-row">
         <input type="checkbox" data-testid="picture-fight" checked={settings.fight} onChange={(e) => onSettings({ ...settings, fight: e.currentTarget.checked })} />
         <span>{keys.keys("The Fight: in a fight, the two of you face off over the room, with health, mana and moves (Cmd+Shift+F)")}</span>

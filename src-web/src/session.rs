@@ -578,6 +578,10 @@ impl Coupler {
         // own look isn't shown, nor the prompt it was asked at, written
         // again as a line when the answer began.
         let prompted = self.screen.partial().is_some_and(|line| line.iter().any(|span| !span.text.trim().is_empty()));
+        // The game's colors, which Coupler's pictures follow (paint::Colors).
+        if let Some(colors) = texts.iter().rev().find_map(|text| crate::paint::Colors::heard(text)) {
+            self.emit("game-colors", json!(colors));
+        }
         // Before anything's hidden: the player's gags are for the screen.
         let ways_found = self.ways_lines(&texts, prompted);
         let (learned, died, mut hidden_lines) = self.bestiary_lines(&texts, prompted);

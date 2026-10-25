@@ -34,6 +34,7 @@ import { FightPanel } from "./components/FightPanel";
 import { VitalsPanel } from "./components/VitalsPanel";
 import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
+import { followGamePalette } from "./lib/palette";
 import { BestiaryDialog } from "./components/BestiaryDialog";
 import { CombatSummaryDialog } from "./components/CombatSummaryDialog";
 import { CastDialog } from "./components/CastDialog";
@@ -1091,6 +1092,8 @@ function App() {
         setError(null);
         setStatus(message);
       }),
+      // The game's colors, which Coupler's pictures follow (lib/palette.ts).
+      followGamePalette(),
       // The character's SOUNDS is off: say once how to hear the game's sounds.
       mud.onSoundsOff((message) => {
         setError(null);

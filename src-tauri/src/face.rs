@@ -57,7 +57,7 @@
 use crate::ansi_art::Art;
 use crate::bestiary::MobEntry;
 use crate::figure::{self, CLEAR};
-use crate::paint::{seed, Scene};
+use crate::paint::{seed, Colors, Scene};
 use crate::painter::*;
 use crate::portrait::{self, Feature};
 use serde::Deserialize;
@@ -1875,7 +1875,7 @@ fn around(c: &mut Canvas, effects: &[Effect], crown: (i32, i32), rng: &mut Rng) 
 /// still picture, calm and unhurt.
 #[cfg(test)]
 pub fn face(sitter: &Sitter) -> Art {
-    face_in(sitter, &Moment::default())
+    face_in(sitter, &Moment::default(), Colors::Sixteen)
 }
 
 /// A creature drawn on a clear canvas of its own, as it feels and is
@@ -1954,7 +1954,7 @@ fn drawn(sitter: &Sitter, moment: &Moment, size: Size) -> Drawn {
 
 /// A creature's face as it is now: its mood, its hurt, what's on it and
 /// where it is.
-pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
+pub fn face_in(sitter: &Sitter, moment: &Moment, colors: Colors) -> Art {
     let name = key(&sitter.name);
     let mut drawn = drawn(sitter, moment, Size::Full);
     let fish = drawn.fish;
@@ -1979,7 +1979,7 @@ pub fn face_in(sitter: &Sitter, moment: &Moment) -> Art {
         }
     };
     drawn.lay_on(&mut canvas, light.as_ref());
-    canvas.art()
+    canvas.art_in(colors)
 }
 
 /// A creature as it is now on a clear canvas of the face's `size`, with
@@ -2815,7 +2815,7 @@ mod tests {
                 who.terrain = terrain.map(str::to_string);
                 let moments = MOODS.iter().map(|&mood| Moment { mood, ..Moment::default() }).chain((0..=5).map(|hurt| Moment { hurt, ..Moment::default() })).chain(EFFECTS.iter().map(|e| Moment { effects: vec![e.to_string()], hurt: 3, ..Moment::default() }));
                 for m in moments {
-                    let art = face_in(&who, &m);
+                    let art = face_in(&who, &m, Colors::Sixteen);
                     assert_eq!((art.columns, art.rows, art.lines.len()), (SIZE.0, SIZE.1, SIZE.1), "{race} {m:?}");
                     assert!(indexes(&art).iter().all(|&c| c < 16), "{race} {m:?}: a color past the 16");
                     assert!(art.lines.iter().flatten().all(|s| s.text.chars().all(|c| font.contains(c))), "{race} {m:?}");
@@ -2830,21 +2830,21 @@ mod tests {
             let who = sitter(&format!("a {race}"), race, category, "");
             let calm = face(&who);
             for mood in &MOODS[1..] {
-                assert_ne!(face_in(&who, &Moment { mood: *mood, ..Moment::default() }), calm, "{race} {mood:?}");
+                assert_ne!(face_in(&who, &Moment { mood: *mood, ..Moment::default() }, Colors::Sixteen), calm, "{race} {mood:?}");
             }
             let mut before = calm.clone();
             for hurt in 1..=5 {
-                let now = face_in(&who, &Moment { hurt, ..Moment::default() });
+                let now = face_in(&who, &Moment { hurt, ..Moment::default() }, Colors::Sixteen);
                 assert_ne!(now, before, "{race} hurt {hurt}");
                 before = now;
             }
         }
         let who = sitter("a guard", "Human", "Humanoid", "");
         for e in EFFECTS {
-            assert_ne!(face_in(&who, &Moment { effects: vec![e.into()], ..Moment::default() }), face(&who), "{e}");
+            assert_ne!(face_in(&who, &Moment { effects: vec![e.into()], ..Moment::default() }, Colors::Sixteen), face(&who), "{e}");
         }
         // An effect no look is known for changes nothing.
-        assert_eq!(face_in(&who, &Moment { effects: vec!["Detect Magic".into()], ..Moment::default() }), face(&who));
+        assert_eq!(face_in(&who, &Moment { effects: vec!["Detect Magic".into()], ..Moment::default() }, Colors::Sixteen), face(&who));
     }
 
     /// A small face (`Size::Small`) on a black ground, as the strip's picture lays it.
@@ -2943,7 +2943,7 @@ mod tests {
         assert_eq!(effect("Detect Magic"), None);
         // Sleep closes the eyes as the mood would.
         let who = sitter("a guard", "Human", "Humanoid", "");
-        assert_eq!(face_in(&who, &Moment { effects: vec!["Sleep".into()], ..Moment::default() }), face_in(&who, &Moment { mood: Mood::Asleep, ..Moment::default() }));
+        assert_eq!(face_in(&who, &Moment { effects: vec!["Sleep".into()], ..Moment::default() }, Colors::Sixteen), face_in(&who, &Moment { mood: Mood::Asleep, ..Moment::default() }, Colors::Sixteen));
     }
 
     #[test]
@@ -3049,7 +3049,7 @@ pub(crate) mod look {
         for sitter in &sitters {
             arts.push(face(&Sitter { terrain: None, ..sitter.clone() }));
             for m in &moments {
-                arts.push(face_in(sitter, m));
+                arts.push(face_in(sitter, m, Colors::Sixteen));
             }
         }
         sheet(&arts, moments.len() + 1, &std::env::var("OUT").unwrap_or_else(|_| "faces.ppm".into()));

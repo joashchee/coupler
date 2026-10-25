@@ -27,6 +27,7 @@ import { memo, useCallback, useEffect, useId, useState, type KeyboardEvent } fro
 import * as bestiary from "../lib/bestiary";
 import { loadDisplay } from "../lib/display";
 import * as mud from "../lib/mud";
+import { usePalette } from "../lib/palette";
 import { Dialog } from "./Dialog";
 
 interface BestiaryDialogProps {
@@ -78,6 +79,8 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
     listed.then(setRows).catch((e) => onError(String(e)));
   }, [tab, query, onError]);
 
+  /** The game's colors: the picture painted again when they change. */
+  const palette = usePalette();
   const readEntry = useCallback(() => {
     if (showing === null) return setEntry(null);
     const found =
@@ -85,7 +88,7 @@ export const BestiaryDialog = memo(function BestiaryDialog({ open, onClose, onSt
         ? Promise.all([mud.bestiaryMob(showing), mud.bestiaryFace(showing)]).then(([m, picture]) => m && { name: m.name, facts: bestiary.mobFacts(m), picture })
         : Promise.all([mud.bestiaryItem(showing), mud.bestiaryItemArt(showing)]).then(([i, painted]) => i && { name: i.name, facts: bestiary.itemFacts(i, painted?.slot ?? null), picture: painted?.art ?? null });
     found.then(setEntry).catch((e) => onError(String(e)));
-  }, [tab, showing, onError]);
+  }, [tab, showing, onError, palette]);
 
   // Read again as the game teaches more; a burst is read once.
   useEffect(() => {

@@ -59,7 +59,7 @@ use crate::journal::{self, Book, Journal};
 use crate::mapper::{self, Map, Step};
 use crate::msp;
 use crate::mssp::Probe;
-use crate::paint::{Looks, Scene};
+use crate::paint::{Colors, Looks, Scene};
 pub use crate::ports::{Port, HOST, PORTS};
 use crate::senses::{Senses, Talk, Vitals};
 use crate::creation::{self, Creation};
@@ -2550,6 +2550,10 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // own look isn't shown, nor the prompt it was asked at, written
         // again as a line when the answer began.
         let prompted = screen.partial().is_some_and(|line| line.iter().any(|span| !span.text.trim().is_empty()));
+        // The game's colors, which Coupler's pictures follow (paint::Colors).
+        if let Some(colors) = texts.iter().rev().find_map(|text| Colors::heard(text)) {
+            let _ = app.emit("game-colors", colors);
+        }
         // Before anything's hidden: the player's gags are for the screen.
         let ways_found = session.ways_lines(&texts, prompted);
         let (learned, died, mut hidden_lines) = session.bestiary_lines(app, &texts, prompted);

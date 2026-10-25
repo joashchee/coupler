@@ -7,6 +7,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { parseColor, readable, rgbCss, type GameColors } from "./display";
 import type { FaceMoment } from "./fight";
+import { palette } from "./palette";
 
 export type Color = { kind: "index"; index: number } | { kind: "rgb"; r: number; g: number; b: number };
 
@@ -501,7 +502,7 @@ export interface ItemEntry {
 export const bestiaryMobs = (query: string) => invoke<MobRow[]>("bestiary_mobs", { query });
 export const bestiaryMob = (key: string) => invoke<MobEntry | null>("bestiary_mob", { key });
 /** A creature's face by Coupler's painter (src-tauri/src/face.rs): 25 by 12 cells, 200 by 192. */
-export const bestiaryFace = (key: string) => invoke<AnsiArt | null>("bestiary_face", { key });
+export const bestiaryFace = (key: string) => invoke<AnsiArt | null>("bestiary_face", { key, colors: palette() });
 /** Where a fighter stands in a frame of The Fight's picture, in cells from its place (more is further right), and whether it flashes. */
 export interface FightPose {
   shift?: number;
@@ -519,9 +520,9 @@ export interface FightFrame {
  * of `frames`, else once standing still.
  */
 export const fightPaint = (foe: string, youNow: FaceMoment, foeNow: FaceMoment, style: PictureStyle, columns: number, frames: FightFrame[] = [], small = false) =>
-  invoke<AnsiArt[]>("fight_paint", { foe, youNow, foeNow, style, columns, frames, small });
+  invoke<AnsiArt[]>("fight_paint", { foe, youNow, foeNow, style, columns, frames, small, colors: palette() });
 /** An item's picture by Coupler's painter (src-tauri/src/item_art.rs), the same size as a face, and its slot in words (written on it). */
-export const bestiaryItemArt = (key: string) => invoke<{ art: AnsiArt; slot: string } | null>("bestiary_item_art", { key });
+export const bestiaryItemArt = (key: string) => invoke<{ art: AnsiArt; slot: string } | null>("bestiary_item_art", { key, colors: palette() });
 export const bestiaryItems = (query: string) => invoke<ItemRow[]>("bestiary_items", { query });
 export const bestiaryItem = (key: string) => invoke<ItemEntry | null>("bestiary_item", { key });
 /** Whether Coupler looks at each creature never looked at, once, unobtrusively (lib/bestiary.ts keeps the choice). */
@@ -1243,9 +1244,9 @@ export const pictureAgain = () => invoke<Scene | null>("picture_again");
 export const pictureForgetLooks = () => invoke<void>("picture_forget_looks");
 /** Coupler's painter's picture of a room, at a size in cells (src-tauri/src/painter.rs). */
 /** A race's or a class's portrait by Coupler's painter (src-tauri/src/portrait.rs). */
-export const portraitPaint = (kind: "race" | "class", name: string, columns: number, rows: number) => invoke<AnsiArt>("portrait_paint", { kind, name, columns, rows });
+export const portraitPaint = (kind: "race" | "class", name: string, columns: number, rows: number) => invoke<AnsiArt>("portrait_paint", { kind, name, columns, rows, colors: palette() });
 export const picturePaint = (scene: Scene, style: PictureStyle, columns: number, rows: number, again = 0) =>
-  invoke<AnsiArt>("picture_paint", { scene, style, columns, rows, again });
+  invoke<AnsiArt>("picture_paint", { scene, style, columns, rows, again, colors: palette() });
 /** A new room, weather or time of day for the picture; null once the player's nowhere. */
 export const onPicture = (f: (scene: Scene | null) => void): Promise<UnlistenFn> => listen<Scene | null>("picture", (e) => f(e.payload));
 

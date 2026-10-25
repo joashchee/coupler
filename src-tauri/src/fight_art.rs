@@ -26,7 +26,7 @@
 use crate::ansi_art::Art;
 use crate::face::{self, Moment, Sitter, Size};
 use crate::figure::{self, lighter, CLEAR};
-use crate::paint::{Scene, Style};
+use crate::paint::{Colors, Scene, Style};
 use crate::painter::*;
 use serde::Deserialize;
 
@@ -72,12 +72,12 @@ pub struct Frame {
 /// still. Without a room (not yet known), a plain dark ground.
 #[cfg(test)]
 pub fn paint(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, size: Size) -> Art {
-    frames(scene, style, fighters, columns, &[Frame::default()], size).remove(0)
+    frames(scene, style, fighters, columns, &[Frame::default()], size, Colors::Sixteen).remove(0)
 }
 
 /// The picture once for each frame, the room and the faces painted once
 /// for them all. No frames, one still.
-pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, frames: &[Frame], size: Size) -> Vec<Art> {
+pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns: usize, frames: &[Frame], size: Size, colors: Colors) -> Vec<Art> {
     let columns = columns.clamp(least(size), MOST_COLUMNS);
     let (face_columns, rows) = size.cells();
     let (room, light) = match scene {
@@ -105,7 +105,7 @@ pub fn frames(scene: Option<&Scene>, style: Style, fighters: &Fighters, columns:
             if let Some(light) = &light {
                 figure::light(&mut canvas, light);
             }
-            canvas.art()
+            canvas.art_in(colors)
         })
         .collect()
 }
@@ -192,8 +192,8 @@ mod tests {
         let room = scene("woods");
         let still = paint(Some(&room), Style::Fantasy, &fighters, 64, Size::Full);
         // No frames is the one still.
-        assert_eq!(frames(Some(&room), Style::Fantasy, &fighters, 64, &[], Size::Full), vec![still.clone()]);
-        let hit = |you: Pose, foe: Pose| frames(Some(&room), Style::Fantasy, &fighters, 64, &[Frame { you, foe }], Size::Full).remove(0);
+        assert_eq!(frames(Some(&room), Style::Fantasy, &fighters, 64, &[], Size::Full, Colors::Sixteen), vec![still.clone()]);
+        let hit = |you: Pose, foe: Pose| frames(Some(&room), Style::Fantasy, &fighters, 64, &[Frame { you, foe }], Size::Full, Colors::Sixteen).remove(0);
         let jolted = hit(Pose::default(), Pose { shift: 1, flash: false });
         let flashed = hit(Pose { shift: 0, flash: true }, Pose::default());
         assert_ne!(jolted, still);
@@ -205,12 +205,12 @@ mod tests {
         let alone = {
             let none = Sitter { name: "nothing".into(), ..Sitter::default() };
             let f = Fighters { you: (&you, &calm), foe: (&none, &calm) };
-            frames(Some(&room), Style::Fantasy, &f, 64, &[Frame { foe: Pose { shift: SIZE.0 as i32, flash: false }, ..Frame::default() }], Size::Full).remove(0)
+            frames(Some(&room), Style::Fantasy, &f, 64, &[Frame { foe: Pose { shift: SIZE.0 as i32, flash: false }, ..Frame::default() }], Size::Full, Colors::Sixteen).remove(0)
         };
         assert_eq!(gone, alone);
         // Each frame its own picture, in order.
         let slide: Vec<Frame> = (0..=4).rev().map(|shift| Frame { foe: Pose { shift, flash: false }, ..Frame::default() }).collect();
-        let played = frames(Some(&room), Style::Fantasy, &fighters, 64, &slide, Size::Full);
+        let played = frames(Some(&room), Style::Fantasy, &fighters, 64, &slide, Size::Full, Colors::Sixteen);
         assert_eq!(played.len(), 5);
         assert_eq!(played[4], still);
         assert_ne!(played[0], played[4]);
@@ -238,7 +238,7 @@ mod tests {
         assert_ne!(fresh, at(&Moment { hurt: 4, ..Moment::default() }));
         assert_ne!(fresh, at(&Moment { mood: Mood::Dead, ..Moment::default() }));
         let slide: Vec<Frame> = (0..SMALL.0 as i32).rev().map(|shift| Frame { foe: Pose { shift, flash: false }, ..Frame::default() }).collect();
-        let played = frames(Some(&scene("plains")), Style::Fantasy, &fighters, 48, &slide, Size::Small);
+        let played = frames(Some(&scene("plains")), Style::Fantasy, &fighters, 48, &slide, Size::Small, Colors::Sixteen);
         assert_eq!(played.last(), Some(&at(&calm)));
         assert_ne!(played[0], at(&calm));
     }

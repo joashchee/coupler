@@ -271,8 +271,8 @@ fn bestiary_mob(app: AppHandle, key: String, session: State<'_, Session>) -> Res
 /// mood, hurt, effects, the room), else calm. None if it isn't in the
 /// Bestiary.
 #[tauri::command]
-fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
-    Ok(session.bestiary_sitter(&app, &key)?.map(|s| face::face_in(&s, &moment.unwrap_or_default())))
+fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, colors: Option<paint::Colors>, session: State<'_, Session>) -> Result<Option<ansi_art::Art>, String> {
+    Ok(session.bestiary_sitter(&app, &key)?.map(|s| face::face_in(&s, &moment.unwrap_or_default(), colors.unwrap_or_default())))
 }
 
 /// The Fight panel's picture by Coupler's painter (fight_art.rs): the
@@ -282,17 +282,17 @@ fn bestiary_face(app: AppHandle, key: String, moment: Option<face::Moment>, sess
 /// the phone's strip, its faces drawn small.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, frames: Option<Vec<fight_art::Frame>>, small: Option<bool>, session: State<'_, Session>) -> Result<Vec<ansi_art::Art>, String> {
+fn fight_paint(app: AppHandle, foe: String, you_now: face::Moment, foe_now: face::Moment, style: paint::Style, columns: usize, frames: Option<Vec<fight_art::Frame>>, small: Option<bool>, colors: Option<paint::Colors>, session: State<'_, Session>) -> Result<Vec<ansi_art::Art>, String> {
     let (you, foe, scene) = session.fighters(&app, &foe)?;
     let size = if small.unwrap_or(false) { face::Size::Small } else { face::Size::Full };
-    Ok(fight_art::frames(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns, &frames.unwrap_or_default(), size))
+    Ok(fight_art::frames(scene.as_ref(), style, &fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) }, columns, &frames.unwrap_or_default(), size, colors.unwrap_or_default()))
 }
 
 /// An item's picture by Coupler's painter (item_art.rs), from all that's
 /// known of it; None if it isn't in the Bestiary.
 #[tauri::command]
-fn bestiary_item_art(app: AppHandle, key: String, session: State<'_, Session>) -> Result<Option<item_art::Picture>, String> {
-    Ok(session.bestiary_thing(&app, &key)?.map(|t| item_art::painted(&t)))
+fn bestiary_item_art(app: AppHandle, key: String, colors: Option<paint::Colors>, session: State<'_, Session>) -> Result<Option<item_art::Picture>, String> {
+    Ok(session.bestiary_thing(&app, &key)?.map(|t| item_art::painted(&t, colors.unwrap_or_default())))
 }
 
 /// The items whose name, material or area has the words.
@@ -566,17 +566,18 @@ fn picture_forget_looks(app: AppHandle, session: State<'_, Session>) -> Result<(
 }
 
 /// Coupler's painter's picture of a room, at a size in cells. `again`
-/// counts the times the player asked for a new look.
+/// counts the times the player asked for a new look; `colors`, the
+/// game's (`paint::Colors`), 16 when not given.
 #[tauri::command]
-fn picture_paint(scene: paint::Scene, style: paint::Style, columns: usize, rows: usize, again: u32) -> ansi_art::Art {
-    painter::paint(&scene, style, columns, rows, again)
+fn picture_paint(scene: paint::Scene, style: paint::Style, columns: usize, rows: usize, again: u32, colors: Option<paint::Colors>) -> ansi_art::Art {
+    painter::paint(&scene, style, columns, rows, again, colors.unwrap_or_default())
 }
 
 /// A race's or a class's portrait by Coupler's painter (portrait.rs),
 /// for the guide to making a character. `kind` is `race` or `class`.
 #[tauri::command]
-fn portrait_paint(kind: String, name: String, columns: usize, rows: usize) -> ansi_art::Art {
-    portrait::portrait(&kind, &name, columns, rows)
+fn portrait_paint(kind: String, name: String, columns: usize, rows: usize, colors: Option<paint::Colors>) -> ansi_art::Art {
+    portrait::portrait(&kind, &name, columns, rows, colors.unwrap_or_default())
 }
 
 // ---- The Assets folder (assets.rs) ----
@@ -642,7 +643,7 @@ async fn asset_create_art(app: AppHandle, prompt: String, columns: usize, rows: 
         let asset = assets::add_made(&root, "ans", &create::file_stem(&prompt, "picture"), |take| {
             let (scene, style, said) = create::scene_from(&prompt, take);
             about = said;
-            create::to_ansi(&painter::paint(&scene, style, columns, rows, take), &prompt)
+            create::to_ansi(&painter::paint(&scene, style, columns, rows, take, paint::Colors::Sixteen), &prompt)
         })?;
         Ok(Made { asset, about, rules: Vec::new() })
     })

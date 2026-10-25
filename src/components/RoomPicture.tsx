@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
+import { usePalette } from "../lib/palette";
 import { sceneWords, type PictureSettings } from "../lib/pictures";
 
 interface RoomPictureProps {
@@ -24,6 +25,8 @@ interface RoomPictureProps {
 }
 
 export function RoomPicture({ scene, settings, rows }: RoomPictureProps) {
+  /** The game's colors: painted again when they change. */
+  const colors = usePalette();
   const boxRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLParagraphElement>(null);
   /** The box's size in cells. */
@@ -78,7 +81,7 @@ export function RoomPicture({ scene, settings, rows }: RoomPictureProps) {
     return () => {
       stale = true;
     };
-  }, [scene, settings.style, cells]);
+  }, [scene, settings.style, cells, colors]);
 
   const caption = scene.art
     ? `${mud.assetTitle(scene.art)}, your picture for this room`

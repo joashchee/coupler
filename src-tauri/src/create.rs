@@ -227,7 +227,7 @@ mod tests {
     fn the_same_words_paint_the_same_picture_and_a_take_another() {
         let paint = |prompt: &str, take| {
             let (scene, style, _) = scene_from(prompt, take);
-            crate::painter::paint(&scene, style, 40, 12, take)
+            crate::painter::paint(&scene, style, 40, 12, take, crate::paint::Colors::Sixteen)
         };
         assert_eq!(paint("the woods at night", 0), paint("The woods, at night!", 0));
         assert_ne!(paint("the woods at night", 0), paint("the woods at night", 1));
@@ -247,7 +247,7 @@ mod tests {
     fn a_painting_written_as_ansi_reads_back_cell_for_cell() {
         for (prompt, columns, rows) in [("a forest at dawn", 40, 12), ("a stormy sea at night", 80, 25), ("a dungeon", 60, 18)] {
             let (scene, style, _) = scene_from(prompt, 0);
-            let art = crate::painter::paint(&scene, style, columns, rows, 0);
+            let art = crate::painter::paint(&scene, style, columns, rows, 0, crate::paint::Colors::Sixteen);
             let file = to_ansi(&art, prompt);
             let back = crate::ansi_art::render(&file);
             assert_eq!((back.columns, back.rows), (columns, rows), "{prompt}");

@@ -373,10 +373,21 @@ async function restoreBackup(x: Exports, path: string, progress?: { onmessage: (
 async function mirrored(path: string, looping = false): Promise<Response> {
   const file = (looping && mirrorFiles[`${path}#loop`]) || mirrorFiles[path];
   if (!file) throw `${path} isn't on the web.`;
-  const r = await fetch(`mirror/${file}`);
-  // Pages answers a missing file with the page itself.
-  if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) throw `${path} couldn't be fetched.`;
-  return r;
+  // Pages answers a missing file with the page itself. A failure is
+  // tried once more past the browser's cache, which Safari on the iPhone
+  // has been seen to answer from badly (2026-10-25).
+  let why = "";
+  for (const cache of ["default", "reload"] as const) {
+    try {
+      const r = await fetch(`mirror/${file}`, { cache });
+      const type = r.headers.get("content-type") ?? "";
+      if (r.ok && !type.includes("text/html")) return r;
+      why = r.ok ? "the site sent a page instead" : `the site answered ${r.status}`;
+    } catch (e) {
+      why = `${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+  throw `${path} couldn't be fetched (${why}).`;
 }
 
 // ---- The commands ----

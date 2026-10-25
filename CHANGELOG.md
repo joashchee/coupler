@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Pictures in more colors** (2026-10-25): when you have the game send
+  you 256 colors or true color (ANSI 256, ANSI TRUE), Coupler's painter
+  follows: skies and land are smooth gradients, night is shadow instead
+  of a checkerboard, and the dithers in rooms, faces, items and The
+  Fight show as the colors they stand for. Sparse textures (cobbles,
+  grass) are kept. 16 until the game says otherwise; remembered across
+  launches; gear → Pictures… says which. Both builds, the phone and the
+  tablet.
+- **The web build fetches a sound again on failure** (2026-10-25): a
+  sound from the mirror that fails (seen on the iPhone with the bank's
+  wind) is fetched once more past the browser's cache, and the message
+  says why it failed if it still does.
+
 ## 0.42.0 (2026-10-25)
 
 - **The iPhone's web screen, made for its size** (2026-10-25): in the

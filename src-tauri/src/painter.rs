@@ -37,7 +37,7 @@
 use crate::ambient;
 use crate::ansi::{Color, Line, Span, Style as Sgr};
 use crate::ansi_art::Art;
-use crate::paint::{seed, Scene, Style};
+use crate::paint::{seed, Colors, Scene, Style};
 
 /// The picture's size in cells is the panel's; within the screen.
 const MOST_COLUMNS: usize = 160;
@@ -63,14 +63,20 @@ pub(crate) const LIGHTMAGENTA: u8 = 13;
 pub(crate) const LIGHTCYAN: u8 = 14;
 pub(crate) const WHITE: u8 = 15;
 
+/// The 16 VGA colors in RGB, as the view shows them (`spanColors` in `lib/mud.ts`).
+const VGA: [[u8; 3]; 16] = [
+    [0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170],
+    [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255],
+];
+
 /// A 4 by 4 ordered dither: two colors mixed in sixteenths without noise.
 const BAYER: [[u8; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 
-/// Paints a room at a size in cells.
-pub fn paint(scene: &Scene, style: Style, columns: usize, rows: usize, again: u32) -> Art {
+/// Paints a room at a size in cells, in the game's `colors`.
+pub fn paint(scene: &Scene, style: Style, columns: usize, rows: usize, again: u32, colors: Colors) -> Art {
     let columns = columns.clamp(LEAST_COLUMNS, MOST_COLUMNS);
     let rows = rows.clamp(LEAST_ROWS, MOST_ROWS);
-    draw(scene, style, columns, rows, again).art()
+    draw(scene, style, columns, rows, again).art_in(colors)
 }
 
 /// The time of day, as the light sees it; day when unknown.
@@ -204,6 +210,10 @@ pub(crate) struct Canvas {
     lit: Vec<bool>,
     /// Per pixel: what it's part of, as the pen was when it was drawn.
     parts: Vec<Part>,
+    /// Per pixel: the color between the 16 that a gradient or the night
+    /// meant there, shown when the game has more colors (`art_in`).
+    /// Drawing over the pixel forgets it.
+    tones: Vec<Option<[u8; 3]>>,
     /// What's drawn now is part of this.
     pub(crate) pen: Part,
 }
@@ -212,7 +222,7 @@ impl Canvas {
     pub(crate) fn new(columns: usize, rows: usize) -> Canvas {
         let (w, h) = (columns as i32, rows as i32 * 2);
         let n = (w * h) as usize;
-        Canvas { w, h, pixels: vec![BLACK; n], glyphs: vec![None; columns * rows], lit: vec![false; n], parts: vec![Part::Back; n], pen: Part::Back }
+        Canvas { w, h, pixels: vec![BLACK; n], glyphs: vec![None; columns * rows], lit: vec![false; n], parts: vec![Part::Back; n], tones: vec![None; n], pen: Part::Back }
     }
 
     pub(crate) fn inside(&self, x: i32, y: i32) -> bool {
@@ -233,6 +243,7 @@ impl Canvas {
             self.pixels[i] = c;
             self.lit[i] = false;
             self.parts[i] = self.pen;
+            self.tones[i] = None;
         }
     }
 
@@ -257,6 +268,7 @@ impl Canvas {
             self.pixels[i] = c;
             self.lit[i] = lit;
             self.parts[i] = part;
+            self.tones[i] = None;
         }
     }
 
@@ -267,6 +279,7 @@ impl Canvas {
             self.pixels[i] = c;
             self.lit[i] = true;
             self.parts[i] = self.pen;
+            self.tones[i] = None;
         }
     }
 
@@ -340,8 +353,11 @@ impl Canvas {
             let (i, t) = ((at / 16) as usize, ((at % 16 - 5) * 16 / 6).clamp(0, 16));
             let a = stops[i.min(stops.len() - 1)];
             let b = stops[(i + 1).min(stops.len() - 1)];
+            // With more colors, smooth all the way from one to the next.
+            let tone = mixed(&[(VGA[usize::from(a)], 16 - (at % 16)), (VGA[usize::from(b)], at % 16)]);
             for x in 0..self.w {
                 self.set(x, y, Canvas::mix(x, y, a, b, t));
+                self.tones[(y * self.w + x) as usize] = Some(tone);
             }
         }
     }
@@ -360,7 +376,16 @@ impl Canvas {
             for x in 0..self.w {
                 let i = (y * self.w + x) as usize;
                 if !self.lit[i] {
-                    self.pixels[i] = dim(self.pixels[i], x, y);
+                    let c = self.pixels[i];
+                    // What the dither means, for more colors: a dark color
+                    // halfway to black in light; a gradient's as far as a
+                    // bright color's dark self.
+                    self.tones[i] = match self.tones[i] {
+                        Some(tone) => Some(mixed(&[(tone, 2), (VGA[0], 3)])),
+                        None if c == BLACK || (c >= 8 && c != DARKGRAY) => None,
+                        None => Some(mixed(&[(VGA[usize::from(c)], 1), (VGA[0], 1)])),
+                    };
+                    self.pixels[i] = dim(c, x, y);
                 }
             }
         }
@@ -389,6 +414,7 @@ impl Canvas {
         for i in 0..self.pixels.len() {
             if !self.lit[i] {
                 self.pixels[i] = back(self.pixels[i]);
+                self.tones[i] = None;
             }
         }
         for (_, fg) in self.glyphs.iter_mut().flatten() {
@@ -404,6 +430,7 @@ impl Canvas {
             for x in 0..self.w {
                 let i = (y * self.w + x) as usize;
                 m.put(self.w - 1 - x, y, self.pixels[i], self.lit[i], self.parts[i]);
+                m.tones[(y * self.w + self.w - 1 - x) as usize] = self.tones[i];
             }
         }
         for row in 0..self.h / 2 {
@@ -423,6 +450,7 @@ impl Canvas {
                 let i = (y * other.w + x) as usize;
                 if other.pixels[i] != clear && self.inside(x + at, y) {
                     self.put(x + at, y, other.pixels[i], other.lit[i], other.parts[i]);
+                    self.tones[(y * self.w + x + at) as usize] = other.tones[i];
                     self.unglyph(x + at, y);
                 }
             }
@@ -438,20 +466,37 @@ impl Canvas {
         }
     }
 
-    /// The cells as lines of styled characters.
+    /// The cells as lines of styled characters, in the 16 colors.
+    #[cfg(test)]
     pub(crate) fn art(&self) -> Art {
+        self.art_in(Colors::Sixteen)
+    }
+
+    /// The cells as lines of styled characters, in the game's `colors`.
+    /// With more than 16, a gradient shows the colors between its stops
+    /// and a dither the color its two make; with 256 each is the nearest
+    /// of the 256.
+    pub(crate) fn art_in(&self, colors: Colors) -> Art {
+        let tones: Option<Vec<[u8; 3]>> = (colors != Colors::Sixteen).then(|| (0..self.h).flat_map(|y| (0..self.w).map(move |x| (x, y))).map(|(x, y)| self.tone(x, y)).collect());
+        let pixel = |x: i32, y: i32| -> Color {
+            let index = self.get(x, y);
+            match &tones {
+                Some(tones) => shown(tones[(y * self.w + x) as usize], index, colors),
+                None => Color::Index { index },
+            }
+        };
         let rows = (self.h / 2) as usize;
         let mut lines: Vec<Line> = Vec::with_capacity(rows);
         for row in 0..rows as i32 {
             let mut line: Line = Vec::new();
             for x in 0..self.w {
-                let (top, bottom) = (self.get(x, row * 2), self.get(x, row * 2 + 1));
+                let (top, bottom) = (pixel(x, row * 2), pixel(x, row * 2 + 1));
                 let (c, fg, bg) = match self.glyphs[(row * self.w + x) as usize] {
-                    Some((c, fg)) => (c, fg, top),
+                    Some((c, fg)) => (c, Color::Index { index: fg }, top),
                     None if top == bottom => (' ', top, top),
                     None => ('▀', top, bottom),
                 };
-                let style = Sgr { fg: Some(Color::Index { index: fg }), bg: Some(Color::Index { index: bg }), ..Sgr::default() };
+                let style = Sgr { fg: Some(fg), bg: Some(bg), ..Sgr::default() };
                 // A space's foreground doesn't show: let it join the run before it.
                 match line.last_mut() {
                     Some(span) if span.style == style || (c == ' ' && span.style.bg == style.bg) => span.text.push(c),
@@ -462,6 +507,114 @@ impl Canvas {
         }
         Art { columns: self.w as usize, rows, lines }
     }
+
+    /// The color a pixel stands for: a gradient's own, else a dither's
+    /// two colors as the eye mixes them, else its own.
+    fn tone(&self, x: i32, y: i32) -> [u8; 3] {
+        let i = (y * self.w + x) as usize;
+        if let Some(tone) = self.tones[i] {
+            return tone;
+        }
+        let own = self.pixels[i];
+        self.dither(x, y).unwrap_or(VGA[usize::from(own)])
+    }
+
+    /// The color a dither made by `mix` stands for, if a pixel is in one:
+    /// some 4 by 4 pixels holding it are two colors of one part and
+    /// light, laid as the Bayer matrix lays them (every pixel of one
+    /// under every pixel of the other in it), at least `FEWEST` of each.
+    /// An edge, a line, an eye or a scatter of specks isn't one, and
+    /// keeps its colors; nor is a sparse dither, kept as a texture
+    /// (cobbles, grass).
+    fn dither(&self, x: i32, y: i32) -> Option<[u8; 3]> {
+        const FEWEST: i32 = 5;
+        // The window around the pixel first, then each other one holding it.
+        let around = std::iter::once((-1, -1)).chain((-3..=0).flat_map(|oy| (-3..=0).map(move |ox| (ox, oy))).filter(|&o| o != (-1, -1)));
+        'window: for (ox, oy) in around {
+            let (x0, y0) = (x + ox, y + oy);
+            if !self.inside(x0, y0) || !self.inside(x0 + 3, y0 + 3) {
+                continue;
+            }
+            let i = (y * self.w + x) as usize;
+            let (own, part, lit) = (self.pixels[i], self.parts[i], self.lit[i]);
+            let mut other = None;
+            // Per color: how many, and the least and most of the matrix under them.
+            let mut seen = [(0, 16, -1), (0, 16, -1)];
+            for wy in y0..y0 + 4 {
+                for wx in x0..x0 + 4 {
+                    let j = (wy * self.w + wx) as usize;
+                    if self.parts[j] != part || self.lit[j] != lit || self.tones[j].is_some() {
+                        continue 'window;
+                    }
+                    let c = self.pixels[j];
+                    let which = if c == own {
+                        0
+                    } else if other.is_none() || other == Some(c) {
+                        other = Some(c);
+                        1
+                    } else {
+                        continue 'window;
+                    };
+                    let at = i32::from(BAYER[(wy & 3) as usize][(wx & 3) as usize]);
+                    let s = &mut seen[which];
+                    *s = (s.0 + 1, s.1.min(at), s.2.max(at));
+                }
+            }
+            let Some(other) = other else { continue };
+            let [(n_own, least_own, most_own), (n_other, least_other, most_other)] = seen;
+            if n_own < FEWEST || n_other < FEWEST || (most_other >= least_own && most_own >= least_other) {
+                continue;
+            }
+            return Some(mixed(&[(VGA[usize::from(own)], n_own), (VGA[usize::from(other)], n_other)]));
+        }
+        None
+    }
+}
+
+/// Colors mixed by their weights, in light (not in the screen's numbers),
+/// as the eye mixes a dither's.
+fn mixed(colors: &[([u8; 3], i32)]) -> [u8; 3] {
+    let total: i32 = colors.iter().map(|(_, n)| n).sum::<i32>().max(1);
+    let mut out = [0u8; 3];
+    for (k, channel) in out.iter_mut().enumerate() {
+        let light: f32 = colors.iter().map(|(c, n)| (f32::from(c[k]) / 255.0).powf(2.2) * *n as f32).sum::<f32>() / total as f32;
+        *channel = (light.powf(1.0 / 2.2) * 255.0).round() as u8;
+    }
+    out
+}
+
+/// A pixel's tone as a color the game's `colors` can show: one of the 16
+/// when it's that one, else the nearest of the 256, or itself.
+fn shown(tone: [u8; 3], index: u8, colors: Colors) -> Color {
+    if VGA.get(usize::from(index)) == Some(&tone) {
+        return Color::Index { index };
+    }
+    match colors {
+        Colors::Sixteen => Color::Index { index },
+        Colors::More => Color::Index { index: nearest_256(tone) },
+        Colors::True => Color::Rgb { r: tone[0], g: tone[1], b: tone[2] },
+    }
+}
+
+/// The nearest of the 256 colors (the 16, the 6 by 6 by 6 cube, the 24
+/// grays), as the view draws them (`indexColor` in `lib/mud.ts`).
+fn nearest_256(tone: [u8; 3]) -> u8 {
+    let level = |v: u8| if v == 0 { 0 } else { 55 + i32::from(v) * 40 };
+    let rgb = |i: u8| -> [i32; 3] {
+        match i {
+            0..=15 => VGA[usize::from(i)].map(i32::from),
+            16..=231 => {
+                let n = i - 16;
+                [level(n / 36), level((n / 6) % 6), level(n % 6)]
+            }
+            _ => [8 + (i32::from(i) - 232) * 10; 3],
+        }
+    };
+    let far = |i: u8| {
+        let c = rgb(i);
+        (0..3).map(|k| (c[k] - i32::from(tone[k])).pow(2)).sum::<i32>()
+    };
+    (0..=255u8).min_by_key(|&i| far(i)).unwrap_or(0)
 }
 
 /// A color at night: a bright one goes to its dark self, a dark one
@@ -1439,7 +1592,7 @@ mod tests {
                 for weather in WEATHERS.iter().map(|w| Some(*w)).chain([None]) {
                     for style in [Style::Fantasy, Style::High] {
                         for (columns, rows) in [(1, 1), (8, 4), (64, 12), (160, 45), (999, 999)] {
-                            let art = paint(&scene(terrain, time, weather), style, columns, rows, 0);
+                            let art = paint(&scene(terrain, time, weather), style, columns, rows, 0, Colors::Sixteen);
                             assert_eq!(art.columns, columns.clamp(LEAST_COLUMNS, MOST_COLUMNS));
                             assert_eq!(art.rows, rows.clamp(LEAST_ROWS, MOST_ROWS));
                             assert_eq!(art.lines.len(), art.rows);
@@ -1453,13 +1606,70 @@ mod tests {
         }
     }
 
+    /// Every color an Art uses, as its spans give them.
+    fn art_colors(art: &Art) -> Vec<Color> {
+        art.lines.iter().flatten().flat_map(|s| [s.style.fg, s.style.bg]).flatten().collect()
+    }
+
+    #[test]
+    fn more_colors_smooth_the_dithers_and_gradients() {
+        let dusk = scene("plains", Some("dusk"), None);
+        let sixteen = paint(&dusk, Style::Fantasy, 64, 12, 0, Colors::Sixteen);
+        assert_eq!(sixteen, draw(&dusk, Style::Fantasy, 64, 12, 0).art(), "16 is as it was");
+        assert!(art_colors(&sixteen).iter().all(|c| matches!(c, Color::Index { index } if *index < 16)));
+        let more = paint(&dusk, Style::Fantasy, 64, 12, 0, Colors::More);
+        assert!(art_colors(&more).iter().all(|c| matches!(c, Color::Index { .. })));
+        assert!(art_colors(&more).iter().any(|c| matches!(c, Color::Index { index } if *index >= 16)));
+        let rgb: std::collections::HashSet<(u8, u8, u8)> = art_colors(&paint(&dusk, Style::Fantasy, 64, 12, 0, Colors::True))
+            .into_iter()
+            .filter_map(|c| match c {
+                Color::Rgb { r, g, b } => Some((r, g, b)),
+                Color::Index { .. } => None,
+            })
+            .collect();
+        assert!(rgb.len() > 8, "a sky between its stops: {}", rgb.len());
+    }
+
+    #[test]
+    fn a_dither_is_its_mix_and_an_edge_stays_an_edge() {
+        let mut c = Canvas::new(8, 4);
+        for y in 0..c.h {
+            for x in 0..c.w {
+                c.set(x, y, Canvas::mix(x, y, BLUE, WHITE, 8));
+            }
+        }
+        let half = c.tone(3, 3);
+        assert!(VGA.iter().all(|v| *v != half), "between blue and white: {half:?}");
+        assert_eq!(c.tone(0, 0), half);
+        // Two solid halves: each keeps its own.
+        let mut c = Canvas::new(8, 4);
+        c.rect(0, 0, 4, 8, BLUE);
+        c.rect(4, 0, 8, 8, WHITE);
+        assert_eq!((c.tone(3, 3), c.tone(4, 3)), (VGA[usize::from(BLUE)], VGA[usize::from(WHITE)]));
+        // A sparse dither is a texture, kept.
+        let mut c = Canvas::new(8, 4);
+        for y in 0..c.h {
+            for x in 0..c.w {
+                c.set(x, y, Canvas::mix(x, y, LIGHTGRAY, DARKGRAY, 3));
+            }
+        }
+        assert_eq!(c.tone(0, 0), VGA[usize::from(c.get(0, 0))]);
+    }
+
+    #[test]
+    fn the_nearest_of_256() {
+        assert_eq!(nearest_256([255, 85, 85]), LIGHTRED);
+        assert_eq!(nearest_256([95, 135, 175]), 16 + 36 + 2 * 6 + 3);
+        assert_eq!(nearest_256([128, 128, 128]), 232 + 12);
+    }
+
     #[test]
     fn every_character_is_one_the_font_has() {
         let font: Vec<char> = crate::ansi_art::CP437.chars().collect();
         for terrain in TERRAINS {
             for weather in WEATHERS {
                 for style in [Style::Fantasy, Style::High] {
-                    let art = paint(&scene(terrain, Some("night"), Some(weather)), style, 64, 12, 0);
+                    let art = paint(&scene(terrain, Some("night"), Some(weather)), style, 64, 12, 0, Colors::Sixteen);
                     for c in art.lines.iter().flatten().flat_map(|s| s.text.chars()) {
                         assert!(font.contains(&c), "{c:?} in {terrain}, {weather}");
                     }
@@ -1472,10 +1682,10 @@ mod tests {
     fn a_room_looks_the_same_each_visit_and_another_room_differs() {
         let here = scene("woods", Some("day"), None);
         let there = Scene { room: "Midgaard#3002".into(), ..here.clone() };
-        assert_eq!(paint(&here, Style::Fantasy, 64, 12, 0), paint(&here, Style::Fantasy, 64, 12, 0));
-        assert_ne!(paint(&here, Style::Fantasy, 64, 12, 0), paint(&there, Style::Fantasy, 64, 12, 0));
+        assert_eq!(paint(&here, Style::Fantasy, 64, 12, 0, Colors::Sixteen), paint(&here, Style::Fantasy, 64, 12, 0, Colors::Sixteen));
+        assert_ne!(paint(&here, Style::Fantasy, 64, 12, 0, Colors::Sixteen), paint(&there, Style::Fantasy, 64, 12, 0, Colors::Sixteen));
         // Asking again gives a new look.
-        assert_ne!(paint(&here, Style::Fantasy, 64, 12, 0), paint(&here, Style::Fantasy, 64, 12, 1));
+        assert_ne!(paint(&here, Style::Fantasy, 64, 12, 0, Colors::Sixteen), paint(&here, Style::Fantasy, 64, 12, 1, Colors::Sixteen));
     }
 
     #[test]
@@ -1531,7 +1741,7 @@ mod tests {
             for room in ["room#1", "room#2", "room#3", "room#4"] {
                 let at = |time: &str, weather: &str| {
                     let s = Scene { world: "standard".into(), room: room.into(), terrain: terrain.into(), time: Some(time.into()), weather: Some(weather.into()), ..Scene::default() };
-                    paint(&s, Style::Fantasy, 64, 12, 0)
+                    paint(&s, Style::Fantasy, 64, 12, 0, Colors::Sixteen)
                 };
                 let day = at("day", "clear");
                 assert_eq!(day, at("night", "clear"), "{terrain} {room}: the time of day shows");
@@ -1588,15 +1798,23 @@ mod show {
         }
     }
 
-    /// The VGA palette, as the view shows the 16 colors.
-    const VGA: [[u8; 3]; 16] = [
-        [0, 0, 0], [170, 0, 0], [0, 170, 0], [170, 85, 0], [0, 0, 170], [170, 0, 170], [0, 170, 170], [170, 170, 170],
-        [85, 85, 85], [255, 85, 85], [85, 255, 85], [255, 255, 85], [85, 85, 255], [255, 85, 255], [85, 255, 255], [255, 255, 255],
-    ];
+    /// A color as RGB, as the view shows it.
+    fn rgb_of(color: Color) -> [u8; 3] {
+        match color {
+            Color::Index { index } if index < 16 => VGA[usize::from(index)],
+            Color::Index { index } if index < 232 => {
+                let n = index - 16;
+                let level = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
+                [level(n / 36), level((n / 6) % 6), level(n % 6)]
+            }
+            Color::Index { index } => [8 + (index - 232) * 10; 3],
+            Color::Rgb { r, g, b } => [r, g, b],
+        }
+    }
 
     /// Each picture as pixels 8 wide and tall, a character as a dot of
-    /// its color, one under another, written as a PPM to `OUT`.
-    fn ppm(canvases: &[Canvas]) -> Vec<u8> {
+    /// its color, one under another, written as a PPM to `OUT`, in `colors`.
+    fn ppm(canvases: &[Canvas], colors: Colors) -> Vec<u8> {
         let w = canvases.iter().map(|c| c.w).max().unwrap_or(0) * 8;
         let h: i32 = canvases.iter().map(|c| c.h * 8 + 8).sum();
         let mut rgb = vec![40u8; (w * h * 3) as usize];
@@ -1605,16 +1823,17 @@ mod show {
             for y in 0..canvas.h * 8 {
                 for x in 0..canvas.w * 8 {
                     let (px, py) = (x / 8, y / 8);
-                    let mut c = canvas.get(px, py);
+                    let pixel = |px: i32, py: i32| rgb_of(shown(canvas.tone(px, py), canvas.get(px, py), colors));
+                    let mut c = pixel(px, py);
                     if let Some((_, fg)) = canvas.glyphs[((py / 2) * canvas.w + px) as usize] {
                         let (cx, cy) = (x % 8, y % 16);
-                        c = canvas.get(px, (py / 2) * 2);
+                        c = pixel(px, (py / 2) * 2);
                         if (2..6).contains(&cx) && (5..11).contains(&cy) {
-                            c = fg;
+                            c = VGA[usize::from(fg)];
                         }
                     }
                     let i = (((top + y) * w + x) * 3) as usize;
-                    rgb[i..i + 3].copy_from_slice(&VGA[c as usize]);
+                    rgb[i..i + 3].copy_from_slice(&c);
                 }
             }
             top += canvas.h * 8 + 8;
@@ -1632,14 +1851,19 @@ mod show {
         let time = std::env::var("TIME").ok();
         let weather = std::env::var("WEATHER").ok();
         let style = if std::env::var("HIGH").is_ok() { Style::High } else { Style::Fantasy };
+        let colors = match std::env::var("COLORS").as_deref() {
+            Ok("256") => Colors::More,
+            Ok("true") => Colors::True,
+            _ => Colors::Sixteen,
+        };
         let mut canvases = Vec::new();
         for terrain in terrains {
             let scene = Scene { world: "standard".into(), room: "room#1".into(), terrain: terrain.into(), time: time.clone(), weather: weather.clone(), ..Scene::default() };
-            print(&paint(&scene, style, 64, 12, 0));
+            print(&paint(&scene, style, 64, 12, 0, Colors::Sixteen));
             canvases.push(draw(&scene, style, 64, 12, 0));
         }
         if let Ok(out) = std::env::var("OUT") {
-            std::fs::write(out, ppm(&canvases)).unwrap();
+            std::fs::write(out, ppm(&canvases, colors)).unwrap();
         }
     }
 }

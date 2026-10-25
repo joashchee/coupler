@@ -167,6 +167,11 @@ fn json(text: String) -> Result<Value, String> {
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
+/// The game's colors a picture is painted in (`paint::Colors`), 16 when not given.
+fn colors(args: &Value) -> crate::paint::Colors {
+    args.get("colors").cloned().and_then(|c| serde_json::from_value(c).ok()).unwrap_or_default()
+}
+
 fn call(input: &[u8]) -> Result<Value, String> {
     let args: Value = serde_json::from_slice(input).map_err(|e| e.to_string())?;
     let s = |name: &str| args.get(name).and_then(Value::as_str).unwrap_or("").to_string();
@@ -257,8 +262,9 @@ fn call(input: &[u8]) -> Result<Value, String> {
         "bestiary_items" => app.bestiary_items(&s("query")).and_then(json),
         "bestiary_item" => serde_json::to_value(app.bestiary_item(&s("key"))?).map_err(|e| e.to_string()),
         "bestiary_face" => {
+            let colors = colors(&args);
             let moment: crate::face::Moment = args.get("moment").cloned().filter(|m| !m.is_null()).map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
-            let face = app.bestiary_sitter(&s("key"))?.map(|sitter| crate::face::face_in(&sitter, &moment));
+            let face = app.bestiary_sitter(&s("key"))?.map(|sitter| crate::face::face_in(&sitter, &moment, colors));
             serde_json::to_value(face).map_err(|e| e.to_string())
         }
         "fight_paint" => {
@@ -270,10 +276,10 @@ fn call(input: &[u8]) -> Result<Value, String> {
             let frames: Vec<crate::fight_art::Frame> = args.get("frames").cloned().filter(|f| !f.is_null()).map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
             let fighters = crate::fight_art::Fighters { you: (&you, &you_now), foe: (&foe, &foe_now) };
             let size = if args.get("small").and_then(Value::as_bool).unwrap_or(false) { crate::face::Size::Small } else { crate::face::Size::Full };
-            serde_json::to_value(crate::fight_art::frames(scene.as_ref(), style, &fighters, columns, &frames, size)).map_err(|e| e.to_string())
+            serde_json::to_value(crate::fight_art::frames(scene.as_ref(), style, &fighters, columns, &frames, size, colors(&args))).map_err(|e| e.to_string())
         }
         "bestiary_item_art" => {
-            let art = app.bestiary_thing(&s("key"))?.map(|t| crate::item_art::painted(&t));
+            let art = app.bestiary_thing(&s("key"))?.map(|t| crate::item_art::painted(&t, colors(&args)));
             serde_json::to_value(art).map_err(|e| e.to_string())
         }
         "automation_set" => {
@@ -308,7 +314,7 @@ fn call(input: &[u8]) -> Result<Value, String> {
             let style: crate::paint::Style = serde_json::from_value(args.get("style").cloned().unwrap_or_default()).map_err(|e| e.to_string())?;
             let size = |name: &str| args.get(name).and_then(Value::as_u64).unwrap_or(0) as usize;
             let again = args.get("again").and_then(Value::as_u64).unwrap_or(0) as u32;
-            serde_json::to_value(crate::painter::paint(&scene, style, size("columns"), size("rows"), again)).map_err(|e| e.to_string())
+            serde_json::to_value(crate::painter::paint(&scene, style, size("columns"), size("rows"), again, colors(&args))).map_err(|e| e.to_string())
         }
         "hooks_count" => Ok(Value::from(app.hooks_count())),
         "ambience_now" => json(app.ambience_now()),
@@ -316,7 +322,7 @@ fn call(input: &[u8]) -> Result<Value, String> {
         "who_ask" => Ok(Value::from(app.who_ask())),
         "portrait_paint" => {
             let size = |name: &str| args.get(name).and_then(Value::as_u64).unwrap_or(0) as usize;
-            serde_json::to_value(crate::portrait::portrait(&s("kind"), &s("name"), size("columns"), size("rows"))).map_err(|e| e.to_string())
+            serde_json::to_value(crate::portrait::portrait(&s("kind"), &s("name"), size("columns"), size("rows"), colors(&args))).map_err(|e| e.to_string())
         }
         "echo_list" => serde_json::to_value(crate::echo::listing()).map_err(|e| e.to_string()),
         "who_tick" => {

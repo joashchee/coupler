@@ -55,7 +55,7 @@ use crate::ansi_art::Art;
 use crate::bestiary::ItemEntry;
 use crate::face::{both, cap, color_word, key, lighter, line, peak, shade, within, words, CX, H, SIZE, W};
 use crate::figure::{self, CLEAR};
-use crate::paint::seed;
+use crate::paint::{seed, Colors as GameColors};
 use crate::painter::*;
 
 /// What the painter needs of an item.
@@ -1604,13 +1604,19 @@ pub struct Picture {
 }
 
 /// The picture with its slot.
-pub fn painted(thing: &Thing) -> Picture {
-    Picture { art: picture(thing), slot: slot(thing, kind(thing)) }
+pub fn painted(thing: &Thing, game: GameColors) -> Picture {
+    Picture { art: picture_in(thing, game), slot: slot(thing, kind(thing)) }
+}
+
+/// The picture in the 16 colors.
+#[cfg(test)]
+fn picture(thing: &Thing) -> Art {
+    picture_in(thing, GameColors::Sixteen)
 }
 
 /// An item's picture, 25 by 24 pixels in 25 by 12 cells: the item, what's
-/// on it, and its slot in words on the bottom row.
-pub fn picture(thing: &Thing) -> Art {
+/// on it, and its slot in words on the bottom row; in the `game`'s colors.
+fn picture_in(thing: &Thing, game: GameColors) -> Art {
     let kind = kind(thing);
     let mut rng = Rng::new(seed("item", &key(&thing.name), 0));
     let colors = colors(thing, kind, &mut rng);
@@ -1741,7 +1747,7 @@ pub fn picture(thing: &Thing) -> Art {
     for (i, ch) in words.chars().enumerate() {
         canvas.glyph(start + i as i32, LABEL, ch, LIGHTGRAY);
     }
-    canvas.art()
+    canvas.art_in(game)
 }
 
 #[cfg(test)]
