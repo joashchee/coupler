@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.42.0 (2026-10-25)
 
 - **The iPhone's web screen, made for its size** (2026-10-25): in the
   web build on an iPhone the menu bar is one row (no icon or name;
