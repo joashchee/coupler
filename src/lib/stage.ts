@@ -76,6 +76,15 @@ const TABLET_LEAST_COLUMNS = 40;
 const TABLET_LEAST_ROWS = 16;
 /** An iPad upright, in points: the tablet screen tried on a computer is this, fitted to the window. */
 export const TABLET_EMULATED_SIZE = { width: 768, height: 1024 };
+/** An iPhone upright in Safari, in points, what's left under its bars: the small tablet screen tried on a computer. */
+export const TABLET_SMALL_EMULATED_SIZE = { width: 390, height: 664 };
+/**
+ * The small tablet screen's lower part (lib/formFactor.ts,
+ * `TABLET_SMALL`: an iPhone in the web build): the desk's width in its
+ * cells, so the keys' text is the game output's size, and 20 rows (the
+ * command line's 3, the keyboard's 15, the messages' 2).
+ */
+export const TABLET_SMALL_LOWER_ROWS = 20;
 
 /** The text sizes the tablet's upper desk offers: how many times the theme's 8 by 16 cell each is. */
 export const TABLET_TEXT_SIZES = [1, 1.25, 1.5, 1.75, 2] as const;
@@ -89,21 +98,32 @@ export interface TabletFit {
   columns: number;
   rows: number;
   left: number;
-  /** The lower stage's scale and its top, in the frame's points. */
+  /** The lower stage's size in its own pixels, its scale, and its top and left, in the frame's points. */
+  lowerWidth: number;
+  lowerHeight: number;
   lowerScale: number;
   lowerTop: number;
+  lowerLeft: number;
   /** Held sideways: the tablet screen is upright only. */
   sideways: boolean;
 }
 
-/** The tablet's two stages in a frame `width` by `height` points, the text at `asked` or the largest under it that fits. */
-export function tabletFit(width: number, height: number, asked: TabletTextSize): TabletFit {
+/**
+ * The tablet's two stages in a frame `width` by `height` points, the
+ * text at `asked` or the largest under it that fits. `small` (an iPhone
+ * in the web build): the lower part is the desk's columns of the same
+ * text, not 96 cells shrunk to the width.
+ */
+export function tabletFit(width: number, height: number, asked: TabletTextSize, small = false): TabletFit {
   const fits = TABLET_TEXT_SIZES.filter((size) => size === 1 || width / (CELL_WIDTH * size) >= TABLET_LEAST_COLUMNS);
   const largest = fits[fits.length - 1];
   const text = Math.min(asked, largest) as TabletTextSize;
-  const lowerScale = width / TABLET_LOWER_WIDTH;
-  const lowerTop = Math.max(0, height - TABLET_LOWER_HEIGHT * lowerScale);
   const columns = Math.max(TABLET_LEAST_COLUMNS, Math.floor(width / (CELL_WIDTH * text)));
+  const left = Math.max(0, (width - columns * CELL_WIDTH * text) / 2);
+  const lowerWidth = small ? columns * CELL_WIDTH : TABLET_LOWER_WIDTH;
+  const lowerHeight = small ? TABLET_SMALL_LOWER_ROWS * CELL_HEIGHT : TABLET_LOWER_HEIGHT;
+  const lowerScale = small ? text : width / TABLET_LOWER_WIDTH;
+  const lowerTop = Math.max(0, height - lowerHeight * lowerScale);
   const rows = Math.max(TABLET_LEAST_ROWS, Math.floor(lowerTop / (CELL_HEIGHT * text)));
-  return { text, largest, columns, rows, left: Math.max(0, (width - columns * CELL_WIDTH * text) / 2), lowerScale, lowerTop, sideways: width > height };
+  return { text, largest, columns, rows, left, lowerWidth, lowerHeight, lowerScale, lowerTop, lowerLeft: small ? left : 0, sideways: width > height };
 }

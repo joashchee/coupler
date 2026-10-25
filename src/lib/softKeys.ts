@@ -98,6 +98,47 @@ export const KEY_ROWS: SoftKey[][] = [
   ],
 ];
 
+/**
+ * The small tablet screen's keyboard (components/SmallKeyboard.tsx, an
+ * iPhone in the web build), as the maintainer laid it out: five rows of
+ * ten places, each key `cells` places (one when left out) whatever the
+ * width, Space two. The labels are short to fit a key of four or five
+ * cells; VoiceOver says the names. `command` is Coupler's own commands'
+ * prefix (lib/commands.ts), typed by its own key.
+ */
+export function smallKeyRows(command: string): SoftKey[][] {
+  const one = (k: Omit<SoftKey, "cells">): SoftKey => ({ ...k, cells: 1 });
+  const keysOf = (row: string, shifted = row.toUpperCase(), codes = [...row].map((c) => `Key${c.toUpperCase()}`)) =>
+    [...row].map((c, i) => one({ key: c, code: codes[i], label: c, shifted: shifted[i] }));
+  return [
+    keysOf("1234567890", "!@#$%^&*()", [..."1234567890"].map((d) => `Digit${d}`)),
+    keysOf("qwertyuiop"),
+    [...keysOf("asdfghjkl"), one({ key: "Backspace", code: "Backspace", label: "bs", name: "Backspace", repeats: true })],
+    [
+      one({ key: "shift", code: "ShiftLeft", label: "sh", name: "Shift", modifier: "shift" }),
+      ...keysOf("zxcvbnm"),
+      one({ key: "ArrowUp", code: "ArrowUp", label: "↑", name: "Up arrow", repeats: true }),
+      one({ key: "Enter", code: "Enter", label: "en", name: "Return" }),
+    ],
+    [
+      one({ key: "Escape", code: "Escape", label: "es", name: "Escape" }),
+      one({ key: "ctrl", code: "ControlLeft", label: "ct", name: "Control", modifier: "ctrl" }),
+      one({ key: "alt", code: "AltLeft", label: MAC ? "op" : "al", name: MAC ? "Option" : "Alt", modifier: "alt" }),
+      one({ key: "meta", code: "MetaLeft", label: MAC ? "cm" : "wn", name: MAC ? "Command" : "Windows", modifier: "meta" }),
+      { key: " ", code: "Space", label: "space", name: "Space", cells: 2, repeats: true },
+      one({ key: command, code: "", label: command, name: `${command}, Coupler's commands` }),
+      one({ key: "ArrowLeft", code: "ArrowLeft", label: "←", name: "Left arrow", repeats: true }),
+      one({ key: "ArrowDown", code: "ArrowDown", label: "↓", name: "Down arrow", repeats: true }),
+      one({ key: "ArrowRight", code: "ArrowRight", label: "→", name: "Right arrow", repeats: true }),
+    ],
+  ];
+}
+
+/** Whole cells for each of `count` equal places across `columns`, the odd cells spread among them. */
+export function spread(columns: number, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => Math.floor(((i + 1) * columns) / count) - Math.floor((i * columns) / count));
+}
+
 export type Field = HTMLInputElement | HTMLTextAreaElement;
 
 const TEXT_TYPES = new Set(["text", "search", "password", "email", "url", "tel", "number"]);

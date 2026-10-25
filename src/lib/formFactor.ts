@@ -101,11 +101,12 @@ export const PHONE_EMULATED = PHONE && !REAL_PHONE;
  */
 const TABLET_KEY = "coupler.tablet";
 
-function tabletAsked(): boolean {
+/** "on" tries the tablet screen, "iphone" the small one (`TABLET_SMALL`). */
+function tabletAsked(): string | null {
   try {
-    return localStorage.getItem(TABLET_KEY) === "on";
+    return localStorage.getItem(TABLET_KEY);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -113,15 +114,26 @@ function tabletAsked(): boolean {
 export const TABLET_TRYABLE = !IPHONE && !TABLET && import.meta.env.DEV;
 
 /** A tablet (not trying the phone screen), or the dev build trying the tablet screen. */
-export const TABLET_SCREEN = !PHONE && (TABLET || (TABLET_TRYABLE && tabletAsked()));
+export const TABLET_SCREEN = !PHONE && (TABLET || (TABLET_TRYABLE && ["on", "iphone"].includes(tabletAsked() ?? "")));
 
-/** The tablet screen tried on a computer: drawn as an iPad upright, 768 by 1024 points, fitted to the window. */
+/** The tablet screen tried on a computer: drawn as an iPad upright, 768 by 1024 points, fitted to the window (or an iPhone, `TABLET_SMALL`). */
 export const TABLET_EMULATED = TABLET_SCREEN && !TABLET;
 
-/** Turns the tablet screen on or off where it can be tried, and starts again with it. */
-export function setTabletScreen(on: boolean) {
+/**
+ * The small tablet screen: an iPhone in the web build (decided
+ * 2026-10-25), or the dev build on the Mac trying it, drawn as an
+ * iPhone upright. The same two stages, but the lower part is in the
+ * game output's own cells (lib/stage.ts, `tabletFit`'s `small`), with
+ * Coupler's phone keyboard (components/SmallKeyboard.tsx) and fewer
+ * touch controls, and the menu bar is one row (`tabletLayout` in
+ * App.tsx). Marked on <html> as data-size="small" for tablet.css.
+ */
+export const TABLET_SMALL = TABLET_SCREEN && (WEB_IPHONE || (TABLET_EMULATED && tabletAsked() === "iphone"));
+
+/** Turns the tablet screen on or off where it can be tried (`"iphone"`, the small one), and starts again with it. */
+export function setTabletScreen(on: boolean | "iphone") {
   try {
-    localStorage.setItem(TABLET_KEY, on ? "on" : "off");
+    localStorage.setItem(TABLET_KEY, on === "iphone" ? "iphone" : on ? "on" : "off");
   } catch {
     // Nothing kept: the same screen comes back.
   }
@@ -151,6 +163,7 @@ const FIELDS = 'input:not([type]), input[type="text"], input[type="search"], inp
  */
 function applyTablet() {
   document.documentElement.dataset.form = "tablet";
+  if (TABLET_SMALL) document.documentElement.dataset.size = "small";
   document.querySelector('meta[name="viewport"]')?.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
   const stop = (e: Event) => e.preventDefault();
   for (const name of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(name, stop, { passive: false });

@@ -122,3 +122,35 @@ html[data-form="tablet"] .dialog-body { overflow-x: auto; }
 :root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key.held,
 :root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key.exit { background: var(--accent); color: #000000; }
 :root:not([data-theme="ansiapps"]) .tablet-lower .tablet-key:disabled { opacity: 0.5; }
+
+/* The small tablet screen (lib/formFactor.ts, TABLET_SMALL: an iPhone in
+   the web build): the lower part in the game output's own cells. */
+
+/* The connection's dot on the bar's one row: in a black cell, light
+   green filled online, light red hollow offline (15.8:1 and 6.7:1). */
+.connection-dot { display: block; width: 8px; height: 16px; line-height: 16px; }
+:root[data-theme="ansiapps"] .menu-bar .connection-dot { background: var(--dos-black); color: var(--dos-lightred); }
+:root[data-theme="ansiapps"] .menu-bar .connection-dot.on { color: var(--dos-lightgreen); }
+:root:not([data-theme="ansiapps"]) .connection-dot { width: 16px; color: var(--warn); }
+:root:not([data-theme="ansiapps"]) .connection-dot.on { color: var(--good); }
+
+/* The keyboard (components/SmallKeyboard.tsx): keys at their places; the
+   finger's own moves never scroll or zoom. The key under the finger is
+   lit, and shown above it at twice the size. */
+.small-keyboard { position: relative; touch-action: none; }
+.small-keyboard .tablet-key { position: absolute; }
+:root[data-theme="ansiapps"] .tablet-lower .small-keyboard .tablet-key.touched { --key: var(--dos-white); color: var(--dos-black); }
+.small-key-shown {
+  position: absolute;
+  height: 48px;
+  box-sizing: border-box;
+  padding-top: 8px;
+  font-size: 32px;
+  line-height: 32px;
+  white-space: pre;
+  pointer-events: none;
+  z-index: 2;
+}
+:root[data-theme="ansiapps"] .small-key-shown { background: var(--dos-white); color: var(--dos-black); }
+:root:not([data-theme="ansiapps"]) .tablet-lower .small-keyboard .tablet-key.touched { background: var(--accent); color: #000000; }
+:root:not([data-theme="ansiapps"]) .small-key-shown { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); text-align: center; padding-left: 0 !important; }

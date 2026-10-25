@@ -63,11 +63,12 @@ import { checkGrid, installRowSnap } from "./lib/grid";
 import { loadDisplay, saveDisplay, type Display, type TextSize } from "./lib/display";
 import { loadSpoken, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
 import { forgetLayout, layoutText } from "./lib/layout";
-import { CELL_HEIGHT, CELL_WIDTH, PHONE_WIDTH, phoneFit, stageScale, TABLET_EMULATED_SIZE, TABLET_LOWER_HEIGHT, TABLET_LOWER_WIDTH, tabletFit, type PhoneFit, type TabletFit } from "./lib/stage";
-import { PHONE, PHONE_EMULATED, PHONE_TRYABLE, setPhoneScreen, setTabletScreen, TABLET_EMULATED, TABLET_SCREEN, TABLET_TRYABLE } from "./lib/formFactor";
+import { CELL_HEIGHT, CELL_WIDTH, PHONE_WIDTH, phoneFit, stageScale, TABLET_EMULATED_SIZE, TABLET_SMALL_EMULATED_SIZE, tabletFit, type PhoneFit, type TabletFit } from "./lib/stage";
+import { PHONE, PHONE_EMULATED, PHONE_TRYABLE, setPhoneScreen, setTabletScreen, TABLET_EMULATED, TABLET_SCREEN, TABLET_SMALL, TABLET_TRYABLE } from "./lib/formFactor";
 import { loadTabletText, stepTabletText, storeTabletText, tabletTextInWords } from "./lib/tablet";
-import { isField, type Field } from "./lib/softKeys";
+import { isField, spread, type Field } from "./lib/softKeys";
 import { TabletKeyboard } from "./components/TabletKeyboard";
+import { SmallKeyboard } from "./components/SmallKeyboard";
 import { TabletControls, type TabletControl } from "./components/TabletControls";
 import { TouchPad } from "./components/TouchPad";
 import { PhoneBar } from "./components/PhoneBar";
@@ -119,6 +120,9 @@ const DISCONNECTED_WORDS = "CoffeeMUD disconnected.";
  * by 25) on the right with Heard (what the voice said) under it; the
  * command line, its hint and the message bar across the bottom.
  * Offline, the ways to play take Here's place.
+ *
+ * The Fight comes up at the top left in every way to play (decided
+ * 2026-10-25), over what's there, as on the tablet.
  */
 function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1): Record<string, Usual> {
   if (ux === "workshop") return defaultLayout(theme, showing);
@@ -137,7 +141,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
           vitals: { at: { x: 680, y: 288 }, size: { width: 600, height: 64 } },
           map: { at: { x: 680, y: 352 }, size: { width: 600, height: 336 } },
           picture: { at: { x: 680, y: 352 }, size: { width: 600, height: 256 } },
-          fight: { at: { x: 680, y: 16 }, size: { width: 600, height: 336 } },
+          fight: { at: { x: 0, y: 0 }, size: { width: 600, height: 336 } },
           heard: { at: { x: 680, y: 528 }, size: { width: 600, height: 160 } },
           journal: { at: { x: 680, y: 688 } },
           log: { at: { x: 680, y: 704 } },
@@ -153,7 +157,7 @@ function uxLayout(ux: Ux, theme: Theme, showing: Showing, textSize: TextSize = 1
           vitals: { at: { x: 732, y: 318 }, size: { width: 536, height: 66 } },
           map: { at: { x: 732, y: 392 }, size: { width: 536, height: 280 } },
           picture: { at: { x: 732, y: 392 }, size: { width: 536, height: 260 } },
-          fight: { at: { x: 732, y: 50 }, size: { width: 536, height: 340 } },
+          fight: { at: { x: 12, y: 12 }, size: { width: 536, height: 340 } },
           heard: { at: { x: 732, y: 532 }, size: { width: 536, height: 140 } },
           journal: { at: { x: 732, y: 680 } },
           log: { at: { x: 732, y: 700 } },
@@ -282,31 +286,41 @@ const PHONE_SECTION_PARTS: Record<PhoneSection, string[]> = {
  * the top: You (or, offline, the ways to play), the game output the
  * desk's width, and the map under it; the Journal, Log and Hooks
  * buttons on the last row. Here and the picture take the map's place,
- * Heard You's, as on the desktop. The command line and the messages are
- * the lower part's (`TABLET_LOWER`), the hint and the screen readout
+ * Heard You's, as on the desktop; The Fight comes up at the top left,
+ * over You. The small screen (`small`, an iPhone in the web build) has
+ * one row of the bar, no name, and only what fits on it. The command
+ * line and the messages are
+ * the lower part's (`tabletLower`), the hint and the screen readout
  * nowhere (`TABLET_HIDDEN`): the keyboard has the keys the hint names,
  * and a finger has no pointer to read.
  */
-function tabletLayout(theme: Theme, columns: number, rows: number, showing: Showing, onBar: (id: string) => boolean): Record<string, Usual> {
+function tabletLayout(theme: Theme, columns: number, rows: number, showing: Showing, onBar: (id: string) => boolean, small = false): Record<string, Usual> {
   const ansi = theme === "ansiapps";
   const width = columns * CELL_WIDTH;
   const height = rows * CELL_HEIGHT;
   const edge = ansi ? 0 : 8;
   const line = ansi ? 16 : 40;
   const snap = (v: number) => (ansi ? Math.floor(v / CELL_HEIGHT) * CELL_HEIGHT : Math.round(v));
-  // Each thing's room on the bar, its gap after it included.
-  const chips: [string, number][] = ansi
-    ? [["mode", 120], ["state", 240], ["hangup", 80], ["where", 112], ["mapToggle", 48], ["mixer", 64], ["bgm", 48], ["nowPlaying", 160]]
-    : [["mode", 124], ["state", 238], ["hangup", 83], ["where", 103], ["mapToggle", 56], ["mixer", 75], ["bgm", 56], ["nowPlaying", 160]];
+  // Each thing's room on the bar, its gap after it included; the small
+  // screen's words are shorter (Combat, the state's dot, Quit, Where).
+  const chips: [string, number][] = small
+    ? ansi
+      ? [["mode", 80], ["state", 16], ["hangup", 56], ["where", 64], ["mapToggle", 48], ["mixer", 64], ["bgm", 48], ["nowPlaying", 160]]
+      : [["mode", 84], ["state", 24], ["hangup", 60], ["where", 70], ["mapToggle", 56], ["mixer", 75], ["bgm", 56], ["nowPlaying", 160]]
+    : ansi
+      ? [["mode", 120], ["state", 240], ["hangup", 80], ["where", 112], ["mapToggle", 48], ["mixer", 64], ["bgm", 48], ["nowPlaying", 160]]
+      : [["mode", 124], ["state", 238], ["hangup", 83], ["where", 103], ["mapToggle", 56], ["mixer", 75], ["bgm", 56], ["nowPlaying", 160]];
   const gear = ansi ? 40 : 41;
   const layout: Record<string, Usual> = { gear: { at: { x: width - gear - edge, y: edge + (ansi ? 0 : 5) } } };
-  // Every row of the bar starts after Coupler's name.
-  const first = ansi ? 112 : 128;
+  // Every row of the bar starts after Coupler's name; the small screen's
+  // one row has no name, and what doesn't fit on it isn't on it.
+  const first = small ? edge + (ansi ? 0 : 4) : ansi ? 112 : 128;
   let x = first;
   let row = 0;
   for (const [id, room] of chips) {
     if (!onBar(id)) continue;
     if (x + room > width - gear - edge && x > first) {
+      if (small) continue;
       x = first;
       row += 1;
     }
@@ -337,7 +351,7 @@ function tabletLayout(theme: Theme, columns: number, rows: number, showing: Show
     map: lower,
     scene: lower,
     picture: { at: lower.at, size: { width: inner, height: Math.min(part, 256) } },
-    fight: { at: lower.at, size: { width: inner, height: ansi ? 304 : 340 } },
+    fight: { at: { x: edge, y: top }, size: { width: inner, height: ansi ? 304 : 340 } },
     journal: { at: { x: edge, y: bottom + (ansi ? 0 : 4) } },
     log: { at: { x: edge + (ansi ? 136 : 148), y: bottom + (ansi ? 0 : 4) } },
     hooks: { at: { x: edge + (ansi ? 272 : 296), y: bottom + (ansi ? 0 : 4) } },
@@ -345,14 +359,16 @@ function tabletLayout(theme: Theme, columns: number, rows: number, showing: Show
 }
 /**
  * The tablet's lower part (lib/stage.ts), 96 cells by 23 rows whatever
- * the tablet: the command line with the keyboard's key at its right
+ * the tablet (the small one's, the desk's columns by 20): the command line with the keyboard's key at its right
  * end, the keyboard or the controls under it, the messages at the foot.
  */
-const TABLET_LOWER: Record<string, Usual> = {
-  command: { at: { x: 0, y: 0 }, size: { width: TABLET_LOWER_WIDTH - 48, height: 48 } },
-  keyboardKey: { at: { x: TABLET_LOWER_WIDTH - 48, y: 0 }, size: { width: 48, height: 48 } },
-  messages: { at: { x: 0, y: TABLET_LOWER_HEIGHT - 32 }, size: { width: TABLET_LOWER_WIDTH, height: 32 } },
-};
+function tabletLower(width: number, height: number): Record<string, Usual> {
+  return {
+    command: { at: { x: 0, y: 0 }, size: { width: width - 48, height: 48 } },
+    keyboardKey: { at: { x: width - 48, y: 0 }, size: { width: 48, height: 48 } },
+    messages: { at: { x: 0, y: height - 32 }, size: { width, height: 32 } },
+  };
+}
 /** What the tablet never shows on its desk. */
 const TABLET_HIDDEN = new Set(["hint", "readout"]);
 
@@ -430,7 +446,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
       scene: { at: { x: 864, y: 16 }, size: { width: 416, height: 672 } },
       heard: { at: { x: 0, y: 16 }, size: { width: main, height: 192 } },
       picture: { at: { x: 864, y: 16 }, size: { width: 416, height: 256 } },
-      fight: { at: { x: 864, y: 16 }, size: { width: 416, height: 336 } },
+      fight: { at: { x: 0, y: 16 }, size: { width: 416, height: 336 } },
       vitals: { at: { x: 0, y: 16 }, size: { width: 704, height: 64 } },
     };
   }
@@ -459,7 +475,7 @@ function defaultLayout(theme: Theme, showing: Showing): Record<string, Usual> {
     scene: { at: { x: 868, y: 62 }, size: { width: 400, height: 610 } },
     heard: { at: { x: 12, y: 62 }, size: { width: main, height: 128 } },
     picture: { at: { x: 868, y: 62 }, size: { width: 400, height: 260 } },
-    fight: { at: { x: 868, y: 62 }, size: { width: 400, height: 372 } },
+    fight: { at: { x: 12, y: 62 }, size: { width: 400, height: 372 } },
     vitals: { at: { x: 12, y: 62 }, size: { width: 720, height: 66 } },
   };
 }
@@ -752,7 +768,7 @@ function App() {
   const [phone, setPhone] = useState<PhoneFit & { left: number }>(() => ({ ...phoneFit(window.innerWidth, window.innerHeight, window.innerHeight), left: 0 }));
   /** The tablet's two stages (lib/stage.ts), set from the frame once it's measured; the upper's text size the player's. */
   const [tabletText, setTabletText] = useState(loadTabletText);
-  const [tablet, setTablet] = useState<TabletFit & { x: number; y: number }>(() => ({ ...tabletFit(window.innerWidth, window.innerHeight, tabletText), x: 0, y: 0 }));
+  const [tablet, setTablet] = useState<TabletFit & { x: number; y: number }>(() => ({ ...tabletFit(window.innerWidth, window.innerHeight, tabletText, TABLET_SMALL), x: 0, y: 0 }));
   /** A text field has the focus on the tablet: its keyboard shows, not the controls. The one typed in last is where the keys go. */
   const [typing, setTyping] = useState(false);
   const lastField = useRef<Field | null>(null);
@@ -863,7 +879,7 @@ function App() {
       const frame = frameRef.current;
       if (!frame) return;
       if (TABLET_EMULATED) {
-        const { width, height } = TABLET_EMULATED_SIZE;
+        const { width, height } = TABLET_SMALL ? TABLET_SMALL_EMULATED_SIZE : TABLET_EMULATED_SIZE;
         const k = Math.min(window.innerWidth / width, window.innerHeight / height);
         Object.assign(frame.style, { inset: "auto", left: `${(window.innerWidth - width * k) / 2}px`, top: "0px", width: `${width}px`, height: `${height}px`, transform: `scale(${k})`, transformOrigin: "0 0" });
       }
@@ -871,7 +887,7 @@ function App() {
       const [x, y] = [parseFloat(style.paddingLeft), parseFloat(style.paddingTop)];
       const width = frame.clientWidth - x - parseFloat(style.paddingRight);
       const height = frame.clientHeight - y - parseFloat(style.paddingBottom);
-      const next = tabletFit(width, height, tabletText);
+      const next = tabletFit(width, height, tabletText, TABLET_SMALL);
       setTablet((was) =>
         Object.entries(next).every(([k, v]) => was[k as keyof TabletFit] === v) && was.x === x && was.y === y ? was : { ...next, x, y },
       );
@@ -1131,8 +1147,10 @@ function App() {
   const usual = PHONE
     ? phoneLayout(phone.rows, fightRows)
     : TABLET_SCREEN
-      ? { ...tabletLayout(theme, tablet.columns, tablet.rows, { map: mapOpen, connected, output: showTerminal }, onBar), ...TABLET_LOWER }
+      ? { ...tabletLayout(theme, tablet.columns, tablet.rows, { map: mapOpen, connected, output: showTerminal }, onBar, TABLET_SMALL), ...tabletLower(tablet.lowerWidth, tablet.lowerHeight) }
       : uxLayout(ux, theme, { map: mapOpen && ux === "workshop", connected, output: showTerminal }, textSize);
+  /** On the small tablet screen's one row of the bar, only what found a place on it. */
+  const onRow = (id: string) => has(id) && (!TABLET_SMALL || !!usual[id]);
   linesRef.current = lines;
   /** In Immersive, talk isn't in the game output (it's in the journal and the log, and the pop-up shows it while it's said), nor the time of day (the narrator says it). */
   /** Nor the player's prompt, once in the game: Immersive has no need of it to look at. Nor the exits: the cues play them. */
@@ -2447,7 +2465,7 @@ function App() {
         send("Help", "help"),
       ],
     ];
-    return [
+    const pad = [
       way("N", "North", 6, 0),
       way("U", "Up", 12, 0),
       way("W", "West", 0, 1),
@@ -2455,6 +2473,31 @@ function App() {
       way("E", "East", 12, 1),
       way("S", "South", 6, 2),
       way("D", "Down", 12, 2),
+    ];
+    if (TABLET_SMALL) {
+      // The small screen's controls are in the game output's text size, so
+      // fewer: the ways and four under them, then three columns of what's
+      // typed and looked at most. The rest are on the desk or in the gear menu.
+      const right: Omit<TabletControl, "column" | "row" | "id">[][] = [
+        [send("Score", "score"), send("Inv", "inventory"), send("Eq", "equipment")],
+        [rows[1][0], rows[1][1], rows[1][5]],
+        [started("Say"), started("Get"), started("Kill")],
+        [send("Flee", "flee"), started("Cast"), started("Consider")],
+        [rows[2][0], rows[2][1], send("Help", "help")],
+      ];
+      const widths = spread(tablet.columns - 18, 3);
+      const columnOf = (i: number) => 18 + widths.slice(0, i).reduce((a, b) => a + b, 0);
+      return [
+        ...pad,
+        ...right.flatMap((row, r) => row.map((c, i) => ({ ...c, id: `${r}-${i}`, column: columnOf(i), row: r, cells: widths[i] }))),
+        { id: "keyboard", label: "Keys", name: "Show the keyboard", column: 0, row: 3, cells: 9, disabled: !keysField() && !connected, onPress: raiseKeyboard },
+        { id: "recall", label: "Last ↑", name: "The last command, to send again", column: 9, row: 3, cells: 9, disabled: off, onPress: recallLast },
+        { id: "quiet", label: "Quiet", name: "Stop the sounds and the voice", column: 0, row: 4, cells: 9, onPress: stopEverything },
+        { ...rows[1][4], id: "fight", column: 9, row: 4, cells: 9 },
+      ];
+    }
+    return [
+      ...pad,
       ...rows.flatMap((row, r) => row.map((c, i) => ({ ...c, id: `${r}-${i}`, column: 24 + 12 * i, row: r, cells: 12 }))),
       { id: "keyboard", label: "Keyboard", name: "Show the keyboard", column: 0, row: 3, cells: 18, disabled: !keysField() && !connected, onPress: raiseKeyboard },
       { id: "recall", label: "Last ↑", name: "The last command, to send again", column: 0, row: 4, cells: 18, disabled: off, onPress: recallLast },
@@ -2761,7 +2804,7 @@ function App() {
         {/* The menu bar's strip, behind the things that sit on it. */}
         {has("menu") && (
         <Movable id="menu" label="menu bar" usual={usual.menu} className="menu-bar" backdrop announce={announcePanel}>
-        <h1 className="menu-app" aria-label={`Coupler ${__APP_VERSION__}`}>
+        <h1 className={`menu-app${TABLET_SMALL ? " sr-only" : ""}`} aria-label={`Coupler ${__APP_VERSION__}`}>
           <span className="app-mark" aria-hidden="true">
             <AppMarkIcon />
           </span>
@@ -2773,10 +2816,10 @@ function App() {
         )}
         {/* Combat or Explore mode, while a character is in the game (the
             map knows their room). Said by VoiceOver when it changes. */}
-        {has("mode") && connected && (snapshot?.room || opponent) && (
+        {onRow("mode") && connected && (snapshot?.room || opponent) && (
           <Movable id="mode" label="play mode" usual={usual.mode} className="menu-bar menu-chip" announce={announcePanel}>
             <span className={`play-mode${opponent ? " combat" : ""}`} data-testid="play-mode" role="status">
-              {opponent ? "Combat mode" : "Explore mode"}
+              {TABLET_SMALL ? (opponent ? "Combat" : "Explore") : opponent ? "Combat mode" : "Explore mode"}
             </span>
           </Movable>
         )}
@@ -2792,50 +2835,64 @@ function App() {
             />
           </Movable>
         )}
-        {has("state") && (
+        {onRow("state") && (
         <Movable id="state" label="connection state" usual={usual.state} className="menu-bar menu-chip" announce={announcePanel}>
+          {/* The small screen's is a dot, filled online and hollow offline
+              (never the color alone), its words for VoiceOver and the title. */}
+          {TABLET_SMALL ? (
+            <span
+              className={`connection-dot${connected ? " on" : ""}`}
+              data-testid="connection-state"
+              role="img"
+              aria-label={connected ? `Online: ${port?.name ?? host}` : "Offline"}
+              title={connected ? `Online: ${port?.name ?? host}` : "Offline"}
+            >
+              {connected ? "●" : "○"}
+            </span>
+          ) : (
           <span className={`connection-state${connected ? " on" : ""}`} data-testid="connection-state">
             {connected ? `Online: ${port?.name ?? host}` : "Offline"}
           </span>
+          )}
         </Movable>
         )}
-        {has("hangup") && connected && (
+        {onRow("hangup") && connected && (
           <Movable id="hangup" label="Hang Up button" usual={usual.hangup} className="menu-bar menu-chip" announce={announcePanel}>
-            <button type="button" className="menu-title" data-testid="disconnect-button" disabled={dialing} onClick={() => void handleDisconnect()}>
-              Hang Up
+            <button type="button" className="menu-title" data-testid="disconnect-button" aria-label={TABLET_SMALL ? "Quit: hang up" : undefined} disabled={dialing} onClick={() => void handleDisconnect()}>
+              {TABLET_SMALL ? "Quit" : "Hang Up"}
             </button>
           </Movable>
         )}
-        {has("where") && (
+        {onRow("where") && (
         <Movable id="where" label="Where am I? button" usual={usual.where} className="menu-bar menu-chip" announce={announcePanel}>
-          <button type="button" className="menu-title" data-testid="where-button" title={keys.keys("Say where you are and the exits (Cmd+Shift+L)")} onClick={whereAmI}>
-            Where am I?
+          <button type="button" className="menu-title" data-testid="where-button" aria-label={TABLET_SMALL ? "Where am I?" : undefined} title={keys.keys("Say where you are and the exits (Cmd+Shift+L)")} onClick={whereAmI}>
+            {TABLET_SMALL ? "Where" : "Where am I?"}
           </button>
         </Movable>
         )}
         {/* What music is playing, while it plays: it opens the Mixer. */}
-        {has("nowPlaying") && nowPlaying && (
+        {onRow("nowPlaying") && nowPlaying && (
           <Movable id="nowPlaying" label="music playing" usual={usual.nowPlaying} className="menu-bar menu-chip" announce={announcePanel}>
             <button type="button" className="menu-title now-playing" data-testid="now-playing" title="The music playing. Click for the Mixer" onClick={() => setMixerOpen(true)}>
               {`♪ ${nowPlaying}`}
             </button>
           </Movable>
         )}
-        {has("mapToggle") && (
+        {onRow("mapToggle") && (
         <Movable id="mapToggle" label="Map button" usual={usual.mapToggle} className="menu-bar menu-chip" announce={announcePanel}>
           <button type="button" className={`menu-title${mapOpen ? " open" : ""}`} data-testid="map-toggle" aria-pressed={mapOpen} title={keys.keys("Show or hide the map (Cmd+Shift+M)")} onClick={toggleMap}>
             Map
           </button>
         </Movable>
         )}
-        {has("mixer") && (
+        {onRow("mixer") && (
         <Movable id="mixer" label="Mixer button" usual={usual.mixer} className="menu-bar menu-chip" announce={announcePanel}>
           <button type="button" className="menu-title" data-testid="mixer-button" title="The volumes of the sounds and music" onClick={() => setMixerOpen(true)}>
             Mixer
           </button>
         </Movable>
         )}
-        {has("bgm") && (
+        {onRow("bgm") && (
         <Movable id="bgm" label="BGM button" usual={usual.bgm} className="menu-bar menu-chip" announce={announcePanel}>
           <button type="button" className="menu-title" data-testid="bgm-button" title="The Music Editor: the MIDI files in the Assets folder" onClick={() => setMusicOpen(true)}>
             BGM
@@ -2888,8 +2945,14 @@ function App() {
               )}
               {TABLET_TRYABLE && (
                 <label className="menu-item menu-item-checkbox">
-                  <input type="checkbox" data-testid="tablet-screen-toggle" checked={TABLET_SCREEN} onChange={(e) => setTabletScreen(e.currentTarget.checked)} />
+                  <input type="checkbox" data-testid="tablet-screen-toggle" checked={TABLET_SCREEN && !TABLET_SMALL} onChange={(e) => setTabletScreen(e.currentTarget.checked)} />
                   <span>Tablet Screen, for Testing (starts again)</span>
+                </label>
+              )}
+              {TABLET_TRYABLE && (
+                <label className="menu-item menu-item-checkbox">
+                  <input type="checkbox" data-testid="tablet-small-toggle" checked={TABLET_SMALL} onChange={(e) => setTabletScreen(e.currentTarget.checked && "iphone")} />
+                  <span>iPhone Web Screen, for Testing (starts again)</span>
                 </label>
               )}
               {/* The tablet's text size: the upper desk's cells (lib/tablet.ts). */}
@@ -3462,7 +3525,7 @@ function App() {
 
         {ux !== "immersive" && has("vitals") && connected && (
           <Movable id="vitals" label="You panel" usual={usual.vitals} least={VITALS_LEAST} tier={1} announce={announcePanel}>
-            <VitalsPanel vitals={vitals} opponent={opponent} />
+            <VitalsPanel vitals={vitals} opponent={opponent} compact={TABLET_SMALL} />
           </Movable>
         )}
 
@@ -3839,7 +3902,7 @@ function App() {
       <div
         className="client tablet-lower"
         data-testid="tablet-lower"
-        style={{ left: tablet.x, top: tablet.y + tablet.lowerTop, width: TABLET_LOWER_WIDTH, height: TABLET_LOWER_HEIGHT, transform: `scale(${tablet.lowerScale})` }}
+        style={{ left: tablet.x + tablet.lowerLeft, top: tablet.y + tablet.lowerTop, width: tablet.lowerWidth, height: tablet.lowerHeight, transform: `scale(${tablet.lowerScale})` }}
       >
         {commandLine}
         <Movable fixed id="keyboardKey" tier={2} label="keyboard key" usual={usual.keyboardKey} className="tablet-keyboard-key">
@@ -3856,8 +3919,16 @@ function App() {
             {typing ? "▼" : "▲"}
           </button>
         </Movable>
-        <div className="tablet-input">
-          {typing ? <TabletKeyboard field={keysField} onHide={() => (document.activeElement as HTMLElement | null)?.blur()} /> : <TabletControls controls={tabletControls()} />}
+        <div className="tablet-input" style={TABLET_SMALL ? { width: tablet.lowerWidth, height: tablet.lowerHeight - 80 } : undefined}>
+          {typing ? (
+            TABLET_SMALL ? (
+              <SmallKeyboard field={keysField} columns={tablet.columns} />
+            ) : (
+              <TabletKeyboard field={keysField} onHide={() => (document.activeElement as HTMLElement | null)?.blur()} />
+            )
+          ) : (
+            <TabletControls controls={tabletControls()} width={TABLET_SMALL ? tablet.lowerWidth : undefined} rows={TABLET_SMALL ? 5 : undefined} />
+          )}
         </div>
         {messageBar}
       </div>

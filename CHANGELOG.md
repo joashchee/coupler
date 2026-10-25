@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **The iPhone's web screen, made for its size** (2026-10-25): in the
+  web build on an iPhone the menu bar is one row (no icon or name;
+  Explore or Combat, a dot for online or offline, Quit, Where, Map,
+  Mixer), Choose how to play is one column, and You reads HP, MN and MV
+  with bars five characters wide, each character a quarter step. The
+  lower part is now in the game output's own text size: Coupler's
+  phone keyboard (numbers, three rows of letters with Backspace, Shift,
+  the arrows and Return, then Esc, Ctrl, Opt, Cmd, Space and the
+  command prefix), whose keys show bigger above the finger and type on
+  lifting it, so a finger can slide to the right key; and fewer touch
+  controls, the size of the text. The dev build tries it from the gear
+  menu (iPhone Web Screen, for Testing). The phone app's Choose how to
+  play is one column too.
+- **The Fight at the top left** (2026-10-25): in every way to play, and
+  on the tablet, The Fight now comes up at the screen's top left.
+
 ## 0.41.0 (2026-10-24)
 
 - **Faces in The Fight on the iPhone** (2026-10-24): the strip above

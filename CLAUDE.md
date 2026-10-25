@@ -170,7 +170,10 @@ roadmap's phase 2.
   `lib/softKeys.ts`) or the touch controls (`TabletControls.tsx`), the
   messages. Fields get `inputmode="none"`; no zoom; upright only
   (`src/tablet.css`). `coupler.tablet` = `on` tries it on the dev Mac
-  build.
+  build. **`TABLET_SMALL`** (the web build's iPhone; `coupler.tablet` =
+  `iphone` in dev): the lower part in the desk's own cells, its keyboard
+  `SmallKeyboard.tsx` (`smallKeyRows`), fewer controls, a one-row bar
+  (`html[data-size="small"]`).
 - **Anything new says whether the phone and the tablet have it.**
 - **Name**: 7 characters (DOS 8.3), unused by any well-known DOS program.
 - **Before any commit and push**, check for security issues: paths

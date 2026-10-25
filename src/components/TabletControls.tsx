@@ -16,7 +16,7 @@ export interface TabletControl {
   label: string;
   /** What VoiceOver says: "North, an exit". */
   name: string;
-  /** Its column (0 to 95) and row of keys (0 to 5). */
+  /** Its column (0 to 95) and row of keys (0 to 5; the small screen's, its columns and 0 to 4). */
   column: number;
   row: number;
   /** Cells wide; 6 when left out. */
@@ -28,11 +28,14 @@ export interface TabletControl {
 
 interface TabletControlsProps {
   controls: TabletControl[];
+  /** The small tablet screen's: its width in pixels and its rows of keys (96 cells by 6 when left out). */
+  width?: number;
+  rows?: number;
 }
 
-export function TabletControls({ controls }: TabletControlsProps) {
+export function TabletControls({ controls, width, rows }: TabletControlsProps) {
   return (
-    <div className="tablet-controls" role="group" aria-label="Controls" data-testid="tablet-controls">
+    <div className="tablet-controls" role="group" aria-label="Controls" data-testid="tablet-controls" style={width ? { width, height: (rows ?? 6) * 48 } : undefined}>
       {controls.map((c) => {
         const cells = c.cells ?? 6;
         const left = Math.max(0, Math.floor((cells - c.label.length) / 2)) * 8;

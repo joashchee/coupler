@@ -1017,3 +1017,15 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 .dialog-box .music-cell.chosen { background: #ffff55; color: #000000; }
 .dialog-box .music-cell.here { outline: 2px dashed #aaaaaa; outline-offset: -2px; }
 .dialog-box .music-cell:focus-visible { outline: 2px dashed #ffffff; outline-offset: 0; }
+
+/* Choose how to play on a screen 48 columns wide (the phone, and the
+   small tablet screen: an iPhone in the web build): one column, each
+   choice on its row and what it is under it. */
+html[data-form="phone"] .port-list li,
+html[data-form="phone"] .tutorial-offer,
+html[data-size="small"] .port-list li,
+html[data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
+:root[data-theme="ansiapps"][data-form="phone"] .port-list li,
+:root[data-theme="ansiapps"][data-form="phone"] .tutorial-offer,
+:root[data-theme="ansiapps"][data-size="small"] .port-list li,
+:root[data-theme="ansiapps"][data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
