@@ -3,7 +3,8 @@
  * (AnsiPicture.tsx). Clicking it closes it. With a fade (the trigger's
  * ART Fade, in seconds) it fades away once that's passed, and is gone;
  * the same trigger going off again starts the wait over (`shownAt`).
- * With 0 it stays until it's clicked away or replaced.
+ * With 0 it stays until it's clicked away or replaced. An ANSImation
+ * plays again each time its trigger goes off.
  */
 import * as keys from "../lib/keys";
 import { useEffect, useState, type CSSProperties } from "react";
@@ -46,7 +47,8 @@ export function HookPicture({ picture, name, style, fade, shownAt, onClose }: Ho
 
   const className = fading ? "hook-picture-fading" : undefined;
   return "art" in picture ? (
-    <AnsiPicture art={picture.art} name={name} style={style} className={className} onClick={onClose} />
+    // A new key each time its trigger goes off: an ANSImation plays again.
+    <AnsiPicture key={shownAt} art={picture.art} name={name} style={style} className={className} onClick={onClose} />
   ) : (
     <img
       className={`hook-picture${className ? ` ${className}` : ""}`}

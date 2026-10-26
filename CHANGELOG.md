@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **ANSImations play** (2026-10-26): an ANSI art file that draws over
+  what it drew (the animations of the BBS days) plays as a trigger's
+  picture the way a 14,400 bps modem showed it, then stays as the
+  finished picture; a long one is sped up to fit two minutes, and a
+  step that changes most of the picture flashes no more than three
+  times a second. Before, only its last frame showed. Still pictures
+  show at once as before; with reduced motion so does every one. Both
+  builds, the phone and the tablet.
+
 ## 0.48.0 (2026-10-26)
 
 - **Sound comes back after the narrator on the iPad** (2026-10-26): in

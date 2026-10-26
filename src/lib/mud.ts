@@ -1286,6 +1286,15 @@ export interface AnsiArt {
   columns: number;
   rows: number;
   lines: Line[];
+  /** An ANSImation's steps, from a blank picture to `lines` (only from `assetAnsi`; none for a still picture). */
+  play?: AnsiStep[];
+}
+
+/** One step of an ANSImation (src-tauri/src/ansi_art.rs `Step`): the rows that changed, `at` ms from the start, on a blank picture when `clear`. */
+export interface AnsiStep {
+  at: number;
+  clear: boolean;
+  rows: [number, Line][];
 }
 
 /** The room as a picture sees it (src-tauri/src/paint.rs): the game's own words about it, and Coupler's weather and time. */

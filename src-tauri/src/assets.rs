@@ -466,16 +466,6 @@ pub fn picture(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     std::fs::read(file).map_err(|e| format!("{path} couldn't be read. ({e})"))
 }
 
-/// ANSI art, drawn into styled rows of characters.
-pub fn ansi(root: &Path, path: &str) -> Result<crate::ansi_art::Art, String> {
-    let file = resolve(root, path)?;
-    if !is_ansi(path) {
-        return Err(format!("{path} isn't ANSI art."));
-    }
-    let bytes = std::fs::read(file).map_err(|e| format!("{path} couldn't be read. ({e})"))?;
-    Ok(crate::ansi_art::render(&bytes))
-}
-
 /// Where a made picture's other colors wait (`keep_colors`).
 const COLORS: &str = ".colors";
 
@@ -540,24 +530,24 @@ fn take_of(path: &str) -> u32 {
 
 /// An ANSI art asset in the game's `colors`: a made picture's own
 /// painting in them (painted now, if it wasn't yet), else the file as
-/// it is.
-pub fn ansi_in(root: &Path, path: &str, colors: crate::paint::Colors) -> Result<crate::ansi_art::Art, String> {
+/// it is; with its steps if it's an ANSImation (`ansi_art::show`).
+pub fn ansi_in(root: &Path, path: &str, colors: crate::paint::Colors) -> Result<crate::ansi_art::Shown, String> {
     let file = resolve(root, path)?;
     if !is_ansi(path) {
         return Err(format!("{path} isn't ANSI art."));
     }
     let bytes = std::fs::read(file).map_err(|e| format!("{path} couldn't be read. ({e})"))?;
     if colors == crate::paint::Colors::Sixteen {
-        return Ok(crate::ansi_art::render(&bytes));
+        return Ok(crate::ansi_art::show(&bytes));
     }
     let Some((title, columns, rows)) = crate::create::recipe_in(&bytes) else {
-        return Ok(crate::ansi_art::render(&bytes));
+        return Ok(crate::ansi_art::show(&bytes));
     };
     let hash = hash_of(&bytes);
     let kept: Option<Painted> = std::fs::read(colors_file(root, path, "json")).ok().and_then(|b| serde_json::from_slice(&b).ok());
     if kept.as_ref().is_some_and(|k| k.of == hash) {
         if let Ok(other) = std::fs::read(colors_file(root, path, colors_suffix(colors))) {
-            return Ok(crate::ansi_art::render(&other));
+            return Ok(crate::ansi_art::show(&other));
         }
     }
     // Painted again only when the words give back this very file: the same picture.
@@ -570,9 +560,9 @@ pub fn ansi_in(root: &Path, path: &str, colors: crate::paint::Colors) -> Result<
         // Kept for next time; shown even if it can't be kept.
         let _ = keep_colors(root, path, &prompt, take, &paintings);
         let wanted = paintings.iter().find(|(c, _)| *c == colors).map_or(&bytes, |(_, b)| b);
-        return Ok(crate::ansi_art::render(wanted));
+        return Ok(crate::ansi_art::show(wanted));
     }
-    Ok(crate::ansi_art::render(&bytes))
+    Ok(crate::ansi_art::show(&bytes))
 }
 
 fn folder_of(path: &str) -> &str {
@@ -1091,24 +1081,24 @@ mod tests {
         let (take, paintings) = kept.unwrap();
         keep_colors(&root.0, &asset.path, "a forest at dawn", take, &paintings).unwrap();
         for (colors, bytes) in &paintings {
-            assert_eq!(ansi_in(&root.0, &asset.path, *colors).unwrap(), crate::ansi_art::render(bytes));
+            assert_eq!(ansi_in(&root.0, &asset.path, *colors).unwrap(), crate::ansi_art::show(bytes));
         }
         // The other colors are never listed.
         assert_eq!(list(&root.0).len(), 1);
         // Made before (only the 16's, a second take): painted again when asked.
         let older = made(1);
         std::fs::write(root.0.join("ans/a forest at dawn (2).ans"), &older[0].1).unwrap();
-        assert_eq!(ansi_in(&root.0, "ans/a forest at dawn (2).ans", Colors::True).unwrap(), crate::ansi_art::render(&older[2].1));
+        assert_eq!(ansi_in(&root.0, "ans/a forest at dawn (2).ans", Colors::True).unwrap(), crate::ansi_art::show(&older[2].1));
         assert!(colors_file(&root.0, "ans/a forest at dawn (2).ans", "256").is_file());
         // The file changed: its old colors aren't it any more, so it's shown as it is.
         let other = crate::create::paintings("the sea at night", 0, 40, 12);
         let mut changed = other[0].1.clone();
         changed.splice(0..0, *b"\x1b[0m");
         std::fs::write(root.0.join(&asset.path), &changed).unwrap();
-        assert_eq!(ansi_in(&root.0, &asset.path, Colors::More).unwrap(), crate::ansi_art::render(&changed));
+        assert_eq!(ansi_in(&root.0, &asset.path, Colors::More).unwrap(), crate::ansi_art::show(&changed));
         // Art Coupler didn't paint is as it is.
         std::fs::write(root.0.join("ans/gate.ans"), b"\x1b[1;33mA gate\x1b[0m\r\n").unwrap();
-        assert_eq!(ansi_in(&root.0, "ans/gate.ans", Colors::True).unwrap(), crate::ansi_art::render(b"\x1b[1;33mA gate\x1b[0m\r\n"));
+        assert_eq!(ansi_in(&root.0, "ans/gate.ans", Colors::True).unwrap(), crate::ansi_art::show(b"\x1b[1;33mA gate\x1b[0m\r\n"));
     }
 
 }

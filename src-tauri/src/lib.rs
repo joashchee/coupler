@@ -778,9 +778,9 @@ fn soundbank_defaults(app: AppHandle, sounds: State<'_, soundbank::Sounds>, sess
     }
 }
 
-/// An ANSI art asset, drawn into rows of styled characters.
+/// An ANSI art asset, drawn into rows of styled characters, with its steps if it's an ANSImation.
 #[tauri::command]
-fn asset_ansi(app: AppHandle, path: String, colors: Option<paint::Colors>) -> Result<ansi_art::Art, String> {
+fn asset_ansi(app: AppHandle, path: String, colors: Option<paint::Colors>) -> Result<ansi_art::Shown, String> {
     assets::ansi_in(&assets_dir(&app)?, &path, colors.unwrap_or_default())
 }
 
