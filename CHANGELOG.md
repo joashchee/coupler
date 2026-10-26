@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.44.0 (2026-10-26)
 
 - **The game's sound ducks under a voice** (2026-10-26): while the
   narrator or a character speaks, sound effects, music, the place's
