@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.49.1 (2026-10-27)
 
 - **The Fight's room in the game's colors** (2026-10-27): with ANSI 256
   or ANSI TRUE on, the room behind the two faces in The Fight, and the

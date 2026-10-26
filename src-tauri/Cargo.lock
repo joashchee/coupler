@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "coupler"
-version = "0.49.0"
+version = "0.49.1"
 dependencies = [
  "brotli",
  "flate2",
