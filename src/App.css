@@ -1037,3 +1037,8 @@ html[data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
 :root[data-theme="ansiapps"][data-form="phone"] .tutorial-offer,
 :root[data-theme="ansiapps"][data-size="small"] .port-list li,
 :root[data-theme="ansiapps"][data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
+
+/* gear → Pictures…: the game's colors now (PicturesDialog's PaletteBadge). */
+.palette-badge { display: flex; align-items: stretch; height: 16px; margin: 0 0 16px; }
+.palette-badge-name { padding: 0 8px; background: #000000; color: #ffff55; line-height: 16px; white-space: pre; }
+.palette-badge-swatch { width: 128px; background-color: #000000; background-repeat: no-repeat; background-size: 100% 8px; background-position: left top, left bottom; }

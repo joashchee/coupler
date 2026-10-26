@@ -1408,7 +1408,7 @@ const BASE16 = [
 const DEFAULT_FG = "#aaaaaa";
 const DEFAULT_BG = "transparent";
 
-function indexColor(i: number): string {
+export function indexColor(i: number): string {
   if (i < 16) return BASE16[i];
   if (i < 232) {
     const n = i - 16;

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **The game's colors as a badge** (2026-10-26): gear → Pictures… opens
+  with a badge saying ANSI 16, ANSI 256 or ANSI TRUE beside a strip of
+  those colors: the 16's eight and bright eight, the 256's cube steps
+  and grays, true color's smooth rainbow and gray. It changes as soon as
+  the game does. The words under it say the same for screen readers.
+  Both builds, the phone and the tablet.
+
 ## 0.46.0 (2026-10-26)
 
 - **Aliases work as soon as you're in the game** (2026-10-26): an alias
