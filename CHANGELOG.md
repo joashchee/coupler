@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.48.0 (2026-10-26)
 
 - **Sound comes back after the narrator on the iPad** (2026-10-26): in
   the web build on an iPad, the loops, music and sound effects could go
