@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.45.0 (2026-10-26)
 
 - **Open and Close on the tablet's pad** (2026-10-26): the two empty
   corners at the pad's left are Open (top) and Close (bottom). Press
