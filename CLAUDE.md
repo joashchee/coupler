@@ -107,6 +107,17 @@ roadmap's phase 2.
     (CoffeeMUD's pictures, a brought model) are the player's choice in
     gear → Pictures…, never the default. New picture work starts in the
     painter.
+12. **Sound and pictures never break** (decided 2026-10-26). Audio and
+    visuals are of paramount importance. Any change touching them (the
+    buses and the `AudioContext` in `lib/assets.ts`, loops, music,
+    SFX, cues, the narrator and voices in `lib/voice.ts`, speech,
+    captions, the painter, ANSI art, `lib/palette.ts`) is tested
+    against breaking every existing sound and picture it could reach
+    before it's called done: list what it reaches, run their tests and
+    add one for any regression, think through the desktop, the web
+    build (Safari on the iPhone too) and the phone, and add App Testing
+    items saying what to hear and see. Say plainly what couldn't be
+    tested.
 
 ## ansiapps conventions (shared with Diskette, Crunchy, Floppy, Stylus)
 

@@ -43,6 +43,14 @@ The full list is in `CLAUDE.md`. The ones most often missed:
 9. **Pictures are Coupler's painter's first** (`painter.rs`,
    `portrait.rs`). Other sources are the player's choice, never the
    default.
+10. **Sound and pictures never break.** What players hear and see is
+    the heart of Coupler. A change that touches any of it (the buses,
+    loops, music, cues, the narrator and the voices, captions, the
+    painter, ANSI art, the pictures' colors, the Web Audio context or
+    speech) is checked against every existing sound and picture it
+    could reach, in each build it runs in, before it's done: the tests
+    for them pass, a regression found gets a test, and the App Testing
+    checklist says what to hear and see.
 
 ## Before you open a pull request
 

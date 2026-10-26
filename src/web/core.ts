@@ -481,8 +481,12 @@ async function answer(x: Exports, cmd: string, args: Args): Promise<unknown> {
       return (await mirrored(String(args.path), Boolean(args.looping))).arrayBuffer();
     case "asset_picture":
       return (await mirrored(String(args.path))).arrayBuffer();
-    case "asset_ansi":
-      return (await mirrored(String(args.path))).json();
+    case "asset_ansi": {
+      // In the game's colors, as the mirror drew them (examples/web_mirror.rs): the 16's when there's no other.
+      const path = String(args.path);
+      const colors = String(args.colors ?? "16");
+      return (await mirrored(colors !== "16" && mirrorFiles[`${path}#${colors}`] ? `${path}#${colors}` : path)).json();
+    }
     case "assets_list":
       return { assets: [], cleared: [] };
     case "soundbank_list":

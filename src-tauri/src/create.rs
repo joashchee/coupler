@@ -15,10 +15,19 @@
 //! colors (the 16 VGA colors, bright ones as 90-97 and 100-107), the
 //! kind `ansi_art.rs` reads back cell for cell, with a SAUCE record
 //! giving its width so a row that fills it doesn't wrap.
+//!
+//! **In each of the game's colors** (decided 2026-10-26). A picture is
+//! painted three times, in the 16, in 256 and in true color
+//! (`paint::Colors`, `paintings`): the 16's is the file, the asset any
+//! ANSI art viewer reads; the others are kept beside it by
+//! `assets::keep_colors`, and the one shown follows the game's colors.
+//! A picture made before that is painted again in the others once
+//! asked for, if its SAUCE record (`recipe_in`) gives back the very
+//! file (`made_from`): the same picture, in more colors, or none.
 
 use crate::ansi::Color;
 use crate::ansi_art::Art;
-use crate::paint::{Scene, Style};
+use crate::paint::{Colors, Scene, Style};
 
 /// Terrain words, the painter's terrains (`ambient.rs`'s), and the name said.
 const TERRAINS: [(&[&str], &str, &str); 21] = [
@@ -184,6 +193,33 @@ fn sauce(title: &str, columns: usize, rows: usize) -> Vec<u8> {
     record
 }
 
+/// What Coupler's painter wrote in a picture's SAUCE record: its words
+/// (as many as the title holds), columns and rows. None for a file
+/// it didn't paint.
+pub fn recipe_in(bytes: &[u8]) -> Option<(String, usize, usize)> {
+    let record = bytes.get(bytes.len().checked_sub(128)?..)?;
+    if !record.starts_with(b"SAUCE00") || record[42..62].trim_ascii_end() != b"Coupler's painter" {
+        return None;
+    }
+    let title = String::from_utf8_lossy(record[7..42].trim_ascii_end()).into_owned();
+    let columns = usize::from(u16::from_le_bytes([record[96], record[97]]));
+    let rows = usize::from(u16::from_le_bytes([record[98], record[99]]));
+    (columns > 0 && rows > 0).then_some((title, columns, rows))
+}
+
+/// The picture the words paint, as a file in each of the game's colors, the 16 first.
+pub fn paintings(prompt: &str, take: u32, columns: usize, rows: usize) -> [(Colors, Vec<u8>); 3] {
+    let (scene, style, _) = scene_from(prompt, take);
+    [Colors::Sixteen, Colors::More, Colors::True].map(|colors| (colors, to_ansi(&crate::painter::paint(&scene, style, columns, rows, take, colors), prompt)))
+}
+
+/// Whether a file is, byte for byte, the 16 colors' painting of these
+/// words: then its other colors are the same picture.
+pub fn made_from(bytes: &[u8], prompt: &str, take: u32, columns: usize, rows: usize) -> bool {
+    let (scene, style, _) = scene_from(prompt, take);
+    to_ansi(&crate::painter::paint(&scene, style, columns, rows, take, Colors::Sixteen), prompt) == bytes
+}
+
 /// A file name from the words: letters, digits, spaces, hyphens and
 /// apostrophes, at most 40 characters cut at a word, or `fallback`.
 pub fn file_stem(prompt: &str, fallback: &str) -> String {
@@ -241,6 +277,27 @@ mod tests {
             .iter()
             .map(|line| line.iter().flat_map(|s| s.text.chars().map(move |c| (c, s.style.bg, if c == ' ' { None } else { s.style.fg }))).collect())
             .collect()
+    }
+
+    #[test]
+    fn a_painting_tells_its_words_and_is_painted_again_in_more_colors() {
+        let [(_, sixteen), (_, more), (_, truecolor)] = paintings("a forest at dawn", 2, 40, 12);
+        assert_eq!(recipe_in(&sixteen), Some(("a forest at dawn".to_string(), 40, 12)));
+        assert!(made_from(&sixteen, "a forest at dawn", 2, 40, 12));
+        // Another take, other words, or a changed file isn't the same picture.
+        assert!(!made_from(&sixteen, "a forest at dawn", 0, 40, 12));
+        assert!(!made_from(&sixteen, "a forest at dusk", 2, 40, 12));
+        let mut changed = sixteen.clone();
+        changed[10] ^= 1;
+        assert!(!made_from(&changed, "a forest at dawn", 2, 40, 12));
+        // The more colors' are the same size, in their own colors.
+        for other in [&more, &truecolor] {
+            let art = crate::ansi_art::render(other);
+            assert_eq!((art.columns, art.rows), (40, 12));
+        }
+        assert_ne!(sixteen, truecolor);
+        // A file the painter didn't write has no recipe.
+        assert_eq!(recipe_in(b"\x1b[1;33mA gate\x1b[0m\r\n"), None);
     }
 
     #[test]

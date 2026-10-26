@@ -22,7 +22,8 @@
 //!   first the way the desktop plays them: Ogg, WavPack, MIDI through the
 //!   first SoundFont, tracker modules), MP3 as it is; PNG and JPEG as
 //!   they are; ANSI art drawn here (`ansi_art.rs`) into the JSON the
-//!   view shows, so the web build carries no ANSI art reader. MIDI is
+//!   view shows, so the web build carries no ANSI art reader, in each
+//!   of the game's colors (`#256`, `#true`; `assets::ansi_in`). MIDI is
 //!   rendered twice when a trigger loops it and another doesn't (`#loop`).
 //!   CoffeeMUD's sounds (`bank/…`, `soundbank.rs`), which the web build
 //!   hasn't, are rendered from this checkout's coffeemud.sf2
@@ -44,7 +45,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use coupler_lib::{assets, codecs, hooks::Hooks, soundbank, trigger::Trigger};
+use coupler_lib::{assets, codecs, hooks::Hooks, paint, soundbank, trigger::Trigger};
 use serde_json::json;
 
 /// Keys whose values can be a person's name or their words.
@@ -182,8 +183,13 @@ fn run() -> Result<(), String> {
             }
             match assets::kind_of(folder) {
                 Some(assets::Kind::Art) if assets::is_ansi(path) => {
-                    let art = assets::ansi(&root, path)?;
-                    Ok(vec![(path.clone(), write(&serde_json::to_vec(&art).map_err(|e| e.to_string())?, "json")?)])
+                    // In each of the game's colors (assets::ansi_in): the 16's as the path, the others as `path#256`, `path#true`.
+                    let mut out = Vec::new();
+                    for (colors, key) in [(paint::Colors::Sixteen, path.clone()), (paint::Colors::More, format!("{path}#256")), (paint::Colors::True, format!("{path}#true"))] {
+                        let art = assets::ansi_in(&root, path, colors)?;
+                        out.push((key, write(&serde_json::to_vec(&art).map_err(|e| e.to_string())?, "json")?));
+                    }
+                    Ok(out)
                 }
                 Some(assets::Kind::Art) => {
                     let ext = if folder == "png" { "png" } else { "jpg" };

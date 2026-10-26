@@ -34,7 +34,7 @@ import { FightPanel } from "./components/FightPanel";
 import { VitalsPanel } from "./components/VitalsPanel";
 import { PicturesDialog } from "./components/PicturesDialog";
 import { loadPictures, pictureShows, savePictures, type PictureSettings } from "./lib/pictures";
-import { followGamePalette } from "./lib/palette";
+import { followGamePalette, usePalette } from "./lib/palette";
 import { BestiaryDialog } from "./components/BestiaryDialog";
 import { CombatSummaryDialog } from "./components/CombatSummaryDialog";
 import { CastDialog } from "./components/CastDialog";
@@ -62,7 +62,7 @@ import * as mud from "./lib/mud";
 import * as updates from "./lib/updates";
 import { checkGrid, installRowSnap } from "./lib/grid";
 import { loadDisplay, saveDisplay, type Display, type TextSize } from "./lib/display";
-import { loadSpoken, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
+import { loadPregameNarrator, loadSpoken, savePregameNarrator, saveSpoken, type Spoken, type SpokenKind } from "./lib/speech";
 import { forgetLayout, layoutText } from "./lib/layout";
 import { CELL_HEIGHT, CELL_WIDTH, PHONE_WIDTH, phoneFit, stageScale, TABLET_EMULATED_SIZE, TABLET_SMALL_EMULATED_SIZE, tabletFit, type PhoneFit, type TabletFit } from "./lib/stage";
 import { PHONE, PHONE_EMULATED, PHONE_TRYABLE, setPhoneScreen, setTabletScreen, TABLET_EMULATED, TABLET_SCREEN, TABLET_SMALL, TABLET_TRYABLE } from "./lib/formFactor";
@@ -623,6 +623,8 @@ function App() {
   /** Checking for a newer Coupler by itself (lib/updates.ts), off until turned on; and the newer version found, offered in the gear menu. */
   const [autoUpdates, setAutoUpdates] = useState(updates.loadAuto);
   const [newRelease, setNewRelease] = useState<string | null>(null);
+  /** A newer Coupler was just found: said in a dialog, never only in the status bar. */
+  const [releaseFound, setReleaseFound] = useState<updates.UpdateCheck | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(() => stored(MAP_KEY) !== "off");
   /** Terminal's Control Panel: what shows beside the game output, and whether it's being arranged (lib/controlPanel.ts). */
@@ -655,6 +657,8 @@ function App() {
   const [artisanOpen, setArtisanOpen] = useState(false);
   /** Which kinds of line the screen reader is given (lib/speech.ts), and the Speech dialog. */
   const [spoken, setSpoken] = useState<Spoken>(loadSpoken);
+  /** The narrator before a character's in the game: off unless the player turns it on (lib/speech.ts). */
+  const [pregameNarrator, setPregameNarrator] = useState(loadPregameNarrator);
   const [speechOpen, setSpeechOpen] = useState(false);
   /** Before You Play: the practice game that teaches Immersive (components/TutorialDialog.tsx). */
   const [tutorialOpen, setTutorialOpen] = useState(false);
@@ -719,7 +723,13 @@ function App() {
    * the one override.
    */
   const cues = ux === "workshop" ? layers.cues : true;
-  const voiced = ux === "workshop" ? layers.voice : true;
+  /**
+   * Before a character's in the game (the launch screen, the login, the
+   * account menu, making a character) the narrator is quiet unless the
+   * player turned it on there: the screen reader is given all of it.
+   */
+  const narratorNow = inGame || pregameNarrator;
+  const voiced = (ux === "workshop" ? layers.voice : true) && narratorNow;
   /** The first line of output after the last command sent, for Cmd+Shift+O. */
   const sentAt = useRef(0);
   const linesRef = useRef<TermLine[]>([]);
@@ -751,7 +761,7 @@ function App() {
    * closing: wherever the voice is on, and in Workshop whatever its voice
    * layer, since the player asked or must know.
    */
-  const narrated = voiced || ux === "workshop";
+  const narrated = voiced || (ux === "workshop" && narratorNow);
   const narratedRef = useRef(narrated);
   narratedRef.current = narrated;
   const cuesRef = useRef(cues);
@@ -1208,7 +1218,15 @@ function App() {
     void Promise.all([mud.launchCounts(portId ?? "standard").catch(() => null), release]).then(([counts, found]) => {
       const newer = found?.newer ? updates.describe(found) : null;
       if (found?.newer) setNewRelease(found.latest);
-      if (connectedRef.current) return;
+      if (connectedRef.current) {
+        // Not a dialog over the login: the status bar (an alert, read and said) and the gear menu.
+        if (newer) {
+          setStatus(newer);
+          if (voicedRef.current) voice.speak(newer);
+        }
+        return;
+      }
+      if (found?.newer) setReleaseFound(found);
       const text = [counts && mud.describeLaunchCounts(counts), newer].filter(Boolean).join(" ");
       if (text) setStatus(text);
       // Another CoffeeMUD than the one Coupler was made for: a warning
@@ -1229,6 +1247,8 @@ function App() {
       setNewRelease(found.newer ? found.latest : null);
       const text = updates.describe(found);
       setStatus(text);
+      // A newer one found is a dialog: it can't be missed, and it offers the page.
+      if (found.newer) setReleaseFound(found);
       if (voicedRef.current) voice.speak(text);
     } catch (e) {
       setError(String(e));
@@ -1930,6 +1950,17 @@ function App() {
   const [restoring, setRestoring] = useState(false);
   const picturesRef = useRef(pictures);
   picturesRef.current = pictures;
+  // The game's colors changed: the ANSI art showing is shown in them (a picture Coupler's painter made, in its own painting of them).
+  const gameColors = usePalette();
+  useEffect(() => {
+    for (const p of picturesRef.current) {
+      if (!("art" in p)) continue;
+      sound
+        .picture(p.path)
+        .then((ready) => setPictures((list) => list.map((q) => (q.id === p.id && "art" in ready ? { ...q, art: ready.art } : q))))
+        .catch(() => {});
+    }
+  }, [gameColors]);
   /** Each failure is said once a run: a broken trigger goes off in every room. */
   const saidFailures = useRef(new Set<string>());
 
@@ -2291,10 +2322,11 @@ function App() {
 
   useEffect(() => {
     const unlisten = mud.onHookFired(onFired);
-    // WebKit only lets sound start once the page has been used.
+    // WebKit only lets sound start once the page has been used, and iOS's
+    // stops it again for speech: every key or touch starts it if it's stopped.
     const wake = () => sound.wakeAudio();
-    document.addEventListener("pointerdown", wake, { once: true });
-    document.addEventListener("keydown", wake, { once: true });
+    document.addEventListener("pointerdown", wake);
+    document.addEventListener("keydown", wake);
     return () => {
       void unlisten.then((f) => f());
       document.removeEventListener("pointerdown", wake);
@@ -3729,6 +3761,40 @@ function App() {
       </Dialog>
 
       <Dialog
+        open={releaseFound !== null}
+        onClose={() => setReleaseFound(null)}
+        title={releaseFound ? `Coupler ${releaseFound.latest} is out` : "A newer Coupler is out"}
+        actions={
+          <>
+            <button type="button" onClick={() => setReleaseFound(null)}>
+              Not Now
+            </button>
+            <button
+              type="button"
+              className="primary"
+              data-testid="update-found-get"
+              onClick={() => {
+                const latest = releaseFound?.latest;
+                setReleaseFound(null);
+                updates
+                  .openPage()
+                  .then(() => setStatus(`Coupler ${latest}'s page is open in your browser.`))
+                  .catch((e) => setError(String(e)));
+              }}
+            >
+              Get It… (opens the browser)
+            </button>
+          </>
+        }
+      >
+        <p data-testid="update-found">
+          {releaseFound
+            ? `A newer Coupler is out: ${releaseFound.latest}. This is ${releaseFound.current}. Get It opens its page in your browser, to download it. Later, Get Coupler ${releaseFound.latest} in the gear menu does the same.`
+            : ""}
+        </p>
+      </Dialog>
+
+      <Dialog
         open={usualLayoutOpen}
         onClose={() => setUsualLayoutOpen(false)}
         title="Reset to the default layout?"
@@ -3801,6 +3867,11 @@ function App() {
         onSpoken={(next) => {
           setSpoken(next);
           saveSpoken(next);
+        }}
+        pregameNarrator={pregameNarrator}
+        onPregameNarrator={(on) => {
+          setPregameNarrator(on);
+          savePregameNarrator(on);
         }}
       />
 

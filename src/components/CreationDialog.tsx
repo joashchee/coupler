@@ -27,7 +27,7 @@ import * as creation from "../lib/creation";
 import * as creationArt from "../lib/creationArt";
 import * as earcons from "../lib/earcons";
 import * as mud from "../lib/mud";
-import { palette } from "../lib/palette";
+import { palette, usePalette } from "../lib/palette";
 import { spanColors, type CreationChoice, type CreationStats, type CreationStep, type Line } from "../lib/mud";
 import type { PortraitSource } from "../lib/pictures";
 import * as voice from "../lib/voice";
@@ -434,6 +434,8 @@ function paintedPortrait(kind: "race" | "class", name: string): Promise<mud.Ansi
  */
 function Portrait({ kind, name, source, coffeemud }: { kind: "race" | "class"; name: string; source: PortraitSource; coffeemud: creationArt.Portrait["art"] | null }) {
   const [art, setArt] = useState<{ columns: number; lines: Line[] } | null>(null);
+  /** The game's colors: painted again when they change. */
+  const colors = usePalette();
   useEffect(() => {
     if (source === "coffeemud" && coffeemud) {
       setArt({ columns: coffeemud.columns, lines: creationArt.lines(coffeemud) });
@@ -444,7 +446,7 @@ function Portrait({ kind, name, source, coffeemud }: { kind: "race" | "class"; n
     return () => {
       live = false;
     };
-  }, [kind, name, source, coffeemud]);
+  }, [kind, name, source, coffeemud, colors]);
   if (!art) return <div className="creation-picture" style={{ width: PORTRAIT_SIZE.columns * 8 }} />;
   return (
     <div className="hook-ansi creation-picture" style={{ width: art.columns * 8 }}>

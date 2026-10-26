@@ -49,3 +49,27 @@ export function saveSpoken(spoken: Spoken) {
     // Not kept past this run, then.
   }
 }
+
+const PREGAME_KEY = "coupler.narrator.pregame";
+
+/**
+ * Whether Coupler's narrator speaks before a character is in the game:
+ * the launch screen, logging in, the account menu, making a character.
+ * Off unless the player turns it on (the Speech dialog): a player there
+ * is taken to have a screen reader on, which is given all of it instead.
+ */
+export function loadPregameNarrator(): boolean {
+  try {
+    return localStorage.getItem(PREGAME_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export function savePregameNarrator(on: boolean) {
+  try {
+    localStorage.setItem(PREGAME_KEY, on ? "on" : "off");
+  } catch {
+    // Not kept past this run, then.
+  }
+}

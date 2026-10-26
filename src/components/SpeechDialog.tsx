@@ -15,9 +15,12 @@ interface SpeechDialogProps {
   /** Whether a screen reader is running now (lib/screenReader.ts). */
   screenReader: boolean;
   onSpoken: (spoken: Spoken) => void;
+  /** Whether Coupler's narrator speaks before a character's in the game (off unless turned on). */
+  pregameNarrator: boolean;
+  onPregameNarrator: (on: boolean) => void;
 }
 
-export function SpeechDialog({ open, onClose, spoken, screenReader, onSpoken }: SpeechDialogProps) {
+export function SpeechDialog({ open, onClose, spoken, screenReader, onSpoken, pregameNarrator, onPregameNarrator }: SpeechDialogProps) {
   return (
     <Dialog
       open={open}
@@ -46,6 +49,19 @@ export function SpeechDialog({ open, onClose, spoken, screenReader, onSpoken }: 
           </li>
         ))}
       </ul>
+      <ul className="check-list">
+        <li>
+          <label className="check-row">
+            <input type="checkbox" data-testid="speech-pregame-narrator" checked={pregameNarrator} onChange={(e) => onPregameNarrator(e.currentTarget.checked)} />
+            <span>Coupler's narrator before the game too: the first screen, logging in, making a character</span>
+          </label>
+        </li>
+      </ul>
+      <p className="about-section-desc">
+        {pregameNarrator
+          ? "Coupler's narrator speaks from the first screen. Your screen reader isn't given what it says."
+          : "Until a character is in the game, Coupler's narrator is quiet and your screen reader is given everything. Coupler's narrator starts once you're in."}
+      </p>
       <p className="about-section-desc" data-testid="speech-screen-reader">
         {screenReader
           ? "A screen reader is running. Coupler's own voice takes turns with it: when you press a key it reads, Coupler pauses and picks up once the keys stop, and what Coupler says isn't given to it twice."

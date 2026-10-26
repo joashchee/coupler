@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **The game's sound ducks under a voice** (2026-10-26): while the
+  narrator or a character speaks, sound effects, music, the place's
+  sounds and the weather go quieter, never stopping, and come back up
+  a moment after the last line; Coupler's cues stay as they are. Both
+  builds.
+- **Sound comes back after the narrator speaks** (2026-10-26): on the
+  iPhone's Safari the system's speech stops the page's sound and never
+  starts it again, so the place's sounds (BGN), the weather and the
+  music went quiet once the narrator spoke in another voice. Coupler
+  starts it again when the narrator's line ends, and at any key or
+  touch.
+- **Pictures in each of the game's colors** (2026-10-26): a picture
+  made with Create Asset is painted in the 16, 256 and true color, and
+  the one shown follows the colors you have the game send you (a pair's
+  ART, the room's, the preview). A picture made before is painted again
+  in the others when the game's colors change, if it's still the
+  painter's own; other ANSI art shows as it is. The race and class
+  portraits paint again too when the colors change. Both builds.
+- **A newer Coupler is a dialog** (2026-10-26): Check for Updates Now,
+  or the automatic check at launch, says a newer version in a dialog
+  you can't miss, with Get It to open its page. While playing, the
+  automatic check says it in the status bar instead.
+- **The narrator waits for the game** (2026-10-26): Coupler's narrator
+  is quiet before a character is in the game (the first screen, logging
+  in, the account menu, making a character), so the screen reader reads
+  all of it. Gear → Speech… → Coupler's narrator before the game too
+  turns it on there.
+
 ## 0.43.0 (2026-10-25)
 
 - **Pictures in more colors** (2026-10-25): when you have the game send

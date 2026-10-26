@@ -59,7 +59,7 @@
  * when it ends or is cut off.
  */
 import { keys } from "./keys";
-import { sharedContext } from "./assets";
+import { duck, keepAudio, sharedContext } from "./assets";
 import * as mud from "./mud";
 import type { Voice } from "./mud";
 
@@ -412,11 +412,32 @@ export function yieldTurn(ms: number) {
   heldTimer = window.setTimeout(next, ms + 10);
 }
 
+// ---- The game's sound ducked under a voice (lib/assets.ts `duck`) ----
+
+/** How long the queue stays empty before the game's sound comes back up, ms: lines one after another don't pump it. */
+const UNDUCK_AFTER = 400;
+let unduckTimer = 0;
+
+/** A line starts: the game's sound goes down at once. */
+function duckNow() {
+  window.clearTimeout(unduckTimer);
+  duck(true);
+}
+
+/** Nothing's said now: the game's sound comes back up, unless another line starts first. */
+function unduckSoon() {
+  window.clearTimeout(unduckTimer);
+  unduckTimer = window.setTimeout(() => {
+    if (!busy && !interrupting) duck(false);
+  }, UNDUCK_AFTER);
+}
+
 function next() {
   if (busy || interrupting) return;
-  if (Date.now() < heldUntil) return;
+  if (Date.now() < heldUntil) return unduckSoon();
   const line = waiting.shift();
-  if (!line) return;
+  if (!line) return unduckSoon();
+  duckNow();
   busy = true;
   current = line;
   tellSpeaking(line);
@@ -453,6 +474,8 @@ function saySystem(words: string, how: Voice | null, system: SpeechSynthesisVoic
   function finish(finished: boolean) {
     window.clearTimeout(timer);
     speaking.delete(u);
+    // iOS's WebKit stops the game's sound while the system speaks.
+    keepAudio();
     done(finished);
   }
   u.onend = () => finish(true);
@@ -738,6 +761,7 @@ function playUrgent() {
     return;
   }
   const line = item.line;
+  duckNow();
   current = line;
   tellSpeaking(line);
   sayLine(line, mine, (finished = true) => {
@@ -780,6 +804,7 @@ export function hush() {
     speaking.clear();
   }
   cut.forEach((line) => line.onDone?.(false));
+  unduckSoon();
 }
 
 /**

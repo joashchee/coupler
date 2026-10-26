@@ -24,6 +24,9 @@
  * character for another, or for the account menu, fades it out (`fadeAll`).
  * One more bus, CUE, carries Immersive mode's own sounds, made here
  * rather than played from the Assets folder (lib/earcons.ts).
+ * While a voice speaks (lib/voice.ts), SFX, BGM, BGN and BGW are
+ * ducked together (`duck`): lowered, never stopped, and brought back
+ * up once the voice is done; CUE isn't.
  * A sound effect with a place (someone coming or going,
  * src-tauri/src/foley.rs) is heard from there, as Immersive's exits are
  * (`COMPASS`): east in the right ear, west in the left, north a little
@@ -37,6 +40,7 @@
  */
 import { caption } from "./captions";
 import * as mud from "./mud";
+import { palette } from "./palette";
 
 export type Bus = "sfx" | "bgm" | "bgn" | "bgw" | "cue";
 export const BUSES: Bus[] = ["sfx", "bgm", "bgn", "bgw", "cue"];
@@ -54,21 +58,55 @@ function storedVolume(bus: Bus): number {
 const volumes: Record<Bus, number> = { sfx: storedVolume("sfx"), bgm: storedVolume("bgm"), bgn: storedVolume("bgn"), bgw: storedVolume("bgw"), cue: storedVolume("cue") };
 let context: AudioContext | null = null;
 let buses: Record<Bus, GainNode> | null = null;
+/**
+ * The game's sound (SFX, BGM, BGN, BGW) on its way out: lowered while
+ * the narrator or a character speaks, for the words to be clear
+ * (`duck`). Coupler's cues aren't: they're short, and say things too.
+ */
+let ducker: GainNode | null = null;
+/** How loud the game's sound is under a voice (of the Mixer's), and how fast it goes down and comes back up, seconds. */
+const DUCKED = 0.3;
+const DUCK_DOWN = 0.15;
+const DUCK_UP = 0.6;
+let ducked = false;
 
 function audio(): { context: AudioContext; buses: Record<Bus, GainNode> } {
   if (!context || !buses) {
     context = new AudioContext();
+    ducker = context.createGain();
+    ducker.gain.value = ducked ? DUCKED : 1;
+    ducker.connect(context.destination);
     const bus = (b: Bus) => {
       const gain = context!.createGain();
       gain.gain.value = volumes[b] / 100;
-      gain.connect(context!.destination);
+      gain.connect(b === "cue" ? context!.destination : ducker!);
       return gain;
     };
     buses = { sfx: bus("sfx"), bgm: bus("bgm"), bgn: bus("bgn"), bgw: bus("bgw"), cue: bus("cue") };
+    // iOS's WebKit stops the context ("interrupted") when the system's
+    // speech starts, and doesn't start it again: the loops went quiet the
+    // first time the narrator spoke. Started again as soon as it stops.
+    const ours = context;
+    // Not while the system's still speaking: that would fight it for the
+    // sound; the narrator's line ending starts it (`keepAudio`).
+    ours.addEventListener("statechange", () => {
+      const speaking = typeof window !== "undefined" && "speechSynthesis" in window && window.speechSynthesis.speaking;
+      if (ours === context && !speaking) resume(ours);
+    });
   }
   // WebKit starts a context suspended until the page has been used.
-  if (context.state === "suspended") void context.resume();
+  resume(context);
   return { context, buses };
+}
+
+/** Starts the context again if it isn't running: suspended, or interrupted (iOS's WebKit, by speech or a call). */
+function resume(c: AudioContext) {
+  // "interrupted" is WebKit's own state, not in the DOM's types.
+  const state = c.state as string;
+  if (state === "running" || state === "closed") return;
+  c.resume().catch(() => {
+    // Not allowed till the page is used again: the next key or touch tries (`wakeAudio`).
+  });
 }
 
 /** The context and the CUE bus, for sounds made rather than played (lib/earcons.ts). */
@@ -82,9 +120,30 @@ export function sharedContext(): AudioContext {
   return audio().context;
 }
 
-/** Lets sound start: call once from a click or a key, before any trigger goes off. */
+/** Lets sound start, or start again after the system stopped it: call from a click or a key. */
 export function wakeAudio() {
   audio();
+}
+
+/** Starts the sound again if the system stopped it (the narrator's line just ended, say); makes no context. */
+export function keepAudio() {
+  if (context) resume(context);
+}
+
+/**
+ * Lowers the game's sound under a voice (`on`), or brings it back:
+ * nothing stops, it only goes quieter (lib/voice.ts calls it as lines
+ * start and the queue empties).
+ */
+export function duck(on: boolean) {
+  if (on === ducked) return;
+  ducked = on;
+  if (!context || !ducker) return;
+  const gain = ducker.gain;
+  const t = context.currentTime;
+  gain.cancelScheduledValues(t);
+  gain.setValueAtTime(gain.value, t);
+  gain.linearRampToValueAtTime(on ? DUCKED : 1, t + (on ? DUCK_DOWN : DUCK_UP));
 }
 
 /** The Mixer's volume for a bus, 0 to 100. */
@@ -600,15 +659,16 @@ export type Shown = { url: string } | { art: mud.AnsiArt };
 
 const shown = new Map<string, Promise<Shown>>();
 
-/** A picture, read once and kept. */
+/** A picture, read once and kept; ANSI art once for each of the game's colors (lib/palette.ts), shown in the colors now. */
 export function picture(path: string): Promise<Shown> {
-  let ready = shown.get(path);
+  const key = mud.isAnsiArt(path) ? `${path}\n${palette()}` : path;
+  let ready = shown.get(key);
   if (!ready) {
     ready = mud.isAnsiArt(path)
       ? mud.assetAnsi(path).then((art) => ({ art }))
       : mud.assetPicture(path).then((bytes) => ({ url: URL.createObjectURL(new Blob([bytes], { type: path.startsWith("png/") ? "image/png" : "image/jpeg" })) }));
-    ready.catch(() => shown.delete(path));
-    shown.set(path, ready);
+    ready.catch(() => shown.delete(key));
+    shown.set(key, ready);
   }
   return ready;
 }

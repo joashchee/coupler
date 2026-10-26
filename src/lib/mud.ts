@@ -1331,7 +1331,8 @@ export const soundbankDefaults = () => invoke<BankDefaults>("soundbank_defaults"
 /** An image's bytes (PNG or JPEG). */
 export const assetPicture = (path: string) => invoke<ArrayBuffer>("asset_picture", { path });
 /** ANSI art, drawn. */
-export const assetAnsi = (path: string) => invoke<AnsiArt>("asset_ansi", { path });
+/** ANSI art in the game's colors: a picture Coupler's painter made, in its own painting of them (src-tauri/src/assets.rs `ansi_in`). */
+export const assetAnsi = (path: string) => invoke<AnsiArt>("asset_ansi", { path, colors: palette() });
 
 /** The list's new total: the game sent a pair not seen before, or a key was filtered. */
 export const onHooksChanged = (f: (count: number) => void): Promise<UnlistenFn> => listen<number>("hooks-changed", (e) => f(e.payload));

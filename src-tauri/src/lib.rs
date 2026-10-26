@@ -50,7 +50,8 @@ mod mapper;
 mod msp;
 mod mssp;
 mod music;
-mod paint;
+#[doc(hidden)]
+pub mod paint;
 mod ports;
 mod painter;
 mod portrait;
@@ -640,11 +641,18 @@ async fn asset_create_art(app: AppHandle, prompt: String, columns: usize, rows: 
     let root = assets_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut about = String::new();
+        let mut made = None;
+        // Painted in each of the game's colors: the 16's is the file, the others kept beside it.
         let asset = assets::add_made(&root, "ans", &create::file_stem(&prompt, "picture"), |take| {
-            let (scene, style, said) = create::scene_from(&prompt, take);
-            about = said;
-            create::to_ansi(&painter::paint(&scene, style, columns, rows, take, paint::Colors::Sixteen), &prompt)
+            about = create::scene_from(&prompt, take).2;
+            let paintings = create::paintings(&prompt, take, columns, rows);
+            let file = paintings[0].1.clone();
+            made = Some((take, paintings));
+            file
         })?;
+        if let Some((take, paintings)) = made {
+            assets::keep_colors(&root, &asset.path, &prompt, take, &paintings)?;
+        }
         Ok(Made { asset, about, rules: Vec::new() })
     })
     .await
@@ -743,8 +751,8 @@ fn soundbank_defaults(app: AppHandle, sounds: State<'_, soundbank::Sounds>, sess
 
 /// An ANSI art asset, drawn into rows of styled characters.
 #[tauri::command]
-fn asset_ansi(app: AppHandle, path: String) -> Result<ansi_art::Art, String> {
-    assets::ansi(&assets_dir(&app)?, &path)
+fn asset_ansi(app: AppHandle, path: String, colors: Option<paint::Colors>) -> Result<ansi_art::Art, String> {
+    assets::ansi_in(&assets_dir(&app)?, &path, colors.unwrap_or_default())
 }
 
 /// An image asset's bytes.

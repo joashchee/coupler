@@ -48,6 +48,14 @@
 //! says yes (`compress`: the smaller file takes the WAV's place in
 //! Assets and the WAV is deleted) or no (`keep`). What's left waiting is
 //! cleared at launch. The file the player added from is never touched.
+//!
+//! **A picture in the game's colors.** ANSI art Coupler's painter made
+//! (`create.rs`) is kept in all three of the game's colors: the 16's is
+//! the asset; 256's and true color's wait in `.colors/` (`.colors/ans/
+//! gate.ans.256`, `.colors/ans/gate.ans.json` naming the file they were
+//! painted for, by its hash), never listed. `ansi_in` shows the one for
+//! the colors asked, painting them first for a picture made before
+//! (`create::made_from`); any other art is shown as it is.
 
 use std::collections::BTreeMap;
 use std::io::Cursor;
@@ -468,6 +476,105 @@ pub fn ansi(root: &Path, path: &str) -> Result<crate::ansi_art::Art, String> {
     Ok(crate::ansi_art::render(&bytes))
 }
 
+/// Where a made picture's other colors wait (`keep_colors`).
+const COLORS: &str = ".colors";
+
+/// The words and take a made picture was painted from, and the file's hash, kept beside its other colors.
+#[derive(Serialize, serde::Deserialize)]
+struct Painted {
+    prompt: String,
+    take: u32,
+    of: String,
+}
+
+/// FNV-1a of a file, in hex: which file a picture's other colors were painted for.
+fn hash_of(bytes: &[u8]) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// The file a made picture's colors are kept in (`.colors/ans/gate.ans.256`), or its recipe (`.json`).
+fn colors_file(root: &Path, path: &str, suffix: &str) -> PathBuf {
+    root.join(COLORS).join(format!("{path}.{suffix}"))
+}
+
+fn colors_suffix(colors: crate::paint::Colors) -> &'static str {
+    match colors {
+        crate::paint::Colors::Sixteen => "16",
+        crate::paint::Colors::More => "256",
+        crate::paint::Colors::True => "true",
+    }
+}
+
+/// Keeps a made picture's 256 and true colors beside it (the 16's is
+/// the asset at `path` already), with the words they're painted from.
+pub fn keep_colors(root: &Path, path: &str, prompt: &str, take: u32, paintings: &[(crate::paint::Colors, Vec<u8>)]) -> Result<(), String> {
+    let file = resolve(root, path)?;
+    let base = std::fs::read(file).map_err(|e| format!("{path} couldn't be read. ({e})"))?;
+    let dir = colors_file(root, path, "json");
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("the pictures' colors couldn't be kept. ({e})"))?;
+    }
+    for (colors, bytes) in paintings {
+        if *colors != crate::paint::Colors::Sixteen {
+            std::fs::write(colors_file(root, path, colors_suffix(*colors)), bytes).map_err(|e| format!("the pictures' colors couldn't be kept. ({e})"))?;
+        }
+    }
+    let recipe = Painted { prompt: prompt.into(), take, of: hash_of(&base) };
+    std::fs::write(colors_file(root, path, "json"), serde_json::to_vec(&recipe).map_err(|e| e.to_string())?).map_err(|e| format!("the pictures' colors couldn't be kept. ({e})"))
+}
+
+/// The take a made picture's name gives (`gate (3).ans` is 2), as `add_made` counted it.
+fn take_of(path: &str) -> u32 {
+    let name = path.rsplit('/').next().unwrap_or_default();
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+    stem.strip_suffix(')')
+        .and_then(|s| s.rsplit_once(" ("))
+        .and_then(|(_, n)| n.parse::<u32>().ok())
+        .map_or(0, |n| n.saturating_sub(1))
+}
+
+/// An ANSI art asset in the game's `colors`: a made picture's own
+/// painting in them (painted now, if it wasn't yet), else the file as
+/// it is.
+pub fn ansi_in(root: &Path, path: &str, colors: crate::paint::Colors) -> Result<crate::ansi_art::Art, String> {
+    let file = resolve(root, path)?;
+    if !is_ansi(path) {
+        return Err(format!("{path} isn't ANSI art."));
+    }
+    let bytes = std::fs::read(file).map_err(|e| format!("{path} couldn't be read. ({e})"))?;
+    if colors == crate::paint::Colors::Sixteen {
+        return Ok(crate::ansi_art::render(&bytes));
+    }
+    let Some((title, columns, rows)) = crate::create::recipe_in(&bytes) else {
+        return Ok(crate::ansi_art::render(&bytes));
+    };
+    let hash = hash_of(&bytes);
+    let kept: Option<Painted> = std::fs::read(colors_file(root, path, "json")).ok().and_then(|b| serde_json::from_slice(&b).ok());
+    if kept.as_ref().is_some_and(|k| k.of == hash) {
+        if let Ok(other) = std::fs::read(colors_file(root, path, colors_suffix(colors))) {
+            return Ok(crate::ansi_art::render(&other));
+        }
+    }
+    // Painted again only when the words give back this very file: the same picture.
+    let words = kept.map(|k| (k.prompt, k.take)).into_iter().chain([(title, take_of(path))]);
+    for (prompt, take) in words {
+        if !crate::create::made_from(&bytes, &prompt, take, columns, rows) {
+            continue;
+        }
+        let paintings = crate::create::paintings(&prompt, take, columns, rows);
+        // Kept for next time; shown even if it can't be kept.
+        let _ = keep_colors(root, path, &prompt, take, &paintings);
+        let wanted = paintings.iter().find(|(c, _)| *c == colors).map_or(&bytes, |(_, b)| b);
+        return Ok(crate::ansi_art::render(wanted));
+    }
+    Ok(crate::ansi_art::render(&bytes))
+}
+
 fn folder_of(path: &str) -> &str {
     path.split('/').next().unwrap_or_default()
 }
@@ -682,6 +789,7 @@ fn module_to_wav(bytes: &[u8]) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paint::Colors;
 
     struct TempDir(PathBuf);
 
@@ -966,4 +1074,41 @@ mod tests {
         let codecs::Samples::Int { data, .. } = played.samples else { panic!("not 16-bit") };
         assert_eq!(data.len(), 44_100);
     }
+
+    #[test]
+    fn a_made_picture_is_shown_in_the_games_colors_and_an_older_one_painted_again() {
+        let root = TempDir::new("colors");
+        let made = |take: u32| crate::create::paintings("a forest at dawn", take, 40, 12);
+        // Made now: all three kept.
+        let mut kept = None;
+        let asset = add_made(&root.0, "ans", "a forest at dawn", |take| {
+            let p = made(take);
+            let file = p[0].1.clone();
+            kept = Some((take, p));
+            file
+        })
+        .unwrap();
+        let (take, paintings) = kept.unwrap();
+        keep_colors(&root.0, &asset.path, "a forest at dawn", take, &paintings).unwrap();
+        for (colors, bytes) in &paintings {
+            assert_eq!(ansi_in(&root.0, &asset.path, *colors).unwrap(), crate::ansi_art::render(bytes));
+        }
+        // The other colors are never listed.
+        assert_eq!(list(&root.0).len(), 1);
+        // Made before (only the 16's, a second take): painted again when asked.
+        let older = made(1);
+        std::fs::write(root.0.join("ans/a forest at dawn (2).ans"), &older[0].1).unwrap();
+        assert_eq!(ansi_in(&root.0, "ans/a forest at dawn (2).ans", Colors::True).unwrap(), crate::ansi_art::render(&older[2].1));
+        assert!(colors_file(&root.0, "ans/a forest at dawn (2).ans", "256").is_file());
+        // The file changed: its old colors aren't it any more, so it's shown as it is.
+        let other = crate::create::paintings("the sea at night", 0, 40, 12);
+        let mut changed = other[0].1.clone();
+        changed.splice(0..0, *b"\x1b[0m");
+        std::fs::write(root.0.join(&asset.path), &changed).unwrap();
+        assert_eq!(ansi_in(&root.0, &asset.path, Colors::More).unwrap(), crate::ansi_art::render(&changed));
+        // Art Coupler didn't paint is as it is.
+        std::fs::write(root.0.join("ans/gate.ans"), b"\x1b[1;33mA gate\x1b[0m\r\n").unwrap();
+        assert_eq!(ansi_in(&root.0, "ans/gate.ans", Colors::True).unwrap(), crate::ansi_art::render(b"\x1b[1;33mA gate\x1b[0m\r\n"));
+    }
+
 }

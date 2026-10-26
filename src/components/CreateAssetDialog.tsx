@@ -22,6 +22,7 @@ import { Fragment, useEffect, useId, useState, type FormEvent } from "react";
 import type { ActivityUpdate } from "../lib/activity";
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
+import { usePalette } from "../lib/palette";
 import { ArtView } from "./AssetPreview";
 import { Dialog } from "./Dialog";
 
@@ -115,6 +116,20 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
   /** What was made last, and its picture once read. */
   const [made, setMade] = useState<mud.Made | null>(null);
   const [picture, setPicture] = useState<sound.Shown | null>(null);
+  /** The game's colors: the picture made is shown in them, again when they change. */
+  const colors = usePalette();
+  const madeArt = made?.kind === "art" ? made.path : null;
+  useEffect(() => {
+    if (!madeArt) return;
+    let live = true;
+    sound
+      .picture(madeArt)
+      .then((p) => live && setPicture(p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [madeArt, colors]);
   const [trying, setTrying] = useState<string | null>(sound.previewing());
   useEffect(() => sound.onPreview(setTrying), []);
   // Closing stops the music it was playing.
@@ -141,8 +156,8 @@ export function CreateAssetDialog({ open, onClose, runActivity, onMade, onStatus
       setPicture(null);
       onMade(done);
       onStatus(`Made ${done.name} in the Assets folder. ${done.about}`);
-      if (done.kind === "art") setPicture(await sound.picture(done.path));
-      else await sound.playPreview(done.path, "bgm", true);
+      // A picture is read by the effect above.
+      if (done.kind !== "art") await sound.playPreview(done.path, "bgm", true);
     } catch (err) {
       onError(String(err));
     } finally {

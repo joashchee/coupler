@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
+import { usePalette } from "../lib/palette";
 import { Dialog } from "./Dialog";
 
 /** A picture in a fixed box: ANSI art in its characters, or an image. */
@@ -53,6 +54,7 @@ interface AssetPreviewDialogProps {
 
 export function AssetPreviewDialog({ path, onClose, onError }: AssetPreviewDialogProps) {
   const [picture, setPicture] = useState<sound.Shown | null>(null);
+  const colors = usePalette();
   useEffect(() => {
     setPicture(null);
     if (!path) return;
@@ -67,9 +69,9 @@ export function AssetPreviewDialog({ path, onClose, onError }: AssetPreviewDialo
     return () => {
       stale = true;
     };
-    // A new path is a new picture; the callbacks are new each render.
+    // A new path is a new picture, and new colors (ANSI art in the game's); the callbacks are new each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path]);
+  }, [path, colors]);
   const title = path ? mud.assetTitle(path) : "";
   return (
     <Dialog open={path !== null} onClose={onClose} title={title || "Picture"} className="dialog-wide">
