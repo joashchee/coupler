@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.47.0 (2026-10-26)
 
 - **The game's colors as a badge** (2026-10-26): gear → Pictures… opens
   with a badge saying ANSI 16, ANSI 256 or ANSI TRUE beside a strip of
