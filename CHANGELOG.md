@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **The Fight's room in the game's colors** (2026-10-27): with ANSI 256
+  or ANSI TRUE on, the room behind the two faces in The Fight, and the
+  place behind a Bestiary face or item, now step back smoothly from the
+  room's own picture, gradients and all. Before, stepping it back threw
+  away every color between the 16, so it showed flat bands of the 16
+  (a wood's trees vanished into its grass) beside a room picture in 256
+  colors. The 16 are as they were. Both builds, the phone and the
+  tablet.
+
 ## 0.49.0 (2026-10-27)
 
 - **ANSImations play** (2026-10-26): an ANSI art file that draws over

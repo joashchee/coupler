@@ -217,6 +217,30 @@ mod tests {
     }
 
     #[test]
+    fn the_room_behind_is_in_the_games_colors() {
+        let (you, foe) = (person("Ada", "Human"), face::sitter_named("a goblin"));
+        let calm = Moment::default();
+        let fighters = Fighters { you: (&you, &calm), foe: (&foe, &calm) };
+        let dusk = Scene { time: Some("dusk".into()), ..scene("plains") };
+        let colors_in = |colors| -> std::collections::HashSet<(u8, u8, u8)> {
+            frames(Some(&dusk), Style::Fantasy, &fighters, 64, &[], Size::Full, colors)[0]
+                .lines
+                .iter()
+                .flatten()
+                .flat_map(|s| [s.style.fg, s.style.bg])
+                .filter_map(|c| match c {
+                    Some(crate::ansi::Color::Rgb { r, g, b }) => Some((r, g, b)),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(colors_in(Colors::Sixteen).is_empty());
+        // The sky's gradient, stepped back behind the two: many colors between the 16.
+        let between = colors_in(Colors::True).len();
+        assert!(between > 8, "{between}");
+    }
+
+    #[test]
     fn small_on_the_phones_strip() {
         let (you, foe) = (person("Ada", "Human"), face::sitter_named("a large wolf"));
         let calm = Moment::default();
@@ -258,6 +282,11 @@ mod tests {
     #[ignore]
     fn show() {
         let out = std::env::var("OUT").unwrap_or_else(|_| "fight.ppm".into());
+        let colors = match std::env::var("COLORS").as_deref() {
+            Ok("256") => Colors::More,
+            Ok("true") => Colors::True,
+            _ => Colors::Sixteen,
+        };
         let fights = [
             ("Human", "a large wolf", "woods", Some("day")),
             ("Elf", "an orc", "hills", Some("dusk")),
@@ -276,7 +305,7 @@ mod tests {
                 (Moment { mood: Mood::Angry, hurt: 2, ..Moment::default() }, Moment { mood: Mood::Pain, hurt: 4, ..Moment::default() }),
                 (Moment { hurt: 2, ..Moment::default() }, Moment { mood: Mood::Dead, hurt: 5, ..Moment::default() }),
             ] {
-                arts.push(paint(Some(&scene), Style::Fantasy, &Fighters { you: (&you, &mine), foe: (&foe, &theirs) }, 72, Size::Full));
+                arts.push(frames(Some(&scene), Style::Fantasy, &Fighters { you: (&you, &mine), foe: (&foe, &theirs) }, 72, &[], Size::Full, colors).remove(0));
             }
         }
         face::look::sheet(&arts, 3, &out);

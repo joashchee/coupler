@@ -2973,11 +2973,19 @@ pub(crate) mod look {
             for (row, line) in art.lines.iter().enumerate() {
                 let mut x = 0;
                 for span in line {
-                    let idx = |c: Option<Color>| match c {
-                        Some(Color::Index { index }) => index as usize,
-                        _ => 0,
+                    // The 16, the 256 (cube and grays, as `indexColor` in lib/mud.ts), or true color.
+                    let rgb = |c: Option<Color>| match c {
+                        Some(Color::Index { index }) if index < 16 => VGA[usize::from(index)],
+                        Some(Color::Index { index }) if index < 232 => {
+                            let level = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
+                            let n = index - 16;
+                            [level(n / 36), level((n / 6) % 6), level(n % 6)]
+                        }
+                        Some(Color::Index { index }) => [8 + (index - 232) * 10; 3],
+                        Some(Color::Rgb { r, g, b }) => [r, g, b],
+                        None => VGA[0],
                     };
-                    let (fg, bg) = (idx(span.style.fg), idx(span.style.bg));
+                    let (fg, bg) = (rgb(span.style.fg), rgb(span.style.bg));
                     for ch in span.text.chars() {
                         // A character other than the half block shows as its color, solid.
                         let (top, bottom) = match ch {
@@ -2987,7 +2995,7 @@ pub(crate) mod look {
                         };
                         for (dy, c) in [(0, top), (1, bottom)] {
                             let at = ((oy + row * 2 + dy) * w + ox + x) * 3;
-                            px[at..at + 3].copy_from_slice(&VGA[c]);
+                            px[at..at + 3].copy_from_slice(&c);
                         }
                         x += 1;
                     }

@@ -402,19 +402,22 @@ impl Canvas {
     /// Every color a step back, solid, not dithered: the place behind a
     /// face or an item (`figure.rs`), so what's in front stands out.
     /// What gives its own light keeps it.
+    /// With more colors, every pixel's tone (its dither's too) a step
+    /// darker, smoothly: the place is its picture behind the figure, its
+    /// gradients kept, where the 16 can only fold one color into the next.
     pub(crate) fn recede(&mut self) {
-        let back = |c: u8| match c {
-            WHITE => LIGHTGRAY,
-            LIGHTGRAY => DARKGRAY,
-            DARKGRAY => BLACK,
-            YELLOW => BROWN,
-            c if c >= 9 => c - 8,
-            c => c,
-        };
+        for y in 0..self.h {
+            for x in 0..self.w {
+                let i = (y * self.w + x) as usize;
+                if !self.lit[i] {
+                    // Read before any pixel changes: a dither is read from its neighbours.
+                    self.tones[i] = Some(mixed(&[(self.tone(x, y), 2), (VGA[0], 3)]));
+                }
+            }
+        }
         for i in 0..self.pixels.len() {
             if !self.lit[i] {
                 self.pixels[i] = back(self.pixels[i]);
-                self.tones[i] = None;
             }
         }
         for (_, fg) in self.glyphs.iter_mut().flatten() {
@@ -568,6 +571,18 @@ impl Canvas {
             return Some(mixed(&[(VGA[usize::from(own)], n_own), (VGA[usize::from(other)], n_other)]));
         }
         None
+    }
+}
+
+/// A color a step back (`Canvas::recede`).
+fn back(c: u8) -> u8 {
+    match c {
+        WHITE => LIGHTGRAY,
+        LIGHTGRAY => DARKGRAY,
+        DARKGRAY => BLACK,
+        YELLOW => BROWN,
+        c if c >= 9 => c - 8,
+        c => c,
     }
 }
 
@@ -1628,6 +1643,28 @@ mod tests {
             })
             .collect();
         assert!(rgb.len() > 8, "a sky between its stops: {}", rgb.len());
+    }
+
+    #[test]
+    fn a_receded_place_keeps_its_gradients() {
+        let mut c = Canvas::new(4, 16);
+        c.gradient(0, c.h, &[WHITE, LIGHTGRAY, BLUE]);
+        c.rect(0, 0, 4, 4, GREEN);
+        let sixteen = {
+            let mut s = c.clone();
+            s.tones.fill(None);
+            s.recede();
+            s.art()
+        };
+        let was: Vec<[u8; 3]> = (0..c.h).map(|y| c.tone(0, y)).collect();
+        c.recede();
+        assert_eq!(c.art(), sixteen, "the 16 recede as they did");
+        // Every tone a step darker, the gradient's and the plain green's alike.
+        for y in 0..c.h {
+            assert_eq!(c.tone(0, y), mixed(&[(was[y as usize], 2), (VGA[0], 3)]));
+        }
+        let between = |colors| c.art_in(colors).lines.iter().flatten().filter(|s| matches!(s.style.bg, Some(Color::Rgb { .. }))).count();
+        assert!(between(Colors::True) > 4);
     }
 
     #[test]
