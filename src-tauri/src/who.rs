@@ -363,6 +363,13 @@ impl Who {
         (QUIET_AFTER_TYPING..IDLE_AFTER).contains(&since_typed)
     }
 
+    /// Whether the game hides what's typed now (a password). The web
+    /// build's: the desktop keeps a flag of its own, read without a lock.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub fn secret(&self) -> bool {
+        self.secret
+    }
+
     /// Whether the player's rules may send on their own (a ticker,
     /// `automation.rs`): a character in the game, no password being
     /// typed, nothing being made, and the player not away 9 minutes (it

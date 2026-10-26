@@ -113,10 +113,19 @@ impl Colors {
     /// The game's answer to a change of colors, read from a line:
     /// `ANSI 256 colour enabled.`, `ANSI True colour re-enabled.`, `ANSI
     /// 16 color is already enabled.`, the account menu's `ANSI 16 color
-    /// is now ON.`; `ANSI color is now OFF.` and NOANSI's are 16.
+    /// is now ON.`; `ANSI color is now OFF.` and NOANSI's are 16. The
+    /// game writes its answer straight after the prompt (`<20Hp 100m>
+    /// ANSI 256 colour enabled.`), so it's looked for from each word on.
     pub fn heard(line: &str) -> Option<Colors> {
         let line = line.trim().to_ascii_lowercase();
         let line = line.strip_suffix('.').unwrap_or(&line);
+        line.match_indices("ansi ")
+            .filter(|&(at, _)| at == 0 || line[..at].ends_with(char::is_whitespace))
+            .find_map(|(at, _)| Self::answer(&line[at..]))
+    }
+
+    /// One answer, the line from its `ansi` on, lowercased and without its full stop.
+    fn answer(line: &str) -> Option<Colors> {
         if line == "ansi color is now off" || line == "ansi colour disabled" {
             return Some(Colors::Sixteen);
         }
@@ -171,6 +180,11 @@ mod tests {
         assert_eq!(Colors::heard("ANSI color is now OFF."), Some(Colors::Sixteen));
         assert_eq!(Colors::heard("ANSI is already enabled."), None);
         assert_eq!(Colors::heard("Bob says 'ANSI 256 colour enabled.'"), None);
+        // After the prompt it was typed at.
+        assert_eq!(Colors::heard("<20Hp 100m 100mv> ANSI 256 colour enabled."), Some(Colors::More));
+        assert_eq!(Colors::heard("<20Hp 100m 100mv> ANSI True colour enabled."), Some(Colors::True));
+        assert_eq!(Colors::heard("<20Hp> ANSI colour disabled."), Some(Colors::Sixteen));
+        assert_eq!(Colors::heard("<20Hp> Bob says 'ANSI 256 colour enabled.'"), None);
         assert_eq!(serde_json::to_string(&Colors::More).unwrap(), "\"256\"");
     }
 

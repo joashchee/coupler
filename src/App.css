@@ -587,6 +587,10 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 /* Tables: Delete, then a column each (--table-columns), then when. */
 .hooks-head.tables-row,
 .hooks-list.tables-list li { display: grid; grid-template-columns: 64px repeat(var(--table-columns), 176px) minmax(0, 1fr); gap: 0 12px; align-items: start; }
+/* Disconnections' rows lead with Show… and Delete. */
+.hooks-head.tables-row-detailed,
+.hooks-list.tables-list-detailed li { grid-template-columns: 140px repeat(var(--table-columns), 176px) minmax(0, 1fr); }
+.tables-row-buttons { display: flex; gap: 8px; align-items: start; }
 .tables-choose { margin: 12px 0 0; }
 .dialog-hooks .hooks-list.tables-list-own { height: 200px; }
 .tables-add { margin: 12px 0 0; }
@@ -702,6 +706,8 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 
 /* Open-Source Licenses (LicensesDialog): the full texts, as written. */
 .licenses-text { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Connection Lost's findings scroll inside the frame (DisconnectDialog). */
+.disconnect-findings { height: 320px; overflow: auto; }
 
 /* Terminal: the plain terminal on black, nothing else around it. */
 .desk.ux-terminal { background: #000000; }

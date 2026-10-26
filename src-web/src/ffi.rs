@@ -216,7 +216,16 @@ fn call(input: &[u8]) -> Result<Value, String> {
             Ok(Value::Null)
         }
         "mud_closed" => {
-            app.closed(args.get("reason").and_then(Value::as_str).map(str::to_string));
+            let reason = args.get("reason").and_then(Value::as_str).map(str::to_string);
+            // How it closed, for the Disconnections table (disconnect.rs).
+            let ending = if args.get("unreadable").and_then(Value::as_bool) == Some(true) {
+                reason.clone().map(crate::disconnect::Ending::Unreadable)
+            } else if args.get("clean").and_then(Value::as_bool) == Some(false) {
+                Some(crate::disconnect::Ending::Dropped(args.get("code").and_then(Value::as_u64).unwrap_or(0) as u16))
+            } else {
+                Some(crate::disconnect::Ending::Closed)
+            };
+            app.closed(reason, ending);
             Ok(Value::Null)
         }
         "mud_send" => app.send_line(&s("line")).map(|()| Value::Null),

@@ -30,6 +30,9 @@ use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::clock::{unix_ms, unix_now, Instant};
 use crate::combat::{Combat, Opponent};
+use crate::needs::Needs;
+use crate::stats::Stats;
+use crate::disconnect::{Ending, LastMoments};
 use crate::fight_log::{self, Fight, Fights, Recorder};
 use crate::daytime::{self, Daytime, Phase};
 use crate::creation::{self, Creation};
@@ -157,6 +160,12 @@ pub struct Coupler {
     daytime: Daytime,
     character: Character,
     combat: Combat,
+    /// Hungry, thirsty, fatigued, stinky, said now and then (needs.rs).
+    needs: Needs,
+    /// What STAT says of the character, read by hidden STATs (stats.rs).
+    stats: Stats,
+    /// The connection's last moments, kept if it ends without the player leaving (disconnect.rs).
+    disconnects: LastMoments,
     combat_sent: Option<Opponent>,
     /// Every fight recorded (`fight_log.rs`), the world's fights kept, and
     /// the character last played.
@@ -235,6 +244,9 @@ impl Coupler {
             daytime: Daytime::default(),
             character: Character::default(),
             combat: Combat::default(),
+            needs: Needs::default(),
+            stats: Stats::default(),
+            disconnects: LastMoments::default(),
             combat_sent: None,
             fight_recorder: Recorder::default(),
             fights: Fights::default(),
@@ -312,6 +324,8 @@ impl Coupler {
         self.account = crate::account::Account::default();
         self.echoes.clear();
         self.looter.clear();
+        self.needs.clear();
+        self.stats.clear();
         self.long_look.clear();
         self.creation.clear();
         self.ways.clear();
@@ -320,13 +334,28 @@ impl Coupler {
         self.told_sounds_off = false;
         self.automation.closed();
         self.outgoing.clear();
+        self.disconnects.start(&format!("{}, port {} (the web build)", port.name, port.port), unix_ms());
         Ok(ports::web_socket_url(port))
     }
 
-    /// The socket closed: `reason` is None when the player hung up.
-    pub fn closed(&mut self, reason: Option<String>) {
+    /// The socket closed: `reason` is None when the player hung up;
+    /// `ending`, how it closed otherwise (disconnect.rs).
+    pub fn closed(&mut self, reason: Option<String>, ending: Option<Ending>) {
         if self.telnet.take().is_none() {
             return;
+        }
+        match ending.filter(|_| reason.is_some()) {
+            None => self.disconnects = LastMoments::default(),
+            Some(ending) => {
+                let character = self.senses.name().to_string();
+                if let Some(finding) = self.disconnects.finish(ending, &character, unix_ms()) {
+                    let row = self.tables.disconnection(&finding);
+                    self.tables_changed();
+                    if !finding.expected {
+                        self.emit("disconnected", json!({ "finding": finding, "row": row }));
+                    }
+                }
+            }
         }
         self.port = None;
         self.outgoing.clear();
@@ -422,9 +451,14 @@ impl Coupler {
         if self.telnet.is_none() {
             return;
         }
+        self.disconnects.tick(unix_ms());
         let kept = self.fight_recorder.tick(unix_ms());
         self.fight_kept(kept);
         let now = Instant::now();
+        // Said by Coupler, never sent: nothing waits for the game's answers.
+        if let Some(words) = self.needs.due(now, self.combat.opponent().is_some()) {
+            self.emit("needs", json!(words));
+        }
         // Nothing of Coupler's own while a channel command's answer is coming (channels.rs).
         if self.channels.awaiting(now) {
             return;
@@ -433,6 +467,10 @@ impl Coupler {
         self.effects.tick(unix_ms());
         self.update_effects();
         if self.effects.awaiting(unix_ms()) {
+            return;
+        }
+        // Nor a hidden STAT's (stats.rs).
+        if self.stats.awaiting(unix_ms()) {
             return;
         }
         let due = self.automation.tick(now, self.who.present(now), self.who.awaiting());
@@ -445,6 +483,9 @@ impl Coupler {
         } else if self.who.gentle(now) && self.effects.wants(unix_ms()) {
             let ask = self.effects.ask(unix_ms());
             self.outgoing.extend(telnet::encode_line(ask));
+        } else if self.who.gentle(now) && self.stats.wants(unix_ms()) {
+            let ask = self.stats.ask(unix_ms());
+            self.outgoing.extend(telnet::encode_line(&ask));
         } else if self.who.gentle(now) && self.ambient.weather_wanted(now) {
             self.ambient.weather_asked(now);
             self.outgoing.extend(telnet::encode_line("weather"));
@@ -469,7 +510,11 @@ impl Coupler {
 
     /// What to send the game now.
     pub fn take_outgoing(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.outgoing)
+        let bytes = std::mem::take(&mut self.outgoing);
+        if !bytes.is_empty() {
+            self.disconnects.sent(&bytes, self.who.secret(), unix_ms());
+        }
+        bytes
     }
 
     /// The events since last asked, as a JSON array of `[name, payload]`.
@@ -481,6 +526,7 @@ impl Coupler {
     /// `read_loop` does with each read. An error means hang up.
     pub fn feed(&mut self, bytes: &[u8]) -> Result<(), String> {
         let Some(telnet) = self.telnet.as_mut() else { return Ok(()) };
+        self.disconnects.received(bytes.len(), unix_ms());
         let out = telnet.feed(bytes)?;
         self.outgoing.extend(out.replies);
         let mut lines = Vec::new();
@@ -547,11 +593,14 @@ impl Coupler {
                     }
                 }
                 Event::Gmcp(package, data) => {
+                    self.disconnects.gmcp(&package, unix_ms());
                     if let Some(left) = self.character.gmcp(&package, &data) {
                         self.character_left(left);
                     }
                     self.combat.gmcp(&package, &data);
                     self.effects.gmcp(&package, &data);
+                    self.needs.gmcp(&package, &data);
+                    self.stats.gmcp(&package, &data);
                     self.ways.gmcp(&package, &data);
                     let moved = self.comings.gmcp(&package, &data, Instant::now());
                     let (learned, cry) = self.bestiary_gmcp(&package, &data);
@@ -610,6 +659,13 @@ impl Coupler {
         let at = unix_ms();
         self.effects.me(self.senses.name());
         hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| self.effects.line(text, at)).map(|(i, _)| i));
+        // Nor a hidden STAT's, kept in the Stats table (stats.rs).
+        hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| self.stats.line(text, at)).map(|(i, _)| i));
+        if let Some(read) = self.stats.take_read() {
+            let character = self.senses.name().to_string();
+            self.tables.stats(&read, at, &character);
+            self.tables_changed();
+        }
         hidden_lines.sort_unstable();
         hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
@@ -633,6 +689,7 @@ impl Coupler {
         }
         // The fight's record reads every line, gagged or not (fight_log.rs).
         self.fight_read(&texts);
+        self.disconnects.lines(&texts, unix_ms());
         // The player's gags, and what their triggers set off (automation.rs).
         let (gagged, actions) = self.automation.lines(&texts, self.who.acting(), Instant::now());
         if !gagged.is_empty() {
@@ -1017,7 +1074,11 @@ impl Coupler {
         Ok(made)
     }
 
-    pub fn table_check(&self, name: &str) -> Result<String, String> {
+    pub fn table_check(&mut self, name: &str) -> Result<String, String> {
+        // Stats are read from the game again, for the next time.
+        if self.tables.find(name).is_ok_and(|t| t.id == crate::tables::STATS) {
+            self.stats.refresh();
+        }
         self.tables.check(name, &self.fight_character)
     }
 
@@ -1070,6 +1131,8 @@ impl Coupler {
         self.counted = false;
         self.echoes.clear();
         self.looter.clear();
+        self.needs.clear();
+        self.stats.clear();
         self.long_look.clear();
         self.ways.clear();
         self.channels.closed();

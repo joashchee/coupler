@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+- **Sound comes back after the narrator on the iPad** (2026-10-26): in
+  the web build on an iPad, the loops, music and sound effects could go
+  silent for good once the narrator first spoke. iOS stops the sound
+  for the system's voice; Coupler now starts it again a moment after
+  each line ends (iOS takes a moment to let go), and a touch anywhere
+  starts it too (it listened for the start of a touch, which iOS
+  doesn't count, and Coupler's own keyboard on the iPad sends no keys).
+- **The colors badge follows ANSI 256 and ANSI TRUE** (2026-10-26):
+  the game writes its answer on the prompt's line (`<20Hp> ANSI 256
+  colour enabled.`), and Coupler read it only at the start of a line,
+  so gear → Pictures… and the pictures stayed at 16 colors. Both builds.
+- **Reminders when you're hungry, thirsty, fatigued or stinky**
+  (2026-10-26): Coupler says "You're hungry and thirsty." as soon as a
+  need begins, and again every 5 minutes while any lasts, never in a
+  fight. The game says hunger and thirst only now and then, and never
+  says fatigue or smell unasked. Spoken by the narrator, or written as
+  Coupler's own line. Both builds, the phone and the tablet.
+- **A Stats table** (2026-10-26): gear → Tables… → Stats holds
+  everything the game's STAT can tell of each character (hit points
+  and their most, the six abilities and their bases, the saving throws,
+  armor, attack and damage in words, experience, quest points, trains,
+  practices, alignment, and more), read by Coupler quietly when you
+  come in, when your level changes and every quarter of an hour,
+  without showing in the output. `#check stats` says the main ones and
+  reads them again. Both builds.
+- **The Mixer says a level once it's set** (2026-10-26): let go of a
+  slider (or stop pressing the arrows) and 2 seconds later "Sound
+  effects at 40 percent." is said and shown, not every step of a drag.
+- **#help lists Coupler's commands** (2026-10-26): every command with
+  its words and what it does, a line each, in the output; only the
+  names are said. `#help check` says one command.
+- **Disconnections** (2026-10-26): when the connection ends and you
+  didn't leave, Coupler says the likely cause (the game shut down, logged
+  you out for being idle, this device was asleep, the network dropped,
+  or the game closed it without a word) and offers what it saw in the
+  last moments: how it ended, when the game was last heard from, the
+  lines sent lately (never a password), the GMCP lately and the game's
+  last lines, to copy into a report. Every ending is kept in gear →
+  Tables… → Disconnections, each row's Show… opening its findings. A
+  QUIT or Hang Up offers nothing. Both builds.
+
 ## 0.47.0 (2026-10-26)
 
 - **The game's colors as a badge** (2026-10-26): gear → Pictures… opens

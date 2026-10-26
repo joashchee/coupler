@@ -15,6 +15,7 @@ import { ScenePanel } from "./components/ScenePanel";
 import { ScreenReadout } from "./components/ScreenReadout";
 import { ShrinkDialog } from "./components/ShrinkDialog";
 import { RestoreDialog, type RestoreOffer } from "./components/RestoreDialog";
+import { DisconnectDialog, type Lost } from "./components/DisconnectDialog";
 import * as backup from "./lib/backup";
 import * as bestiary from "./lib/bestiary";
 import { SpeechDialog } from "./components/SpeechDialog";
@@ -1461,9 +1462,18 @@ function App() {
     };
     try {
       switch (c.info.name) {
-        case "help":
+        case "help": {
+          if (c.rest) {
+            const one = commands.helpFor(c.rest, p, !WEB);
+            if (one) tell(one);
+            else fail(`Coupler has no command ${c.rest}. ${p}help lists them.`);
+            return;
+          }
+          // The whole list to read in the output; only the names said.
+          append(commands.helpLines(p, !WEB).map((text) => ({ id: nextLineId.current++, kind: "note" as const, line: [{ text }] })));
           tell(commands.helpText(p, !WEB));
           return;
+        }
         case "check": {
           if (!c.rest.trim()) {
             const all = await mud.tablesList();
@@ -1981,6 +1991,12 @@ function App() {
   const [shrinkOffer, setShrinkOffer] = useState<mud.Added[] | null>(null);
   /** A Coupler Backup chosen or dropped, waiting for a yes. */
   const [restoreOffer, setRestoreOffer] = useState<RestoreOffer | null>(null);
+  /** A connection that ended without the player leaving: what Coupler saw, offered (src-tauri/src/disconnect.rs). */
+  const [lost, setLost] = useState<Lost | null>(null);
+  useEffect(() => {
+    const unlisten = mud.onDisconnected((e) => setLost({ finding: e.finding, asking: true }));
+    return () => void unlisten.then((f) => f());
+  }, []);
   const [restoring, setRestoring] = useState(false);
   const picturesRef = useRef(pictures);
   picturesRef.current = pictures;
@@ -2358,13 +2374,14 @@ function App() {
     const unlisten = mud.onHookFired(onFired);
     // WebKit only lets sound start once the page has been used, and iOS's
     // stops it again for speech: every key or touch starts it if it's stopped.
+    // iOS counts a touch's end (touchend, click) as the player's doing, not
+    // its start (pointerdown), and the tablet's own keyboard sends no keydown.
     const wake = () => sound.wakeAudio();
-    document.addEventListener("pointerdown", wake);
-    document.addEventListener("keydown", wake);
+    const WAKE_ON = ["pointerdown", "touchend", "click", "keydown"] as const;
+    WAKE_ON.forEach((e) => document.addEventListener(e, wake, { passive: true, capture: true }));
     return () => {
       void unlisten.then((f) => f());
-      document.removeEventListener("pointerdown", wake);
-      document.removeEventListener("keydown", wake);
+      WAKE_ON.forEach((e) => document.removeEventListener(e, wake, { capture: true }));
     };
   }, [onFired]);
 
@@ -2380,13 +2397,20 @@ function App() {
       for (const path of f.sounds) void sound.playEffect(path).catch(() => {});
     });
     const held = mud.onAutomationHeld((message) => setError(message));
+    // Hungry, thirsty, fatigued, stinky (src-tauri/src/needs.rs): said as a trigger's words are.
+    // Shown as Coupler's own line when it isn't spoken.
+    const needs = mud.onNeeds((words) => {
+      if (voicedRef.current && voice.voiceVolume() > 0) voice.speak(words);
+      else note(words);
+    });
     return () => {
       void fired.then((f) => f());
       void held.then((f) => f());
+      void needs.then((f) => f());
     };
-  }, [hear]);
+  }, [hear, note]);
 
-  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || summaryOpen || tablesOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || summaryOpen || tablesOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || lost !== null || musicOpen;
 
   /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
   const turnPhone = useCallback(
@@ -3999,6 +4023,8 @@ function App() {
 
       <RestoreDialog offer={restoreOffer} busy={restoring} onCancel={() => !restoring && setRestoreOffer(null)} onRestore={() => void restoreBackup()} />
 
+      <DisconnectDialog lost={lost} onClose={() => setLost(null)} onStatus={showStatus} onError={showError} />
+
       {PHONE && (
         <PhoneSheet
           open={sheetDown}
@@ -4009,7 +4035,7 @@ function App() {
           own={sheetOwn[phoneSection]}
         />
       )}
-      <MixerDialog open={mixerOpen} onClose={() => setMixerOpen(false)} playing={nowPlaying} onStatus={showStatus} />
+      <MixerDialog open={mixerOpen} onClose={() => setMixerOpen(false)} playing={nowPlaying} onStatus={showStatus} onSay={sayNow} />
 
       {!WEB && (
       <MusicEditorDialog

@@ -6,8 +6,13 @@
  * here with a name and up to five columns, rows added here or by `#add`.
  * `#check <table>` says one; `#check loot`, the last fight's loot.
  *
+ * Stats: everything STAT says of each character
+ * (src-tauri/src/stats.rs); Disconnections: each connection that ended
+ * without the player leaving (src-tauri/src/disconnect.rs), whose rows
+ * have Show… for what Coupler saw (`DisconnectDialog`).
+ *
  * One table shows at a time, chosen from a list, its rows the latest
- * first; each row's Delete comes first (the row's own buttons lead). The
+ * first; each row's buttons (Show…, Delete) come first. The
  * columns' names head the list for the eye; each row's name for VoiceOver
  * says them with its cells. The list isn't a live region: loot coming in
  * while it's open is read in quietly.
@@ -16,6 +21,7 @@ import { useCallback, useEffect, useId, useState, type CSSProperties } from "rea
 import { prefix } from "../lib/commands";
 import * as mud from "../lib/mud";
 import { Dialog } from "./Dialog";
+import { DisconnectDialog, type Lost } from "./DisconnectDialog";
 
 interface TablesDialogProps {
   open: boolean;
@@ -51,6 +57,8 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
   /** Deleting or clearing the table shown, asked first. */
   const [asking, setAsking] = useState<"delete" | "clear" | null>(null);
   const [busy, setBusy] = useState(false);
+  /** A disconnection's findings, shown over the list. */
+  const [lost, setLost] = useState<Lost | null>(null);
 
   const read = useCallback(() => {
     mud.tablesList().then(setList, (e) => onError(String(e)));
@@ -131,10 +139,16 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
       : table.rows.length === 0
         ? table.id === mud.LOOT_TABLE
           ? "No loot yet. With AUTOLOOT on in the game, everything you take off a body is listed here the moment it's taken."
-          : `${table.name} has no rows yet: add one below, or type ${prefix()}add ${table.name.toLowerCase()} and its cells split by |.`
+          : table.id === mud.STATS_TABLE
+            ? "No stats yet. Coupler reads them from the game's STAT a few seconds after you're in, while you're not typing, and again every quarter of an hour."
+            : table.id === mud.DISCONNECTIONS_TABLE
+              ? "No disconnections. When a connection ends without you leaving, what Coupler saw is kept here, to find out why."
+              : `${table.name} has no rows yet: add one below, or type ${prefix()}add ${table.name.toLowerCase()} and its cells split by |.`
         : `${plural(table.rows.length, "row", "rows")}${table.rows.length > SHOWN ? `, the latest ${SHOWN} shown` : ""}, the latest first.`;
   const grid = { "--table-columns": table?.columns.length ?? 1 } as CSSProperties;
   const own = table !== null && !table.coupler;
+  /** Its rows have findings to show: a wider lead for two buttons. */
+  const detailed = table?.id === mud.DISCONNECTIONS_TABLE;
 
   return (
     <>
@@ -143,7 +157,7 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
         onClose={onClose}
         title="Tables"
         className="dialog-wide dialog-hooks"
-        covered={making || asking !== null}
+        covered={making || asking !== null || lost !== null}
         actions={
           <>
             <button type="button" data-testid="tables-new" onClick={() => setMaking(true)}>
@@ -162,7 +176,9 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
       >
         <p>
           Coupler's tables of what it reads in the game, and your own. Loot is what you take off a body with AUTOLOOT: {prefix()}check loot (or LOOK
-          LOOT) says what your last fight brought. {prefix()}check and a table's name says any table; {prefix()}add adds a row to one of yours.
+          LOOT) says what your last fight brought. Stats is everything the game's STAT says of your characters. Disconnections keeps what Coupler saw
+          when a connection ended without you leaving: Show… on a row. {prefix()}check and a table's name says any table; {prefix()}add adds a row to
+          one of yours.
         </p>
         <div className="hook-edit-row tables-choose">
           <label htmlFor={`${id}-table`}>Table</label>
@@ -181,27 +197,40 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
         {table && (
           <>
             {/* The columns' names, for the eye; each row says its own. */}
-            <div className="hooks-head tables-row" style={grid} aria-hidden="true">
+            <div className={`hooks-head tables-row${detailed ? " tables-row-detailed" : ""}`} style={grid} aria-hidden="true">
               <span />
               {table.columns.map((c) => (
                 <span key={c}>{c}</span>
               ))}
               <span>When</span>
             </div>
-            <ul className={`hooks-list tables-list${own ? " tables-list-own" : ""}`} style={grid} data-testid="tables-rows" tabIndex={0} aria-label={`${table.name}: ${table.columns.join(", ")}, and when`} aria-describedby={`${id}-summary`}>
+            <ul className={`hooks-list tables-list${own ? " tables-list-own" : ""}${detailed ? " tables-list-detailed" : ""}`} style={grid} data-testid="tables-rows" tabIndex={0} aria-label={`${table.name}: ${table.columns.join(", ")}, and when`} aria-describedby={`${id}-summary`}>
               {open &&
                 rows.map((r) => (
                   <li key={r.id} className="tables-row">
-                    <button
-                      type="button"
-                      className="hook-edit"
-                      data-testid="tables-row-delete"
-                      disabled={busy}
-                      aria-label={`Delete: ${rowWords(table, r)}`}
-                      onClick={() => void change({ kind: "deleteRow", id: table.id, row: r.id }, `Deleted a row of ${table.name}.`)}
-                    >
-                      Delete
-                    </button>
+                    <span className="tables-row-buttons">
+                      {r.details && (
+                        <button
+                          type="button"
+                          className="hook-edit"
+                          data-testid="tables-row-show"
+                          aria-label={`Show what Coupler saw: ${rowWords(table, r)}`}
+                          onClick={() => setLost({ finding: { at: r.at, how: r.cells[0] ?? "", cause: r.cells[1] ?? "", details: r.details ?? [] }, asking: false })}
+                        >
+                          Show…
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="hook-edit"
+                        data-testid="tables-row-delete"
+                        disabled={busy}
+                        aria-label={`Delete: ${rowWords(table, r)}`}
+                        onClick={() => void change({ kind: "deleteRow", id: table.id, row: r.id }, `Deleted a row of ${table.name}.`)}
+                      >
+                        Delete
+                      </button>
+                    </span>
                     {table.columns.map((c, i) => (
                       <span key={c} className={i === 0 ? "hook-key" : "hook-value"}>
                         {r.cells[i] ?? ""}
@@ -317,6 +346,7 @@ export function TablesDialog({ open, onClose, onStatus, onError }: TablesDialogP
               : ""}
         </p>
       </Dialog>
+      <DisconnectDialog lost={open ? lost : null} onClose={() => setLost(null)} onStatus={onStatus} onError={onError} />
     </>
   );
 }

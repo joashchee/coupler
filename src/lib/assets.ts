@@ -125,9 +125,22 @@ export function wakeAudio() {
   audio();
 }
 
+/** Tries again after a line ends, ms: iOS ends its interruption a moment after the speech, not with it. */
+const KEEP_RETRIES = [250, 1000, 2500];
+let keepTimers: number[] = [];
+
 /** Starts the sound again if the system stopped it (the narrator's line just ended, say); makes no context. */
 export function keepAudio() {
-  if (context) resume(context);
+  if (!context) return;
+  resume(context);
+  keepTimers.forEach((t) => window.clearTimeout(t));
+  const ours = context;
+  keepTimers = KEEP_RETRIES.map((ms) =>
+    window.setTimeout(() => {
+      const speaking = "speechSynthesis" in window && window.speechSynthesis.speaking;
+      if (ours === context && !speaking) resume(ours);
+    }, ms),
+  );
 }
 
 /**

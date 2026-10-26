@@ -7,6 +7,14 @@
 //!   off a body (`loot.rs`), a row each, with the body, the character and
 //!   the room. The rows of one death share its `haul`, so `#check loot`
 //!   says only what the last fight brought, never the whole inventory.
+//! - **Stats** (`STATS`), Coupler's: everything STAT can say of each
+//!   character (`stats.rs`), a row a stat, its value the latest read
+//!   (each reading replaces the character's rows). `#check stats` says
+//!   the main ones and asks the game again.
+//! - **Disconnections** (`DISCONNECTIONS`), Coupler's: each connection
+//!   that ended without the player leaving (`disconnect.rs`), its likely
+//!   cause, and the findings kept with the row (`details`) to show or
+//!   copy for a report. The last `MOST_DISCONNECTIONS` are kept.
 //! - **The player's own**: a name, up to `MOST_COLUMNS` columns, rows
 //!   added in the dialog or by `#add`.
 //!
@@ -19,6 +27,12 @@ use crate::loot::Got;
 
 /// The Loot table's id.
 pub const LOOT: &str = "loot";
+/// The Stats table's id.
+pub const STATS: &str = "stats";
+/// The Disconnections table's id.
+pub const DISCONNECTIONS: &str = "disconnections";
+/// Disconnections kept: each holds its findings.
+const MOST_DISCONNECTIONS: usize = 200;
 /// Rows kept per table; the oldest go first.
 const MOST_ROWS: usize = 5_000;
 /// The player's tables at most.
@@ -40,6 +54,9 @@ pub struct Row {
     /// Loot's: the death it came from (its time), shared by its rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub haul: Option<i64>,
+    /// Disconnections': the findings, a line each (`disconnect::Finding`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -95,6 +112,20 @@ fn loot_table() -> Table {
     Table { id: LOOT.into(), name: "Loot".into(), columns: LOOT_COLUMNS.map(String::from).to_vec(), coupler: true, rows: Vec::new() }
 }
 
+/// The Stats table's columns.
+const STATS_COLUMNS: [&str; 4] = ["Stat", "Code", "Value", "Character"];
+
+fn stats_table() -> Table {
+    Table { id: STATS.into(), name: "Stats".into(), columns: STATS_COLUMNS.map(String::from).to_vec(), coupler: true, rows: Vec::new() }
+}
+
+/// The Disconnections table's columns.
+const DISCONNECTIONS_COLUMNS: [&str; 4] = ["How it ended", "Likely cause", "Character", "Connected for"];
+
+fn disconnections_table() -> Table {
+    Table { id: DISCONNECTIONS.into(), name: "Disconnections".into(), columns: DISCONNECTIONS_COLUMNS.map(String::from).to_vec(), coupler: true, rows: Vec::new() }
+}
+
 /// A name or a cell as kept: spaces squeezed, cut to `LONGEST`.
 fn tidy(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(LONGEST).collect()
@@ -138,6 +169,12 @@ impl Tables {
         if !self.tables.iter().any(|t| t.id == LOOT) {
             self.tables.insert(0, loot_table());
         }
+        if !self.tables.iter().any(|t| t.id == STATS) {
+            self.tables.insert(1, stats_table());
+        }
+        if !self.tables.iter().any(|t| t.id == DISCONNECTIONS) {
+            self.tables.insert(2, disconnections_table());
+        }
         let most = self.tables.iter().flat_map(|t| t.rows.iter().map(|r| r.id + 1)).max().unwrap_or(0);
         self.next_row = self.next_row.max(most);
     }
@@ -180,12 +217,16 @@ impl Tables {
     }
 
     fn push(&mut self, id: &str, at: i64, cells: Vec<String>, haul: Option<i64>) {
-        let row = Row { id: self.next_row, at, cells, haul };
+        self.push_row(id, Row { id: self.next_row, at, cells, haul, details: None });
+    }
+
+    fn push_row(&mut self, id: &str, row: Row) {
         self.next_row += 1;
         let Some(t) = self.tables.iter_mut().find(|t| t.id == id) else { return };
         t.rows.push(row);
-        if t.rows.len() > MOST_ROWS {
-            let over = t.rows.len() - MOST_ROWS;
+        let most = if id == DISCONNECTIONS { MOST_DISCONNECTIONS } else { MOST_ROWS };
+        if t.rows.len() > most {
+            let over = t.rows.len() - most;
             t.rows.drain(..over);
         }
         self.changed = true;
@@ -197,6 +238,29 @@ impl Tables {
             let cells = vec![tidy(&g.item), tidy(&g.from), tidy(character), tidy(place)];
             self.push(LOOT, at, cells, Some(haul));
         }
+    }
+
+    /// A reading of a character's stats (`stats.rs`): their rows replaced, in the game's order.
+    pub fn stats(&mut self, read: &[(String, String)], at: i64, character: &str) {
+        if read.is_empty() || character.is_empty() {
+            return;
+        }
+        let theirs = |r: &Row| r.cells.get(3).is_some_and(|c| c.eq_ignore_ascii_case(character));
+        if let Some(t) = self.tables.iter_mut().find(|t| t.id == STATS) {
+            t.rows.retain(|r| !theirs(r));
+        }
+        for (code, value) in read {
+            let cells = vec![crate::stats::stat_name(code), tidy(code), tidy(value), tidy(character)];
+            self.push(STATS, at, cells, None);
+        }
+    }
+
+    /// A connection that ended (`disconnect.rs`), with its findings: the row's id.
+    pub fn disconnection(&mut self, finding: &crate::disconnect::Finding) -> u64 {
+        let id = self.next_row;
+        let cells = vec![tidy(&finding.how), tidy(&finding.cause), tidy(&finding.character), tidy(&finding.connected_for)];
+        self.push_row(DISCONNECTIONS, Row { id, at: finding.at, cells, haul: None, details: Some(finding.details.clone()) });
+        id
     }
 
     /// A new table of the player's: its id.
@@ -292,6 +356,15 @@ impl Tables {
         if t.id == LOOT {
             return Ok(last_haul(t, character));
         }
+        if t.id == STATS {
+            return Ok(main_stats(t, character));
+        }
+        if t.id == DISCONNECTIONS {
+            return Ok(match t.rows.last() {
+                None => "No disconnections kept.".into(),
+                Some(r) => format!("{}: {} The last: {} {}", t.name, if t.rows.len() == 1 { "1 kept.".to_string() } else { format!("{} kept.", t.rows.len()) }, r.cells[0], r.cells[1]),
+            });
+        }
         if t.rows.is_empty() {
             return Ok(format!("{}: no rows yet.", t.name));
         }
@@ -300,6 +373,40 @@ impl Tables {
         let label = if latest.len() == 1 { "The latest" } else { "The latest first" };
         Ok(format!("{}: {rows}. {label}: {}.", t.name, latest.join("; ")))
     }
+}
+
+/// The main stats of this character's, in words: level, health, mana, movement, the six abilities.
+fn main_stats(t: &Table, character: &str) -> String {
+    let theirs: Vec<&Row> = t.rows.iter().filter(|r| r.cells.get(3).is_some_and(|c| character.is_empty() || c.eq_ignore_ascii_case(character))).collect();
+    let Some(who) = theirs.first().map(|r| r.cells[3].clone()) else {
+        return "No stats yet: Coupler reads them from the game a few seconds after you're in, while you're not typing.".into();
+    };
+    let value = |code: &str| theirs.iter().find(|r| r.cells[1] == code && r.cells[3] == who).map(|r| r.cells[2].clone());
+    let mut said = Vec::new();
+    if let Some(level) = value("LEVEL") {
+        said.push(format!("level {level}"));
+    }
+    for (code, words) in [("HITS", "hit points"), ("MANA", "mana"), ("MOVE", "movement")] {
+        match (value(code), value(&format!("MAX{code}"))) {
+            (Some(n), Some(most)) => said.push(format!("{n} of {most} {words}")),
+            (Some(n), None) => said.push(format!("{n} {words}")),
+            _ => {}
+        }
+    }
+    let abilities: Vec<String> = ["STRENGTH", "INTELLIGENCE", "DEXTERITY", "CONSTITUTION", "CHARISMA", "WISDOM"]
+        .iter()
+        .filter_map(|code| value(code).map(|v| format!("{} {v}", code.to_lowercase())))
+        .collect();
+    let count = theirs.iter().filter(|r| r.cells[3] == who).count();
+    let mut out = format!("Stats of {who}");
+    if !said.is_empty() {
+        out.push_str(&format!(": {}", said.join(", ")));
+    }
+    if !abilities.is_empty() {
+        out.push_str(&format!("; {}", abilities.join(", ")));
+    }
+    out.push_str(&format!(". {count} in the table."));
+    out
 }
 
 /// The things the last death brought this character, in words.
@@ -332,8 +439,27 @@ mod tests {
         let t = Tables::new();
         assert_eq!(t.list()[0].id, LOOT);
         assert!(t.list()[0].coupler);
+        assert_eq!(t.list()[1].id, STATS);
+        assert!(t.list()[1].coupler);
+        assert_eq!(t.list()[2].id, DISCONNECTIONS);
         let back = Tables::from_json("{}").unwrap();
-        assert_eq!(back.list().len(), 1);
+        assert_eq!(back.list().len(), 3);
+    }
+
+    #[test]
+    fn stats_replace_the_characters_rows() {
+        let mut t = Tables::new();
+        let read = |pairs: &[(&str, &str)]| pairs.iter().map(|(c, v)| (c.to_string(), v.to_string())).collect::<Vec<_>>();
+        assert!(t.check("stats", "Hassan").unwrap().starts_with("No stats yet"));
+        t.stats(&read(&[("LEVEL", "3"), ("HITS", "20"), ("MAXHITS", "31"), ("STRENGTH", "16")]), 1, "Hassan");
+        t.stats(&read(&[("LEVEL", "9")]), 1, "Bob");
+        t.stats(&read(&[("LEVEL", "4"), ("HITS", "25"), ("MAXHITS", "35"), ("MANA", "9"), ("STRENGTH", "17")]), 2, "Hassan");
+        let rows = &t.table(STATS).unwrap().rows;
+        assert_eq!(rows.len(), 6);
+        assert_eq!(rows.iter().filter(|r| r.cells[3] == "Hassan").count(), 5);
+        assert_eq!(rows.last().unwrap().cells, ["Strength", "STRENGTH", "17", "Hassan"]);
+        assert_eq!(t.check("stats", "Hassan").unwrap(), "Stats of Hassan: level 4, 25 of 35 hit points, 9 mana; strength 17. 5 in the table.");
+        assert_eq!(t.check("stat", "Bob").unwrap(), "Stats of Bob: level 9. 1 in the table.");
     }
 
     #[test]

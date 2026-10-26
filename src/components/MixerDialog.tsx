@@ -8,10 +8,12 @@
  *
  * Each volume is a slider the arrow keys move by 1 (Page Up and Page
  * Down by 10), with its value beside it in words and numbers; a change
- * is heard at once and kept for next time. Coupler's voice
- * (lib/voice.ts) has its volume and speed here too.
+ * is heard at once and kept for next time. The new level is said
+ * (`onSay`) once it's been left alone `SETTLE_MS`: the slider let go,
+ * or the last key pressed, so a drag isn't said at every step. Coupler's
+ * voice (lib/voice.ts) has its volume and speed here too.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import * as sound from "../lib/assets";
 import { assetTitle } from "../lib/mud";
 import * as voice from "../lib/voice";
@@ -23,7 +25,12 @@ interface MixerDialogProps {
   /** The music playing now, by name, or null. */
   playing: string | null;
   onStatus: (message: string) => void;
+  /** Says a level once it's set: in the status bar, and by the narrator if it speaks. */
+  onSay: (message: string) => void;
 }
+
+/** How long a level's left alone before it's said, ms. */
+const SETTLE_MS = 2000;
 
 const BUSES: [sound.Bus, string, string][] = [
   ["sfx", "SFX", "Sound effects"],
@@ -35,7 +42,7 @@ const BUSES: [sound.Bus, string, string][] = [
 
 const levelsNow = () => Object.fromEntries(sound.BUSES.map((b) => [b, sound.masterVolume(b)])) as Record<sound.Bus, number>;
 
-export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogProps) {
+export function MixerDialog({ open, onClose, playing, onStatus, onSay }: MixerDialogProps) {
   const id = useId();
   const [levels, setLevels] = useState(levelsNow);
   const [speech, setSpeech] = useState({ volume: voice.voiceVolume(), rate: voice.voiceRate() });
@@ -47,6 +54,46 @@ export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogPro
       setLevels(levelsNow());
       setSpeech({ volume: voice.voiceVolume(), rate: voice.voiceRate() });
     }
+  }, [open]);
+
+  // The level to say once it settles, and whether a finger or the mouse still holds its slider.
+  const settling = useRef<{ timer: number; held: boolean; words: (() => string) | null }>({ timer: 0, held: false, words: null });
+  const sayLater = () => {
+    const s = settling.current;
+    window.clearTimeout(s.timer);
+    if (s.held || !s.words) return;
+    s.timer = window.setTimeout(() => {
+      if (s.words) onSay(s.words());
+      s.words = null;
+    }, SETTLE_MS);
+  };
+  /** Props for a slider whose level is said once it settles. */
+  const settles = (words: () => string) => ({
+    onPointerDown: () => {
+      settling.current.held = true;
+      window.clearTimeout(settling.current.timer);
+    },
+    onPointerUp: () => {
+      settling.current.held = false;
+      sayLater();
+    },
+    onPointerCancel: () => {
+      settling.current.held = false;
+      sayLater();
+    },
+    onInput: () => {
+      settling.current.words = words;
+      sayLater();
+    },
+  });
+  useEffect(() => {
+    const s = settling.current;
+    if (!open) {
+      window.clearTimeout(s.timer);
+      s.words = null;
+      s.held = false;
+    }
+    return () => window.clearTimeout(s.timer);
   }, [open]);
 
   function change(bus: sound.Bus, percent: number) {
@@ -93,6 +140,7 @@ export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogPro
               aria-valuetext={`${levels[bus]} percent`}
               value={levels[bus]}
               onChange={(e) => change(bus, Number(e.currentTarget.value))}
+              {...settles(() => `${long} at ${sound.masterVolume(bus)} percent.`)}
             />
             <span className="mixer-value" aria-hidden="true">
               {String(levels[bus]).padStart(3)}%
@@ -115,6 +163,7 @@ export function MixerDialog({ open, onClose, playing, onStatus }: MixerDialogPro
               voice.setVoiceVolume(Number(e.currentTarget.value));
               setSpeech((s) => ({ ...s, volume: voice.voiceVolume() }));
             }}
+            {...settles(() => `Coupler's voice at ${voice.voiceVolume()} percent.`)}
           />
           <span className="mixer-value" aria-hidden="true">
             {String(speech.volume).padStart(3)}%

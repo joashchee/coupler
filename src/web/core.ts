@@ -235,7 +235,7 @@ async function connect(x: Exports, portId: string): Promise<void> {
       socket = null;
       stopWhoClock();
       reject("Couldn't reach CoffeeMUD.");
-      call(x, "mud_closed", { reason: e.wasClean ? "CoffeeMUD closed the connection." : "The connection to CoffeeMUD dropped." });
+      call(x, "mud_closed", { reason: e.wasClean ? "CoffeeMUD closed the connection." : "The connection to CoffeeMUD dropped.", clean: e.wasClean, code: e.code });
       flush(x);
     };
   });
@@ -249,7 +249,7 @@ async function connect(x: Exports, portId: string): Promise<void> {
       stopWhoClock();
       ws.close();
       flush(x);
-      call(x, "mud_closed", { reason: String(why) });
+      call(x, "mud_closed", { reason: String(why), unreadable: true });
       flush(x);
     }
   };

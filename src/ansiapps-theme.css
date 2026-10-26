@@ -674,6 +674,10 @@
    field, in the same columns but the button's. */
 :root[data-theme="ansiapps"] .hooks-head.tables-row,
 :root[data-theme="ansiapps"] .hooks-list.tables-list li { grid-template-columns: 56px repeat(var(--table-columns), 176px) minmax(0, 1fr); gap: 0 16px; }
+/* Disconnections' rows lead with Show… and Delete (16 cells, one between). */
+:root[data-theme="ansiapps"] .hooks-head.tables-row-detailed,
+:root[data-theme="ansiapps"] .hooks-list.tables-list-detailed li { grid-template-columns: 128px repeat(var(--table-columns), 176px) minmax(0, 1fr); }
+:root[data-theme="ansiapps"] .tables-row-buttons { gap: 8px; }
 :root[data-theme="ansiapps"] .tables-choose { margin: 16px 0 0; }
 :root[data-theme="ansiapps"] .dialog-hooks .hooks-list.tables-list-own { height: 192px; }
 :root[data-theme="ansiapps"] .tables-add { margin: 16px 0 0; }

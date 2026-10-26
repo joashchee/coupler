@@ -32,6 +32,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -49,6 +50,9 @@ use crate::bestiary::{self, Bestiary, Creature, Cry, Fact, Reader};
 use crate::cast::{self, Cast};
 use crate::character::{Character, Left};
 use crate::combat::{Combat, Opponent};
+use crate::disconnect::{Ending, LastMoments};
+use crate::needs::Needs;
+use crate::stats::Stats;
 use crate::fight_log::{self, Fight, Fights, Recorder};
 use crate::{face, item_art};
 use crate::daytime::{self, Daytime, Phase};
@@ -380,6 +384,14 @@ pub struct Session {
     channels: Mutex<Channels>,
     /// What's on the player, their cooldowns and group (`effects.rs`).
     effects: Mutex<Watch>,
+    /// Hungry, thirsty, fatigued, stinky, said now and then (`needs.rs`).
+    needs: Mutex<Needs>,
+    /// What STAT says of the character, read by hidden STATs (`stats.rs`).
+    stats: Mutex<Stats>,
+    /// The connection's last moments, kept if it ends without the player leaving (`disconnect.rs`).
+    disconnects: Mutex<LastMoments>,
+    /// The game isn't echoing what's typed (a password): nothing sent is kept by `disconnects`.
+    secret: AtomicBool,
 }
 
 /// The narrator's words for a fight's loot, by the id the player's own
@@ -575,6 +587,8 @@ impl Session {
         *self.account.lock().unwrap() = Account::default();
         self.echoes.lock().unwrap().clear();
         self.looter.lock().unwrap().clear();
+        self.needs.lock().unwrap().clear();
+        self.stats.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
@@ -582,6 +596,8 @@ impl Session {
         self.effects.lock().unwrap().closed();
         self.automation.lock().unwrap().closed();
         *self.live.lock().unwrap() = Some(Live { stream, telnet: telnet.clone(), id, port, wrote: Instant::now() });
+        self.secret.store(false, Ordering::Relaxed);
+        self.disconnects.lock().unwrap().start(&format!("{name}, port {number}"), unix_ms());
 
         // WHO's clock, for as long as this connection lasts.
         let clock = app.clone();
@@ -591,17 +607,19 @@ impl Session {
             if session.live.lock().unwrap().as_ref().is_none_or(|l| l.id != id) {
                 break;
             }
+            session.disconnects.lock().unwrap().tick(unix_ms());
             session.who_tick(&clock);
         });
 
         let app = app.clone();
         std::thread::spawn(move || {
-            let reason = read_loop(&app, reader, &telnet);
+            let (reason, ending) = read_loop(&app, reader, &telnet);
             let session = app.state::<Session>();
             let mut live = session.live.lock().unwrap();
             if live.as_ref().is_some_and(|l| l.id == id) {
                 *live = None;
                 drop(live);
+                session.ended(&app, ending);
                 session.left_the_game(&app, "Stopped walking: the connection ended.");
                 let _ = app.emit("mud-closed", ClosedEvent { reason });
             }
@@ -660,6 +678,8 @@ impl Session {
 
     pub fn disconnect(&self, app: &AppHandle) {
         if let Some(live) = self.live.lock().unwrap().take() {
+            // The player's own leaving: nothing to find out.
+            *self.disconnects.lock().unwrap() = LastMoments::default();
             let _ = live.stream.shutdown(Shutdown::Both);
             self.left_the_game(app, "Stopped walking: the connection ended.");
             let _ = app.emit("mud-closed", ClosedEvent { reason: None });
@@ -842,6 +862,11 @@ impl Session {
         let kept = self.fights.lock().unwrap().recorder.tick(unix_ms());
         self.fight_kept(app, kept);
         self.songbook_tick(app, now);
+        // Said by Coupler, never sent: nothing waits for the game's answers.
+        let fighting = self.combat.lock().unwrap().combat.opponent().is_some();
+        if let Some(words) = self.needs.lock().unwrap().due(now, fighting) {
+            let _ = app.emit("needs", words);
+        }
         // A WRITE under way takes the next lines as its answers: nothing
         // of Coupler's own (WHO, WEATHER, a look, a ticker) goes till it's done.
         if self.songbook.lock().unwrap().poster.is_some() {
@@ -857,6 +882,10 @@ impl Session {
         if self.effects.lock().unwrap().awaiting(unix_ms()) {
             return;
         }
+        // Nor a hidden STAT's (stats.rs).
+        if self.stats.lock().unwrap().awaiting(unix_ms()) {
+            return;
+        }
         self.automation_tick(app, now);
         if self.who.lock().unwrap().due(now) {
             if let Err(e) = self.write(&telnet::encode_line("who")) {
@@ -869,6 +898,14 @@ impl Session {
         if gentle && self.effects.lock().unwrap().wants(unix_ms()) {
             let ask = self.effects.lock().unwrap().ask(unix_ms());
             if let Err(e) = self.write(&telnet::encode_line(ask)) {
+                log::warn!("{e}");
+            }
+            return;
+        }
+        // What STAT says, for the Stats table.
+        if gentle && self.stats.lock().unwrap().wants(unix_ms()) {
+            let ask = self.stats.lock().unwrap().ask(unix_ms());
+            if let Err(e) = self.write(&telnet::encode_line(&ask)) {
                 log::warn!("{e}");
             }
             return;
@@ -929,7 +966,21 @@ impl Session {
         let mut live = self.live.lock().unwrap();
         let live = live.as_mut().ok_or("Not connected to CoffeeMUD.")?;
         live.wrote = Instant::now();
+        self.disconnects.lock().unwrap().sent(bytes, self.secret.load(Ordering::Relaxed), unix_ms());
         live.stream.write_all(bytes).map_err(|e| format!("Couldn't send to CoffeeMUD. ({e})"))
+    }
+
+    /// The connection ended without the player hanging up: what was seen
+    /// kept in the Disconnections table, and offered unless they quit.
+    fn ended(&self, app: &AppHandle, ending: Ending) {
+        let character = self.senses.lock().unwrap().senses.name().to_string();
+        let Some(finding) = self.disconnects.lock().unwrap().finish(ending, &character, unix_ms()) else { return };
+        log::info!("disconnected: {} {}", finding.how, finding.cause);
+        let row = self.tables.lock().unwrap().book.disconnection(&finding);
+        self.tables_changed(app);
+        if !finding.expected {
+            let _ = app.emit("disconnected", Disconnected { finding, row });
+        }
     }
 
     // ---- The cast ----
@@ -1118,7 +1169,12 @@ impl Session {
     /// What `#check` says of a table, for the character playing (or last played).
     pub fn table_check(&self, name: &str) -> Result<String, String> {
         let character = self.fights.lock().unwrap().character.clone();
-        self.tables.lock().unwrap().book.check(name, &character)
+        let book = &self.tables.lock().unwrap().book;
+        // Stats are read from the game again, for the next time.
+        if book.find(name).is_ok_and(|t| t.id == tables::STATS) {
+            self.stats.lock().unwrap().refresh();
+        }
+        book.check(name, &character)
     }
 
     /// One read's loot (`loot.rs`): its lines made the narrator's, said
@@ -1876,6 +1932,8 @@ impl Session {
         *self.counted.lock().unwrap() = false;
         self.echoes.lock().unwrap().clear();
         self.looter.lock().unwrap().clear();
+        self.needs.lock().unwrap().clear();
+        self.stats.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
         self.channels.lock().unwrap().closed();
@@ -2507,11 +2565,19 @@ enum Said<'a> {
     WorldTime(&'a str),
 }
 
+/// A connection that ended without the player hanging up, offered to them (`DisconnectDialog.tsx`).
+#[derive(Serialize, Clone)]
+struct Disconnected {
+    finding: crate::disconnect::Finding,
+    /// Its row in the Disconnections table.
+    row: u64,
+}
+
 /// What's said when the game hangs up (a QUIT).
 const CLOSED: &str = "CoffeeMUD closed the connection.";
 
-/// Reads until the socket closes. Returns why, for the status line.
-fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> Option<String> {
+/// Reads until the socket closes. Returns why, for the status line, and how (`disconnect.rs`).
+fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> (Option<String>, Ending) {
     let mut writer = stream.try_clone().ok();
     let mut screen = Screen::default();
     let mut kinds = Kinds::default();
@@ -2522,18 +2588,19 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
     let mut buf = vec![0u8; 16 * 1024];
     loop {
         let n = match stream.read(&mut buf) {
-            Ok(0) => return Some(CLOSED.into()),
+            Ok(0) => return (Some(CLOSED.into()), Ending::Closed),
             Ok(n) => n,
             // A QUIT the game ends with a reset rather than a close: it's
             // still the game hanging up, not the line dropping.
-            Err(e) if matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) => return Some(CLOSED.into()),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted) => return (Some(CLOSED.into()), Ending::Reset),
             // Our own shutdown lands here too; `disconnect` has already
             // reported it, and the id check drops this one.
-            Err(e) => return Some(format!("The connection to CoffeeMUD dropped. ({e})")),
+            Err(e) => return (Some(format!("The connection to CoffeeMUD dropped. ({e})")), Ending::Error(e.to_string())),
         };
+        app.state::<Session>().disconnects.lock().unwrap().received(n, unix_ms());
         let out = match telnet.lock().unwrap().feed(&buf[..n]) {
             Ok(out) => out,
-            Err(e) => return Some(e),
+            Err(e) => return (Some(e.clone()), Ending::Unreadable(e)),
         };
         if !out.replies.is_empty() {
             if let Some(w) = writer.as_mut() {
@@ -2616,6 +2683,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 // anyway, so a prompt shows whether or not GA marks it.
                 Event::Prompt => {}
                 Event::ServerEcho(on) => {
+                    session.secret.store(on, Ordering::Relaxed);
                     session.who.lock().unwrap().echo(on);
                     let _ = app.emit("mud-echo", on);
                 }
@@ -2642,6 +2710,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                 }
                 Event::Gmcp(package, data) => {
                     log::debug!("GMCP {package}");
+                    session.disconnects.lock().unwrap().gmcp(&package, unix_ms());
                     let left = session.character.lock().unwrap().gmcp(&package, &data);
                     // Emitted now, so what this read sets off (the new
                     // character's room, which comes before their char.base)
@@ -2651,6 +2720,8 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
                     }
                     session.combat.lock().unwrap().combat.gmcp(&package, &data);
                     session.effects.lock().unwrap().gmcp(&package, &data);
+                    session.needs.lock().unwrap().gmcp(&package, &data);
+                    session.stats.lock().unwrap().gmcp(&package, &data);
                     session.ways.lock().unwrap().gmcp(&package, &data);
                     let moved = session.comings.lock().unwrap().gmcp(&package, &data, Instant::now());
                     let (learned, cry) = session.bestiary_gmcp(app, &package, &data);
@@ -2721,6 +2792,19 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
             watch.me(session.senses.lock().unwrap().senses.name());
             hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| watch.line(text, now)).map(|(i, _)| i));
         }
+        // Nor a hidden STAT's, kept in the Stats table (stats.rs).
+        {
+            let now = unix_ms();
+            let mut stats = session.stats.lock().unwrap();
+            hidden_lines.extend(texts.iter().enumerate().filter(|(_, text)| stats.line(text, now)).map(|(i, _)| i));
+            let read = stats.take_read();
+            drop(stats);
+            if let Some(read) = read {
+                let character = session.senses.lock().unwrap().senses.name().to_string();
+                session.tables.lock().unwrap().book.stats(&read, now, &character);
+                session.tables_changed(app);
+            }
+        }
         hidden_lines.sort_unstable();
         hidden_lines.dedup();
         if let Some(&first) = hidden_lines.first() {
@@ -2744,6 +2828,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         }
         // The fight's record reads every line, gagged or not (fight_log.rs).
         session.fight_read(app, &texts);
+        session.disconnects.lock().unwrap().lines(&texts, unix_ms());
         // The player's gags, and what their triggers set off (automation.rs).
         let acting = session.who.lock().unwrap().acting();
         let (gagged, actions) = session.automation.lock().unwrap().lines(&texts, acting, Instant::now());

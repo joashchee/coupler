@@ -40,6 +40,8 @@ mod combat;
 mod creation;
 #[path = "../../src-tauri/src/daytime.rs"]
 mod daytime;
+#[path = "../../src-tauri/src/disconnect.rs"]
+mod disconnect;
 #[path = "../../src-tauri/src/echo.rs"]
 mod echo;
 #[path = "../../src-tauri/src/effects.rs"]
@@ -71,6 +73,8 @@ mod mapper;
 mod msp;
 #[path = "../../src-tauri/src/mssp.rs"]
 mod mssp;
+#[path = "../../src-tauri/src/needs.rs"]
+mod needs;
 #[path = "../../src-tauri/src/paint.rs"]
 mod paint;
 #[path = "../../src-tauri/src/painter.rs"]
@@ -87,6 +91,8 @@ mod soundbank;
 #[path = "../../src-tauri/src/speech.rs"]
 mod speech;
 mod synth;
+#[path = "../../src-tauri/src/stats.rs"]
+mod stats;
 #[path = "../../src-tauri/src/tables.rs"]
 mod tables;
 #[path = "../../src-tauri/src/telnet.rs"]

@@ -592,7 +592,31 @@ export interface TableRow {
   cells: string[];
   /** Loot's: the death it came from, shared by its rows. */
   haul?: number;
+  /** Disconnections': the findings, a line each. */
+  details?: string[];
 }
+
+/** The Stats table's id (src-tauri/src/tables.rs). */
+export const STATS_TABLE = "stats";
+/** The Disconnections table's id (src-tauri/src/tables.rs). */
+export const DISCONNECTIONS_TABLE = "disconnections";
+
+/** What Coupler saw of a connection that ended (src-tauri/src/disconnect.rs). */
+export interface Finding {
+  /** When it ended, Unix milliseconds. */
+  at: number;
+  /** The player quit: never offered. */
+  expected: boolean;
+  how: string;
+  cause: string;
+  character: string;
+  connectedFor: string;
+  details: string[];
+}
+
+/** A connection ended without the player leaving: its findings, kept as `row` of the Disconnections table. */
+export const onDisconnected = (f: (e: { finding: Finding; row: number }) => void): Promise<UnlistenFn> =>
+  listen<{ finding: Finding; row: number }>("disconnected", (e) => f(e.payload));
 
 export interface TableOverview {
   id: string;
@@ -686,6 +710,9 @@ export const automationSuggest = (line: string) => invoke<Suggestion[]>("automat
 /** What each `*` of the pattern is in the line; null when it doesn't match. */
 export const automationMatch = (pattern: string, line: string) => invoke<string[] | null>("automation_match", { pattern, line });
 export const onAutomationRecent = (f: (recent: RecentLine[]) => void): Promise<UnlistenFn> => listen<RecentLine[]>("automation-recent", (e) => f(e.payload));
+/** The body's needs to say (src-tauri/src/needs.rs): "You're hungry and thirsty.", when one begins and every few minutes while any lasts. */
+export const onNeeds = (f: (words: string) => void): Promise<UnlistenFn> => listen<string>("needs", (e) => f(e.payload));
+
 export const onAutomationFired = (f: (fired: AutomationFired) => void): Promise<UnlistenFn> => listen<AutomationFired>("automation-fired", (e) => f(e.payload));
 export const onAutomationHeld = (f: (message: string) => void): Promise<UnlistenFn> => listen<string>("automation-held", (e) => f(e.payload));
 

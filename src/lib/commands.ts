@@ -34,10 +34,10 @@ export const COMMANDS: CommandInfo[] = [
   { name: "load", usage: "", does: "opens the music last read in a journal", desktop: true },
   { name: "hook", usage: "room|area", does: "makes it the music of this room or area", desktop: true },
   { name: "unhook", usage: "room|area", does: "takes the music off this room or area", desktop: true },
-  { name: "check", usage: "[table]", does: "says a table: loot is what your last fight brought; with no table, lists them" },
+  { name: "check", usage: "[table]", does: "says a table: loot is what your last fight brought, stats your character's (read again from the game); with no table, lists them" },
   { name: "add", usage: "<table> <cell> | <cell>…", does: "adds a row to a table of yours, its cells split by |" },
   { name: "prefix", usage: "<character>", does: "types Coupler's commands after another character" },
-  { name: "help", usage: "", does: "lists these" },
+  { name: "help", usage: "[command]", does: "lists these; with a command's name, says what it does" },
 ];
 
 const PREFIX_KEY = "coupler.commandPrefix";
@@ -88,10 +88,34 @@ export function parse(line: string, p = prefix()): Parsed {
   return { kind: "command", name: info?.name ?? name, rest, info };
 }
 
-/** The commands in a line, for the status bar and the screen reader. */
+const usable = (desktop: boolean) => COMMANDS.filter((c) => desktop || !c.desktop);
+const typed = (c: CommandInfo, p: string) => `${p}${c.name}${c.usage ? ` ${c.usage}` : ""}`;
+
+/** The commands' names in a line, said and put in the status bar: the list itself is `helpLines`. */
 export function helpText(p = prefix(), desktop = true): string {
-  const list = COMMANDS.filter((c) => desktop || !c.desktop).map((c) => `${p}${c.name}${c.usage ? ` ${c.usage}` : ""}`);
-  return `Coupler's commands: ${list.join(", ")}. ${p}${p} sends a line starting with ${p} to the game.`;
+  return `Coupler's commands: ${usable(desktop).map((c) => c.name).join(", ")}. ${p}help and a command's name says what it does.`;
+}
+
+/** Every command with its words and what it does, a line each, for the output. */
+export function helpLines(p = prefix(), desktop = true): string[] {
+  const list = usable(desktop);
+  const width = Math.max(...list.map((c) => typed(c, p).length));
+  return [
+    `Coupler's commands, never sent to the game (a name can be cut short):`,
+    ...list.map((c) => `  ${typed(c, p).padEnd(width)}  ${c.does}`),
+    `  ${p}${p} sends a line starting with ${p} to the game.`,
+  ];
+}
+
+/** One command's words and what it does, or null for none of that name. */
+export function helpFor(name: string, p = prefix(), desktop = true): string | null {
+  const bare = name.trim().toLowerCase();
+  const want = bare.startsWith(p) ? bare.slice(p.length) : bare;
+  const starting = usable(desktop).filter((c) => c.name.startsWith(want));
+  const c = usable(desktop).find((c) => c.name === want) ?? (starting.length === 1 ? starting[0] : null);
+  if (!want || !c) return null;
+  const does = c.does.charAt(0).toUpperCase() + c.does.slice(1);
+  return `${typed(c, p)}: ${does}.`;
 }
 
 /**

@@ -233,6 +233,10 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   `clock.rs`: split out so the web build can share them.
 - `mssp.rs`: the launch greeting (players online, version vs
   `BUILT_FOR`, times played from `played.json`).
+- `disconnect.rs`: a connection's last moments (lines, sends without
+  passwords, GMCP, the clock's pauses), its likely cause when it ends;
+  kept in the Disconnections table, offered unless the player quit
+  (`DisconnectDialog.tsx`). Both builds.
 - `update.rs`: the update check (rule 2), desktop only; also
   `community_open`'s fixed Discord and Reddit pages.
 - `who.rs`: WHO once a minute, its reply hidden; **never for a player
@@ -253,9 +257,13 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   narrator's ("Loot collected." once, an `Echoed`), kept in the Loot
   table; `is_money`, money by its count and denomination (foley's
   `Coins`). Both builds.
-- `tables.rs`: Coupler's tables (Loot) and the player's, per world in
-  `tables/<world>.json`; `#check`, `#add`. `TablesDialog.tsx`,
-  Cmd+Shift+T. Both builds.
+- `tables.rs`: Coupler's tables (Loot, Stats, Disconnections) and the
+  player's, per world in `tables/<world>.json`; `#check`, `#add`.
+  `TablesDialog.tsx`, Cmd+Shift+T. Both builds.
+- `stats.rs`: hidden STATs (gentle as AFFECTS) read into the Stats
+  table. Both builds.
+- `needs.rs`: hungry, thirsty, fatigued, stinky from `char.status`,
+  said when one begins and every 5 minutes. Both builds.
 - `combat.rs`: Combat or Explore mode and the opponent; MSDP's exact
   figures preferred over GMCP's `enemypct`.
 - `fight_log.rs`: every fight recorded for **Combat Summary**: blows
