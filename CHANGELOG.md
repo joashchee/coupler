@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.46.0 (2026-10-26)
 
 - **Aliases work as soon as you're in the game** (2026-10-26): an alias
   typed was sent as it was ("Huh?") until the game had told Coupler
