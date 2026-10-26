@@ -547,6 +547,9 @@ mod tests {
             ("You borrow 200 gold coins from the banker.", Some(Happening::Coins)),
             ("You pay Bob 20 gold coins.", Some(Happening::Coins)),
             ("You bid 30 gold coins on a sword with the auctioneer.", Some(Happening::Coins)),
+            ("You get 5 Copper Crowns from the body of a guard.", Some(Happening::Coins)),
+            ("You give 3 conch(es) to a merman.", Some(Happening::Coins)),
+            ("You drop 12 drachmas.", Some(Happening::Coins)),
             ("You get a bag of coins.", Some(Happening::Get)),
             ("You deposit a long sword with the banker.", None),
         ];

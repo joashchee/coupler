@@ -1121,10 +1121,11 @@ fn blurbs(text: &str) -> (String, Vec<String>) {
     (name.to_string(), found)
 }
 
-/// Coins by their kind, not how many: "12 gold coins" is "gold coins".
+/// Coins by their kind, not how many: "12 gold coins" is "gold coins",
+/// "5 Copper Crowns" "Copper Crowns" (every currency: `loot::is_money`).
 fn coins(item: &str) -> String {
     let lower = item.to_lowercase();
-    if lower.contains("coin") && item.chars().any(|c| c.is_ascii_digit()) {
+    if (lower.contains("coin") || crate::loot::is_money(item)) && item.chars().any(|c| c.is_ascii_digit()) {
         squeeze(&item.chars().filter(|c| !c.is_ascii_digit()).collect::<String>().replace(" of  ", " of "))
     } else {
         item.to_string()
@@ -1586,6 +1587,10 @@ mod tests {
         // COMPRESS: the list on the line.
         let facts = read(&mut reader, &["the body of an orc contains: a sword, 12 gold coins"], t);
         assert_eq!(facts, [Fact::Carried { name: "an orc".into(), item: "a sword".into(), count: 1 }, Fact::Carried { name: "an orc".into(), item: "gold coins".into(), count: 1 }]);
+        // Every currency by its kind, not how many.
+        assert_eq!(coins("5 Copper Crowns"), "Copper Crowns");
+        assert_eq!(coins("3 conch(es)"), "conch(es)");
+        assert_eq!(coins("a 2 handed sword"), "a 2 handed sword");
     }
 
     #[test]

@@ -13,7 +13,8 @@ work from this file, the code and `docs/`.
   (rule 9), `docs/ansiapps-theme.md` and
   `docs/ansiapps-color-contrast.md` (the look); the study of the
   server: `docs/coffeemud-gmcp.md`, `coffeemud-ports.md`,
-  `coffeemud-socials.md` (+ `.tsv`), `coffeemud-commands.md`.
+  `coffeemud-socials.md` (+ `.tsv`), `coffeemud-commands.md`,
+  `coffeemud-currencies.md`.
   `CONTRIBUTING.md` is these rules for contributors; keep the two in
   step.
 - **CoffeeMUD's source** is in `reference/CoffeeMud/` (gitignored,
@@ -253,8 +254,8 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
   table; `is_money`, money by its count and denomination (foley's
   `Coins`). Both builds.
 - `tables.rs`: Coupler's tables (Loot) and the player's, per world in
-  `tables/<world>.json`; `#check`, `#add`, LOOK LOOT (App.tsx answers
-  it, never sent). `TablesDialog.tsx`, Cmd+Shift+T. Both builds.
+  `tables/<world>.json`; `#check`, `#add`. `TablesDialog.tsx`,
+  Cmd+Shift+T. Both builds.
 - `combat.rs`: Combat or Explore mode and the opponent; MSDP's exact
   figures preferred over GMCP's `enemypct`.
 - `fight_log.rs`: every fight recorded for **Combat Summary**: blows

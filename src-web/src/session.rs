@@ -128,6 +128,8 @@ pub struct Coupler {
     map_saved: Saved,
     walk: VecDeque<Step>,
     asked_where: bool,
+    /// `Char.Base` asked for and not yet answered (`ask_who`).
+    asked_name: bool,
     cast: Cast,
     cast_saved: Saved,
     /// The journal and the log, every world's, and whose they are: the
@@ -225,6 +227,7 @@ impl Coupler {
             map_saved: Saved::default(),
             walk: VecDeque::new(),
             asked_where: false,
+            asked_name: false,
             cast: Cast::default(),
             cast_saved: Saved::default(),
             ambient: Ambient::default(),
@@ -299,6 +302,7 @@ impl Coupler {
         self.screen = Screen::default();
         self.kinds = Kinds::default();
         self.asked_where = false;
+        self.asked_name = false;
         self.character = Character::default();
         self.combat = Combat::default();
         self.combat_sent = None;
@@ -668,6 +672,7 @@ impl Coupler {
         if in_game {
             self.count_play();
             self.ask_where();
+            self.ask_who();
         }
         if !sounds.is_empty() {
             fired.extend(self.msp_sounds(&sounds));
@@ -1103,6 +1108,18 @@ impl Coupler {
         if !self.asked_where {
             self.asked_where = true;
             self.outgoing.extend(Telnet::gmcp("Room.Info", ""));
+        }
+    }
+
+    /// The desktop's `ask_who`: `Char.Base` when no name is known, once.
+    fn ask_who(&mut self) {
+        if !self.senses.name().is_empty() {
+            self.asked_name = false;
+            return;
+        }
+        if !self.asked_name {
+            self.asked_name = true;
+            self.outgoing.extend(Telnet::gmcp("Char.Base", ""));
         }
     }
 

@@ -6,8 +6,7 @@
 //! - **Loot** (`LOOT`), Coupler's: every thing AUTOLOOT and AUTOGOLD took
 //!   off a body (`loot.rs`), a row each, with the body, the character and
 //!   the room. The rows of one death share its `haul`, so `#check loot`
-//!   (and LOOK LOOT) says only what the last fight brought, never the
-//!   whole inventory.
+//!   says only what the last fight brought, never the whole inventory.
 //! - **The player's own**: a name, up to `MOST_COLUMNS` columns, rows
 //!   added in the dialog or by `#add`.
 //!

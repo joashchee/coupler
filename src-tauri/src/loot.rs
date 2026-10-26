@@ -13,9 +13,10 @@
 //! (`echo.rs`), not loot.
 //!
 //! The wiki's AUTOLOOT page (read 2026-10-26) agrees: it "automatically
-//! collect[s] any items from the corpses of vanquished foes". It has no
-//! page on currencies, so the denominations are the source's.
+//! collect[s] any items from the corpses of vanquished foes". Money is
+//! known by the game's own list of its currencies (`DENOMINATIONS`).
 
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use crate::clock::Instant;
@@ -112,22 +113,71 @@ impl Looter {
     }
 }
 
+/// Every denomination of every currency, as the game names it
+/// (`MoneyDenomination.name`, "(s)" its plural). coffeemud.net's areas use
+/// nine currencies, read from its `HELP WORLD CURRENCY` (its web help,
+/// `help.cmvp?HELPTOPIC=WORLD_CURRENCY`, 2026-10-26); the wiki names each
+/// area's currency (`|Currency=` on its page) but not their coins. The
+/// rates are in `docs/coffeemud-currencies.md`. The last are the source's
+/// standards no area of coffeemud.net uses yet (`BeanCounter`); its
+/// VICTORY points are bound and never change hands.
+const DENOMINATIONS: &[&str] = &[
+    // The default: "gold coin(s)".
+    "gold coin(s)", "golden note(s)", "whole note(s)", "Archon note(s)",
+    // Alramian (Alramus, Cora Isle, the Gambling Hall …): no "(s)", so the
+    // same name for one or many.
+    "Copper Crowns", "Gold Crowns", "Double Crowns", "Royal Crowns", "Archon Crown",
+    // Merconomy (Atlantis): "(es)" isn't a plural the game makes
+    // (`BeanCounter.getDenominationName`), so "3 conch(es)" as it stands.
+    "sanddollar(s)", "shell(s)", "conch(es)", "nautilus(es)", "archonolus(es)",
+    // Copper (Calinth, the Steading of the Hill Giants …).
+    "copper bit(s)", "silver bit(s)", "gold bit(s)", "platinum bit(s)", "aluminum bit(s)",
+    // Troya (Old Troya).
+    "chalko(s)", "obol(s)", "drachma(s)", "mina(s)", "talent(s)",
+    // Weed (Cannabis).
+    "bud(s)", "stem(s)", "weed bag(s)",
+    // Gold (the Dwarven Kingdom, Urgan`ali Dorica …).
+    "copper piece(s)", "silver piece(s)", "gold piece(s)", "platinum piece(s)",
+    // Charcurrency (Illysia`s Cottage).
+    "Character Coin",
+    // Darkcredits.
+    "dark credit(s)", "dark coin(s)",
+    // The source's CREDIT and DOLLAR.
+    "credit(s)", "megacredit(s)", "gigacredit(s)", "cent(s)", "dollar(s)", "grand",
+];
+
+/// A denomination's names for one and for many, lowercase, as
+/// `BeanCounter.getDenominationName` makes them: "gold coin(s)" is "gold
+/// coin" and "gold coins"; any other name stands as it is.
+fn forms(name: &str) -> [String; 2] {
+    let name = name.to_lowercase();
+    match name.strip_suffix("(s)") {
+        Some(one) => [one.to_string(), format!("{one}s")],
+        None => [name.clone(), name],
+    }
+}
+
 /// Whether a thing the game names is money: CoffeeMUD names coins by
-/// their count and denomination (`BeanCounter.getDenominationName`:
-/// "12 gold coins", "1 copper bit"), the denominations of its standard
-/// currencies (`BeanCounter`'s default, GOLD and COPPER standards;
-/// `resources/` adds CREDIT and DOLLAR).
+/// their count and denomination and nothing else (`StdCoins.Name`: "12
+/// gold coins", "1 Archon note", "5 Copper Crowns"), so a count followed
+/// by one of `DENOMINATIONS`.
 pub fn is_money(text: &str) -> bool {
-    const DENOMINATIONS: &[&str] = &[
-        "coin", "coins", "note", "notes", "piece", "pieces", "bit", "bits", "credit", "credits", "megacredit", "megacredits", "gigacredit", "gigacredits", "cent", "cents", "dollar",
-        "dollars", "grand",
-    ];
-    let words: Vec<String> = text.split_whitespace().map(|w| w.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != ',').to_lowercase()).collect();
-    let number = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_digit() || c == ',' || c == '.') && w.chars().any(|c| c.is_ascii_digit());
-    // The count, then up to three words of the denomination's name ("1 Archon note").
-    words.iter().enumerate().any(|(i, w)| {
-        number(w) && words.iter().skip(i + 1).take(3).any(|d| DENOMINATIONS.contains(&d.trim_end_matches(['.', ','])))
-    })
+    static FORMS: OnceLock<Vec<String>> = OnceLock::new();
+    let forms = FORMS.get_or_init(|| DENOMINATIONS.iter().flat_map(|d| forms(d)).collect());
+    let lower = text.to_lowercase();
+    // Each word's start in the line, so what follows a count can be read.
+    let mut at = 0;
+    for word in lower.split(' ') {
+        let next = at + word.len() + 1;
+        let count = word.trim_start_matches('(');
+        let count = !count.is_empty() && count.chars().all(|c| c.is_ascii_digit() || c == ',' || c == '.') && count.chars().any(|c| c.is_ascii_digit());
+        let rest = lower.get(next..).unwrap_or("");
+        if count && forms.iter().any(|f| rest.strip_prefix(f.as_str()).is_some_and(|after| !after.starts_with(|c: char| c.is_alphanumeric()))) {
+            return true;
+        }
+        at = next;
+    }
+    false
 }
 
 #[cfg(test)]
@@ -206,8 +256,23 @@ mod tests {
             assert!(is_money(text), "{text}");
         }
         // A bag of coins is a bag; a count of anything else isn't money.
-        for text in ["a gold ring", "a bag of coins", "You get a sword.", "You drop 3 rations.", "a piece of cheese"] {
+        for text in ["a gold ring", "a bag of coins", "You get a sword.", "You drop 3 rations.", "a piece of cheese", "You get 2 apples from a bag.", "You get 3 shellfish.", "You drop 2 gold coinpurses."] {
             assert!(!is_money(text), "{text}");
         }
+    }
+
+    #[test]
+    fn every_currency_of_the_game_is_money() {
+        // Each denomination, one and many, as `getDenominationName` names it.
+        for name in DENOMINATIONS {
+            let [one, many] = forms(name);
+            assert!(is_money(&format!("You get 1 {one} from the body of a rat.")), "{one}");
+            assert!(is_money(&format!("You drop 12 {many}.")), "{many}");
+        }
+        for text in ["You get 5 Copper Crowns from the body of a guard.", "You get 1 Archon Crown.", "You give 3 conch(es) to a merman.", "You drop 2 weed bags.", "You deposit 36 drachmas into your account with the banker.", "You get 100 Character Coin.", "You withdraw 1 dark coin from your account with the banker.", "You get 7 sanddollars from the body of a crab."] {
+            assert!(is_money(text), "{text}");
+        }
+        assert_eq!(forms("gold coin(s)"), ["gold coin", "gold coins"]);
+        assert_eq!(forms("Archon Crown"), ["archon crown", "archon crown"]);
     }
 }

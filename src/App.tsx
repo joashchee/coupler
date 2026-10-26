@@ -1633,13 +1633,6 @@ function App() {
     historyAt.current = history.current.length;
     // What's said next answers it: the ping while it renders, if it has to be.
     voice.asked();
-    // LOOK LOOT is answered from the Loot table: what the last fight brought (src-tauri/src/tables.rs).
-    if (!secret && commands.isLookLoot(line)) {
-      const answer = await mud.tableCheck(mud.LOOT_TABLE).catch((e: unknown) => String(e));
-      note(`*** ${answer}`);
-      if (narratedRef.current) voice.speak(answer, true);
-      return;
-    }
     // A channel's LAST (OOC LAST 10) is answered from the log, not the game.
     if (!secret && LAST_LIKE.test(line.trim())) {
       const answer = await mud.journalLast(line.trim()).catch(() => null);

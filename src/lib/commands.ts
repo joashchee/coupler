@@ -105,8 +105,6 @@ export function addWords(rest: string): { table: string; cells: string[] } | nul
   return cells.some((c) => c !== "") ? { table: quoted[1], cells } : null;
 }
 
-/** LOOK LOOT, as the game's LOOK is typed (L, LO, LOO, LOOK): answered by Coupler from the Loot table, never sent. */
-export const isLookLoot = (line: string) => /^\s*l(o(ok?)?)?\s+loot\s*$/i.test(line);
 
 /** Commands that start with `name`, when it's ambiguous: for the error. */
 export const candidates = (name: string) => COMMANDS.filter((c) => c.name.startsWith(name)).map((c) => c.name);

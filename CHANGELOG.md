@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- **Aliases work as soon as you're in the game** (2026-10-26): an alias
+  typed was sent as it was ("Huh?") until the game had told Coupler
+  your character's name, which it does only every 16 seconds or so, and
+  never again after a LOGOUT and the same character back in. Coupler
+  now asks for the name at once. Triggers and tickers had the same
+  wait. Both builds.
+- **Every currency sounds like coins** (2026-10-26): Coins played only
+  for gold coins, notes, bits and pieces. Now it plays for every coin
+  of every currency in the game: Alramus's crowns, Atlantis's
+  sanddollars, shells and conches, Old Troya's drachmas, Cannabis's
+  buds, Character Coin and dark credits, whether picked up, looted,
+  dropped, given, banked or paid. The Bestiary keeps them by their kind,
+  not how many. Both builds.
+- **LOOK LOOT goes to the game again** (2026-10-26): Coupler no longer
+  answers it. #check loot says what the last fight brought, shown and
+  said. Both builds.
+
 ## 0.45.0 (2026-10-26)
 
 - **Open and Close on the tablet's pad** (2026-10-26): the two empty

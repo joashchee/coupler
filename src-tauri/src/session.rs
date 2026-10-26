@@ -455,6 +455,8 @@ pub fn game_status(port_id: &str) -> Result<(Option<u32>, Option<String>), Strin
 struct SensesStore {
     senses: Senses,
     sent: Option<Vitals>,
+    /// `Char.Base` asked for and not yet answered (`ask_who`).
+    asked_name: bool,
 }
 
 /// Where a world's map is kept: under the app-data dir (CLAUDE.md rule 8).
@@ -1942,6 +1944,29 @@ impl Session {
         }
     }
 
+    /// Asks the game who the player is (GMCP `Char.Base`, answered at
+    /// once) when Coupler doesn't know: CoffeeMUD sends `char.base` by
+    /// itself only when it changes (`possiblePingGmcp`'s hash, kept for
+    /// the connection), so after a LOGOUT the same character back in is
+    /// never named again, and a login waits up to its ~16 s poll. Until
+    /// named, `Who::acting` is false: no alias, trigger or WHO. Called
+    /// with `ask_where`; asks once until a name comes.
+    fn ask_who(&self) {
+        let mut store = self.senses.lock().unwrap();
+        if !store.senses.name().is_empty() {
+            store.asked_name = false;
+            return;
+        }
+        if store.asked_name {
+            return;
+        }
+        store.asked_name = true;
+        drop(store);
+        if let Err(e) = self.write(&Telnet::gmcp("Char.Base", "")) {
+            log::warn!("{e}");
+        }
+    }
+
     /// One GMCP message, for the map. Returns whether the room changed.
     fn map_gmcp(&self, app: &AppHandle, package: &str, data: &str) -> bool {
         let applied = match package.to_ascii_lowercase().as_str() {
@@ -2762,6 +2787,7 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         if in_game {
             session.count_play(app);
             session.ask_where();
+            session.ask_who();
         }
         if !sounds.is_empty() {
             let (added, set_off) = session.msp_sounds(app, &sounds);

@@ -4,7 +4,7 @@
  * Coupler's own come first (Loot: what AUTOLOOT took off a body, filled
  * as the game says it, src-tauri/src/loot.rs); then the player's, made
  * here with a name and up to five columns, rows added here or by `#add`.
- * `#check <table>` says one; LOOK LOOT says the last fight's loot.
+ * `#check <table>` says one; `#check loot`, the last fight's loot.
  *
  * One table shows at a time, chosen from a list, its rows the latest
  * first; each row's Delete comes first (the row's own buttons lead). The
