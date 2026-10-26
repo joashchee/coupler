@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.49.0 (2026-10-27)
 
 - **ANSImations play** (2026-10-26): an ANSI art file that draws over
   what it drew (the animations of the BBS days) plays as a trigger's
