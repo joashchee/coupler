@@ -166,6 +166,10 @@ pub struct Coupler {
     who: Who,
     account: crate::account::Account,
     echoes: Echoes,
+    /// A death seen, its loot coming (`loot.rs`).
+    looter: crate::loot::Looter,
+    /// Coupler's tables and the player's (`tables.rs`), the world's.
+    tables: crate::tables::Tables,
     long_look: LongLook,
     creation: Creation,
     /// Portals, ships and caravans, read from the exits text (`ways.rs`).
@@ -237,6 +241,8 @@ impl Coupler {
             who: Who::default(),
             account: crate::account::Account::default(),
             echoes: Echoes::default(),
+            looter: crate::loot::Looter::default(),
+            tables: crate::tables::Tables::new(),
             long_look: LongLook::default(),
             creation: Creation::default(),
             ways: Ways::default(),
@@ -262,8 +268,8 @@ impl Coupler {
     }
 
     /// Gets ready to play on a port and returns the WebSocket to open.
-    /// `map`, `cast` and `looks` are the world's saved JSON, or empty.
-    pub fn connect(&mut self, port_id: &str, map: &str, cast: &str, looks: &str, fights: &str) -> Result<String, String> {
+    /// `map`, `cast`, `looks`, `fights` and `tables` are the world's saved JSON, or empty.
+    pub fn connect(&mut self, port_id: &str, map: &str, cast: &str, looks: &str, fights: &str, tables: &str) -> Result<String, String> {
         let port = PORTS.iter().find(|p| p.id == port_id).ok_or("Coupler doesn't know that way to play.")?;
         let mut telnet = Telnet::new(&self.version);
         if self.size.0 > 0 {
@@ -274,6 +280,7 @@ impl Coupler {
             self.cast = if cast.is_empty() { Cast::default() } else { Cast::from_json(cast).unwrap_or_default() };
             self.looks = if looks.is_empty() { Looks::default() } else { Looks::from_json(looks).unwrap_or_default() };
             self.fights = if fights.is_empty() { Fights::default() } else { Fights::from_json(fights).unwrap_or_default() };
+            self.tables = if tables.is_empty() { crate::tables::Tables::new() } else { crate::tables::Tables::from_json(tables).unwrap_or_else(|_| crate::tables::Tables::new()) };
             self.map_saved = Saved::default();
             self.cast_saved = Saved::default();
             self.walk.clear();
@@ -300,6 +307,7 @@ impl Coupler {
         self.who = Who::default();
         self.account = crate::account::Account::default();
         self.echoes.clear();
+        self.looter.clear();
         self.long_look.clear();
         self.creation.clear();
         self.ways.clear();
@@ -347,6 +355,7 @@ impl Coupler {
         self.fight_recorder.sent(line, unix_ms());
         self.effects.sent(line, unix_ms());
         self.echoes.typed(line, Instant::now());
+        self.looter.typed();
         self.long_look.typed(line, Instant::now());
         self.beasts.reader.typed(line, Instant::now());
         self.creation.typed(line);
@@ -727,7 +736,11 @@ impl Coupler {
         }
         // WHO waits while a character's being made (who.rs).
         self.who.creating(self.creation.active());
-        let echoes = self.echoes.lines(&texts, &mut line_kinds, prompt.as_deref(), playing, Instant::now());
+        // Loot first, as the desktop's: its lines are no command's answer (loot.rs).
+        let looted = if playing { self.loot_read(&texts, &mut line_kinds) } else { None };
+        let mut echoes = self.echoes.lines(&texts, &mut line_kinds, prompt.as_deref(), playing, Instant::now());
+        echoes.extend(looted);
+        echoes.sort_by_key(|e| e.line);
         let hidden = self.long_look.lines(&lines, &line_kinds, self.map.here_name(), Instant::now());
         self.emit("mud-output", json!(OutputEvent { lines, kinds: line_kinds, echoes, hidden, partial }));
         Ok(())
@@ -953,6 +966,56 @@ impl Coupler {
         self.emit("fight-kept", json!(overview));
     }
 
+    // ---- The tables (tables.rs), as the desktop's ----
+
+    /// One read's loot: its lines the narrator's, "Loot collected." once, kept in the Loot table.
+    fn loot_read(&mut self, texts: &[String], kinds: &mut [crate::speech::LineKind]) -> Option<crate::echo::Echoed> {
+        let found = self.looter.lines(texts, Instant::now(), unix_ms());
+        let haul = found.haul?;
+        for &i in &found.lines {
+            if let Some(kind) = kinds.get_mut(i) {
+                *kind = crate::speech::LineKind::Echo;
+            }
+        }
+        let character = self.senses.name().to_string();
+        let place = self.map.here_name().unwrap_or_default().to_string();
+        self.tables.loot(&found.got, haul, unix_ms(), &character, &place);
+        self.tables_changed();
+        found.first.map(|line| crate::echo::Echoed { line, lines: 1, id: Some("loot.collected"), values: Vec::new(), says: "Loot collected.".into() })
+    }
+
+    /// Has the page keep the world's tables if they changed, and says so.
+    fn tables_changed(&mut self) {
+        if !self.tables.take_changed() {
+            return;
+        }
+        if let Some(world) = self.world {
+            self.emit("coupler-save", json!({ "key": format!("tables/{world}.json"), "json": self.tables.to_json() }));
+        }
+        self.emit("tables-changed", Value::Null);
+    }
+
+    pub fn tables_list(&self) -> Vec<crate::tables::Overview> {
+        self.tables.list()
+    }
+
+    pub fn table(&self, id: &str) -> Option<crate::tables::Table> {
+        self.tables.table(id).cloned()
+    }
+
+    pub fn table_change(&mut self, change: &crate::tables::Change) -> Result<Option<String>, String> {
+        if self.world.is_none() {
+            return Err("Tables are kept for each of CoffeeMUD's worlds: connect once first.".into());
+        }
+        let made = self.tables.apply(change, unix_ms())?;
+        self.tables_changed();
+        Ok(made)
+    }
+
+    pub fn table_check(&self, name: &str) -> Result<String, String> {
+        self.tables.check(name, &self.fight_character)
+    }
+
     pub fn fights_list(&self) -> Vec<fight_log::Overview> {
         self.fights.list(&self.fight_character)
     }
@@ -1001,6 +1064,7 @@ impl Coupler {
     fn character_left(&mut self, left: Left) {
         self.counted = false;
         self.echoes.clear();
+        self.looter.clear();
         self.long_look.clear();
         self.ways.clear();
         self.channels.closed();

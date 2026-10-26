@@ -247,6 +247,14 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
 - `echo.rs`: the commands' one-line answers, said by the narrator
   (gear → Narrator's Answers…).
 - `hidden.rs`: hidden details found by a long look's HIGHLIGHT color.
+- `loot.rs`: AUTOLOOT's and AUTOGOLD's "You get … from the body"
+  lines after a death, before the player sends anything: made the
+  narrator's ("Loot collected." once, an `Echoed`), kept in the Loot
+  table; `is_money`, money by its count and denomination (foley's
+  `Coins`). Both builds.
+- `tables.rs`: Coupler's tables (Loot) and the player's, per world in
+  `tables/<world>.json`; `#check`, `#add`, LOOK LOOT (App.tsx answers
+  it, never sent). `TablesDialog.tsx`, Cmd+Shift+T. Both builds.
 - `combat.rs`: Combat or Explore mode and the opponent; MSDP's exact
   figures preferred over GMCP's `enemypct`.
 - `fight_log.rs`: every fight recorded for **Combat Summary**: blows

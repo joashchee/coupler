@@ -669,6 +669,16 @@
    rows scrolling inside the frame, headings in blue (rank 23 on light
    gray) a row each; the charts light gray, light green and light
    magenta on black (ranks 9, 4 and 10), a row between. */
+/* Tables: Delete (7 cells), then each column (22), then when (the
+   rest), two cells between. Adding a row: each column's name over its
+   field, in the same columns but the button's. */
+:root[data-theme="ansiapps"] .hooks-head.tables-row,
+:root[data-theme="ansiapps"] .hooks-list.tables-list li { grid-template-columns: 56px repeat(var(--table-columns), 176px) minmax(0, 1fr); gap: 0 16px; }
+:root[data-theme="ansiapps"] .tables-choose { margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .dialog-hooks .hooks-list.tables-list-own { height: 192px; }
+:root[data-theme="ansiapps"] .tables-add { margin: 16px 0 0; }
+:root[data-theme="ansiapps"] .tables-add-cells { grid-template-columns: repeat(var(--table-columns), 176px); gap: 0 16px; margin: 0 0 16px; }
+:root[data-theme="ansiapps"] .tables-add-cell { gap: 0; line-height: 16px; }
 :root[data-theme="ansiapps"] .hooks-head.fights-row,
 :root[data-theme="ansiapps"] .hooks-list.fights-list li { grid-template-columns: 56px 280px 160px minmax(0, 1fr); gap: 0 16px; }
 :root[data-theme="ansiapps"] .summary-page { margin: 16px 0 0; height: 400px; font-size: inherit; line-height: 16px; color: var(--dos-black); }

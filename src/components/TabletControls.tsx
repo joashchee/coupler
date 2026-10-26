@@ -7,7 +7,9 @@
  * reading order, whatever the places.
  *
  * `lit` marks a control in yellow (an exit the map knows), and it's in
- * its name too (rule 10), never only in its look.
+ * its name too (rule 10), never only in its look. `pressed` (Open or
+ * Close waiting for a way) is yellow as a held modifier is on the
+ * keyboard, and `aria-pressed`.
  */
 import type { CSSProperties } from "react";
 
@@ -22,6 +24,8 @@ export interface TabletControl {
   /** Cells wide; 6 when left out. */
   cells?: number;
   lit?: boolean;
+  /** A key that stays down till it's used (Open, Close): pressed, for VoiceOver too. */
+  pressed?: boolean;
   disabled?: boolean;
   onPress: () => void;
 }
@@ -43,9 +47,10 @@ export function TabletControls({ controls, width, rows }: TabletControlsProps) {
           <button
             key={c.id}
             type="button"
-            className={`tablet-key${c.lit ? " exit" : ""}`}
+            className={`tablet-key${c.lit ? " exit" : ""}${c.pressed ? " held" : ""}`}
             data-testid={`control-${c.id}`}
             aria-label={c.name}
+            aria-pressed={c.pressed}
             disabled={c.disabled}
             style={{ left: c.column * 8, top: c.row * 48, width: cells * 8, "--left": `${left}px` } as CSSProperties}
             onClick={c.onPress}

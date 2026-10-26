@@ -64,6 +64,8 @@ pub use crate::ports::{Port, HOST, PORTS};
 use crate::senses::{Senses, Talk, Vitals};
 use crate::creation::{self, Creation};
 use crate::echo::{Echoed, Echoes};
+use crate::loot::Looter;
+use crate::tables::{self, Tables};
 use crate::hidden::{Hidden, LongLook};
 use crate::speech::{Kinds, LineKind};
 use crate::telnet::{self, Event, Telnet};
@@ -306,6 +308,14 @@ struct FightStore {
     character: String,
 }
 
+/// The world's tables (`tables.rs`): the world last played, so they can
+/// be read and changed after hanging up.
+#[derive(Default)]
+struct TableStore {
+    book: Tables,
+    world: Option<&'static str>,
+}
+
 /// The fight (`combat.rs`) and what was last sent.
 #[derive(Default)]
 struct CombatStore {
@@ -351,6 +361,10 @@ pub struct Session {
     account: Mutex<Account>,
     /// The commands sent, waiting for their one-line answers (`echo.rs`).
     echoes: Mutex<Echoes>,
+    /// A death seen, its loot coming (`loot.rs`).
+    looter: Mutex<Looter>,
+    /// Coupler's tables and the player's (`tables.rs`), the world's.
+    tables: Mutex<TableStore>,
     /// A long look sent, waiting for its room (`hidden.rs`).
     long_look: Mutex<LongLook>,
     /// A character being made, a question at a time (`creation.rs`).
@@ -367,6 +381,10 @@ pub struct Session {
     /// What's on the player, their cooldowns and group (`effects.rs`).
     effects: Mutex<Watch>,
 }
+
+/// The narrator's words for a fight's loot, by the id the player's own
+/// words for it are kept under (lib/echoes.ts).
+pub const LOOT_SAID: &str = "loot.collected";
 
 /// Something Coupler held back of the player's rules: too much at once.
 const HELD: &str = "Coupler held back commands of your triggers or tickers: too many at once. A trigger may be answering its own line.";
@@ -457,6 +475,11 @@ fn fights_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
     Ok(dir.join("fights").join(format!("{world}.json")))
 }
 
+fn tables_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
+    Ok(dir.join("tables").join(format!("{world}.json")))
+}
+
 fn cast_path(app: &AppHandle, world: &str) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| format!("Couldn't find where Coupler keeps its data. ({e})"))?;
     Ok(dir.join("cast").join(format!("{world}.json")))
@@ -525,6 +548,7 @@ impl Session {
         self.load_map(app, port.world);
         self.load_cast(app, port.world);
         self.load_fights(app, port.world);
+        self.load_tables(app, port.world);
         {
             let mut journal = self.journal.lock().unwrap();
             if journal.world != Some(port.world) {
@@ -548,6 +572,7 @@ impl Session {
         *self.who.lock().unwrap() = Who::default();
         *self.account.lock().unwrap() = Account::default();
         self.echoes.lock().unwrap().clear();
+        self.looter.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.creation.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
@@ -620,6 +645,7 @@ impl Session {
         self.fights.lock().unwrap().recorder.sent(line, unix_ms());
         self.effects.lock().unwrap().sent(line, unix_ms());
         self.echoes.lock().unwrap().typed(line, Instant::now());
+        self.looter.lock().unwrap().typed();
         self.long_look.lock().unwrap().typed(line, Instant::now());
         self.bestiary.lock().unwrap().reader.typed(line, Instant::now());
         self.creation.lock().unwrap().typed(line);
@@ -705,6 +731,11 @@ impl Session {
                 store.book = Fights::default();
                 storage::remove(&root, what)
             }
+            "tables" => {
+                let mut store = self.tables.lock().unwrap();
+                store.book = Tables::new();
+                storage::remove(&root, what)
+            }
             "beforeRestore" => storage::remove(&root, what),
             _ => return Err("Coupler doesn't know that kind of data.".into()),
         };
@@ -716,6 +747,9 @@ impl Session {
             }
             "fights" => {
                 let _ = app.emit("fight-kept", None::<fight_log::Overview>);
+            }
+            "tables" => {
+                let _ = app.emit("tables-changed", ());
             }
             _ => {}
         }
@@ -1014,6 +1048,92 @@ impl Session {
     pub fn fight_page(&self, id: i64) -> Option<fight_log::Page> {
         let store = self.fights.lock().unwrap();
         store.book.page(&store.character, id)
+    }
+
+    // ---- The tables (tables.rs) ----
+
+    fn load_tables(&self, app: &AppHandle, world: &'static str) {
+        let mut store = self.tables.lock().unwrap();
+        if store.world == Some(world) {
+            return;
+        }
+        let book = match tables_path(app, world).and_then(|p| match std::fs::read_to_string(&p) {
+            Ok(json) => Tables::from_json(&json),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Tables::new()),
+            Err(e) => Err(format!("The tables couldn't be opened. ({e})")),
+        }) {
+            Ok(book) => book,
+            Err(e) => {
+                // As with the fights: start afresh, the old file kept aside.
+                log::warn!("{e}");
+                if let Ok(p) = tables_path(app, world) {
+                    let _ = std::fs::rename(&p, p.with_extension("json.unreadable"));
+                }
+                Tables::new()
+            }
+        };
+        *store = TableStore { book, world: Some(world) };
+    }
+
+    /// Saves the world's tables if they changed, and says so.
+    fn tables_changed(&self, app: &AppHandle) {
+        let (json, world) = {
+            let mut store = self.tables.lock().unwrap();
+            if !store.book.take_changed() {
+                return;
+            }
+            let Some(world) = store.world else { return };
+            (store.book.to_json(), world)
+        };
+        if let Err(e) = tables_path(app, world).and_then(|path| write_replacing(&path, json)) {
+            log::warn!("couldn't save the tables: {e}");
+        }
+        let _ = app.emit("tables-changed", ());
+    }
+
+    /// The tables of the world last played (before any, an empty Loot).
+    pub fn tables_list(&self) -> Vec<tables::Overview> {
+        self.tables.lock().unwrap().book.list()
+    }
+
+    pub fn table(&self, id: &str) -> Option<tables::Table> {
+        self.tables.lock().unwrap().book.table(id).cloned()
+    }
+
+    /// A change of the player's to the tables: a new table's id, for one made.
+    pub fn table_change(&self, app: &AppHandle, change: &tables::Change) -> Result<Option<String>, String> {
+        let made = {
+            let mut store = self.tables.lock().unwrap();
+            if store.world.is_none() {
+                return Err("Tables are kept for each of CoffeeMUD's worlds: connect once first.".into());
+            }
+            store.book.apply(change, unix_ms())?
+        };
+        self.tables_changed(app);
+        Ok(made)
+    }
+
+    /// What `#check` says of a table, for the character playing (or last played).
+    pub fn table_check(&self, name: &str) -> Result<String, String> {
+        let character = self.fights.lock().unwrap().character.clone();
+        self.tables.lock().unwrap().book.check(name, &character)
+    }
+
+    /// One read's loot (`loot.rs`): its lines made the narrator's, said
+    /// once as "Loot collected.", and kept in the Loot table.
+    fn loot_read(&self, app: &AppHandle, texts: &[String], kinds: &mut [LineKind]) -> Option<Echoed> {
+        let found = self.looter.lock().unwrap().lines(texts, Instant::now(), unix_ms());
+        let haul = found.haul?;
+        for &i in &found.lines {
+            if let Some(kind) = kinds.get_mut(i) {
+                *kind = LineKind::Echo;
+            }
+        }
+        let character = self.senses.lock().unwrap().senses.name().to_string();
+        let place = self.atlas.lock().unwrap().map.here_name().unwrap_or_default().to_string();
+        self.tables.lock().unwrap().book.loot(&found.got, haul, unix_ms(), &character, &place);
+        self.tables_changed(app);
+        found.first.map(|line| Echoed { line, lines: 1, id: Some(LOOT_SAID), values: Vec::new(), says: "Loot collected.".into() })
     }
 
     /// A GMCP message for the cast. Returns whether anyone new was met.
@@ -1753,6 +1873,7 @@ impl Session {
     fn character_left(&self, app: &AppHandle, left: Left) {
         *self.counted.lock().unwrap() = false;
         self.echoes.lock().unwrap().clear();
+        self.looter.lock().unwrap().clear();
         self.long_look.lock().unwrap().clear();
         self.ways.lock().unwrap().clear();
         self.channels.lock().unwrap().closed();
@@ -2735,7 +2856,11 @@ fn read_loop(app: &AppHandle, mut stream: TcpStream, telnet: &Mutex<Telnet>) -> 
         // WHO waits while a character's being made (who.rs).
         let creating = session.creation.lock().unwrap().active();
         session.who.lock().unwrap().creating(creating);
-        let echoes = session.echoes.lock().unwrap().lines(&texts, &mut line_kinds, prompt.as_deref(), playing, Instant::now());
+        // Loot first: its lines are no command's answer (loot.rs).
+        let looted = if playing { session.loot_read(app, &texts, &mut line_kinds) } else { None };
+        let mut echoes = session.echoes.lock().unwrap().lines(&texts, &mut line_kinds, prompt.as_deref(), playing, Instant::now());
+        echoes.extend(looted);
+        echoes.sort_by_key(|e| e.line);
         let hidden = {
             let atlas = session.atlas.lock().unwrap();
             session.long_look.lock().unwrap().lines(&lines, &line_kinds, atlas.map.here_name(), Instant::now())

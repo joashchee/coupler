@@ -578,6 +578,51 @@ export const fightPage = (id: number) => invoke<FightPage | null>("fight_page", 
 /** A fight was kept (its overview), or the fights were deleted (null). */
 export const onFightKept = (f: (o: FightOverview | null) => void): Promise<UnlistenFn> => listen<FightOverview | null>("fight-kept", (e) => f(e.payload));
 
+// ---- Tables: Coupler's (Loot) and the player's (src-tauri/src/tables.rs) ----
+
+/** The Loot table's id: what AUTOLOOT took off a body (src-tauri/src/loot.rs). */
+export const LOOT_TABLE = "loot";
+/** A table of the player's has this many columns at most (`MOST_COLUMNS`). */
+export const MOST_TABLE_COLUMNS = 5;
+
+export interface TableRow {
+  id: number;
+  /** When it was added, Unix milliseconds. */
+  at: number;
+  cells: string[];
+  /** Loot's: the death it came from, shared by its rows. */
+  haul?: number;
+}
+
+export interface TableOverview {
+  id: string;
+  name: string;
+  columns: string[];
+  /** Coupler fills it: no rows added by hand, never deleted. */
+  coupler: boolean;
+  rows: number;
+}
+
+export interface Table extends Omit<TableOverview, "rows"> {
+  rows: TableRow[];
+}
+
+export type TableChange =
+  | { kind: "create"; name: string; columns: string[] }
+  | { kind: "delete"; id: string }
+  | { kind: "add"; id: string; cells: string[] }
+  | { kind: "deleteRow"; id: string; row: number }
+  | { kind: "clear"; id: string };
+
+export const tablesList = () => invoke<TableOverview[]>("tables_list");
+export const tableGet = (id: string) => invoke<Table | null>("table_get", { id });
+/** A new table's id, for one made. */
+export const tableChange = (change: TableChange) => invoke<string | null>("table_change", { change });
+/** What `#check <table>` says of it, in words. */
+export const tableCheck = (name: string) => invoke<string>("table_check", { name });
+/** A table changed: loot came, or the player changed one. */
+export const onTablesChanged = (f: () => void): Promise<UnlistenFn> => listen("tables-changed", () => f());
+
 // ---- Triggers, gags, aliases and tickers (src-tauri/src/automation.rs) ----
 
 export interface LineTrigger {

@@ -26,7 +26,10 @@
 //! `Sit`, `Stand`, `Sleep`, `Wake`, `Get`, `Drop`, `Give`, `Put`, `Wear`,
 //! `Wield`, `Hold`, `Remove`, `Buy` and `Sell`. Others doing the same
 //! read "Bob sits down…", never "You", so only the player's count. Not
-//! GMCP's `char.status` `pos`: it waits for the next tick.
+//! GMCP's `char.status` `pos`: it waits for the next tick. Money handled
+//! (got, dropped, given, put away, looted, or the bank's and the
+//! auction's: `Deposit`, `Withdraw`, `Borrow`, `Pay`, `Bid`) is `Coins`,
+//! whatever the verb (`loot::is_money`).
 
 use std::time::Duration;
 
@@ -131,10 +134,12 @@ pub enum Happening {
     Remove,
     Buy,
     Sell,
+    /// Money changing hands: coins got, dropped, given, banked or bid.
+    Coins,
 }
 
 impl Happening {
-    pub const ALL: [Happening; 25] = [
+    pub const ALL: [Happening; 26] = [
         Happening::Arrives(Manner::Walks),
         Happening::Arrives(Manner::Creeps),
         Happening::Arrives(Manner::Stomps),
@@ -160,6 +165,7 @@ impl Happening {
         Happening::Remove,
         Happening::Buy,
         Happening::Sell,
+        Happening::Coins,
     ];
 
     /// Its value in the hooks list.
@@ -190,6 +196,7 @@ impl Happening {
             Happening::Remove => "you remove",
             Happening::Buy => "you buy",
             Happening::Sell => "you sell",
+            Happening::Coins => "you handle coins",
         }
     }
 }
@@ -376,7 +383,7 @@ fn read(text: &str, now: Instant) -> Option<Seen> {
 
 /// The lines CoffeeMUD's commands say to the one doing it, by how they
 /// start; the first that fits counts, so the longer come first.
-const OWN: [(&str, Happening); 18] = [
+const OWN: [(&str, Happening); 23] = [
     ("You sit down and take a rest.", Happening::Sit),
     ("You sit on ", Happening::Sit),
     ("You stand up.", Happening::Stand),
@@ -396,6 +403,12 @@ const OWN: [(&str, Happening); 18] = [
     ("You remove ", Happening::Remove),
     ("You buy ", Happening::Buy),
     ("You sell ", Happening::Sell),
+    // Only ever money here (`line`).
+    ("You deposit ", Happening::Coins),
+    ("You withdraw ", Happening::Coins),
+    ("You borrow ", Happening::Coins),
+    ("You pay ", Happening::Coins),
+    ("You bid ", Happening::Coins),
 ];
 
 /// A finished line of the game's: one of the player's own doings. The
@@ -405,7 +418,11 @@ pub fn line(text: &str) -> Option<Happening> {
     let text = text.trim();
     let own = if text.starts_with("You ") { text } else { &text[text.find("> You ")? + 2..] };
     let (start, happening) = OWN.iter().find(|(start, _)| own.starts_with(start))?;
+    let money = crate::loot::is_money(own);
     match happening {
+        Happening::Get | Happening::Drop | Happening::Give | Happening::Put if money && *start != "You put out " => Some(Happening::Coins),
+        // A thing banked or posted, not money: no sound of its own.
+        Happening::Coins if !money => None,
         Happening::Put if *start == "You put out " => None,
         // "You put a ring on your finger." is wearing it; "You put a
         // ring in a pouch" (or on a table) is putting it.
@@ -510,7 +527,7 @@ mod tests {
             ("You get a long sword.", Some(Happening::Get)),
             ("You get a ration from a backpack.", Some(Happening::Get)),
             ("You drop a ration.", Some(Happening::Drop)),
-            ("You give 10 gold coins to the shopkeeper.", Some(Happening::Give)),
+            ("You give a ration to the shopkeeper.", Some(Happening::Give)),
             ("You put a ration in a backpack.", Some(Happening::Put)),
             ("You put a ration on a table.", Some(Happening::Put)),
             ("You put on a leather cap.", Some(Happening::Wear)),
@@ -520,6 +537,18 @@ mod tests {
             ("You remove a leather cap.", Some(Happening::Remove)),
             ("You buy a ration from the grocer.", Some(Happening::Buy)),
             ("You sell a dagger to the smith.", Some(Happening::Sell)),
+            ("You get 12 gold coins from the body of an orc.", Some(Happening::Coins)),
+            ("You get 3 silver pieces.", Some(Happening::Coins)),
+            ("You drop 1 gold coin.", Some(Happening::Coins)),
+            ("You give 10 gold coins to the shopkeeper.", Some(Happening::Coins)),
+            ("You put 5 copper bits in a pouch.", Some(Happening::Coins)),
+            ("You deposit 100 gold coins into your account with the banker.", Some(Happening::Coins)),
+            ("You withdraw 50 gold coins from your account with the banker.", Some(Happening::Coins)),
+            ("You borrow 200 gold coins from the banker.", Some(Happening::Coins)),
+            ("You pay Bob 20 gold coins.", Some(Happening::Coins)),
+            ("You bid 30 gold coins on a sword with the auctioneer.", Some(Happening::Coins)),
+            ("You get a bag of coins.", Some(Happening::Get)),
+            ("You deposit a long sword with the banker.", None),
         ];
         for (text, want) in cases {
             assert_eq!(line(text), want, "{text}");

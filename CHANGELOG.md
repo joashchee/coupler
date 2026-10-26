@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **Open and Close on the tablet's pad** (2026-10-26): the two empty
+  corners at the pad's left are Open (top) and Close (bottom). Press
+  one, then a way: Open then W sends OPEN WEST. Pressed, it's yellow and
+  says so to VoiceOver; pressed again it lets go.
+- **Loot collected** (2026-10-26): when you win a fight and AUTOLOOT
+  (or AUTOGOLD) takes things off the body, the narrator says "Loot
+  collected." once instead of every item, and Immersive leaves those
+  lines out of the output. Each thing goes in the Loot table. LOOK LOOT
+  or #check loot says just what the last fight brought. Both builds.
+- **Tables** (2026-10-26): gear → Tables… (Cmd+Shift+T; the phone's
+  Here sheet) shows Coupler's tables (Loot) and your own: make one with
+  a name and up to five columns, add rows there or with #add, delete
+  rows, clear Loot. #check and a table's name says it. Kept for each
+  world on this machine, in a Coupler Backup and in gear → Storage….
+  Both builds.
+- **Coins sound like coins** (2026-10-26): money got, looted, dropped,
+  given, put away, deposited, withdrawn, borrowed, paid or bid plays
+  CoffeeMUD's Coins, as buying and selling do. It's its own event, "you
+  handle coins", in the hooks list, for a sound of your own. Both
+  builds.
+
 ## 0.44.0 (2026-10-26)
 
 - **The game's sound ducks under a voice** (2026-10-26): while the

@@ -354,7 +354,7 @@ pub fn fill_ambience(ambience: &mut crate::ambient::Ambience, terrain: Option<&s
 /// leaving is heard softer than someone coming (going away), and someone
 /// creeping softer still. Stomping is the footsteps with a heavy thud
 /// under them (`event_under`).
-const EVENT_SOUNDS: [(Happening, &str, u8); 25] = [
+const EVENT_SOUNDS: [(Happening, &str, u8); 26] = [
     (Happening::Arrives(Manner::Walks), "Footsteps in", 100),
     (Happening::Arrives(Manner::Creeps), "Footsteps in", 40),
     (Happening::Arrives(Manner::Stomps), "Footsteps in", 100),
@@ -381,6 +381,7 @@ const EVENT_SOUNDS: [(Happening, &str, u8); 25] = [
     (Happening::Remove, "Unequip", 100),
     (Happening::Buy, "Coins", 100),
     (Happening::Sell, "Coins", 100),
+    (Happening::Coins, "Coins", 100),
 ];
 
 /// What one of Coupler's own events plays when the player has set no

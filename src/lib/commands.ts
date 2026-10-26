@@ -6,9 +6,11 @@
  * a word in the status bar); the prefix twice sends the line to the
  * game with one of it (`##` is `#`).
  *
- * Today they're the Music Editor's (lib/musicEditor.ts): its player,
- * saving, writing the song into a journal, and hooking it to the room
- * or area as its music.
+ * They're the Music Editor's (lib/musicEditor.ts): its player, saving,
+ * writing the song into a journal, and hooking it to the room or area as
+ * its music; and the tables' (src-tauri/src/tables.rs, gear → Tables…):
+ * `#check` says one (`#check loot`: what the last fight brought), `#add`
+ * adds a row to one of the player's.
  */
 
 export interface CommandInfo {
@@ -32,6 +34,8 @@ export const COMMANDS: CommandInfo[] = [
   { name: "load", usage: "", does: "opens the music last read in a journal", desktop: true },
   { name: "hook", usage: "room|area", does: "makes it the music of this room or area", desktop: true },
   { name: "unhook", usage: "room|area", does: "takes the music off this room or area", desktop: true },
+  { name: "check", usage: "[table]", does: "says a table: loot is what your last fight brought; with no table, lists them" },
+  { name: "add", usage: "<table> <cell> | <cell>…", does: "adds a row to a table of yours, its cells split by |" },
   { name: "prefix", usage: "<character>", does: "types Coupler's commands after another character" },
   { name: "help", usage: "", does: "lists these" },
 ];
@@ -89,6 +93,20 @@ export function helpText(p = prefix(), desktop = true): string {
   const list = COMMANDS.filter((c) => desktop || !c.desktop).map((c) => `${p}${c.name}${c.usage ? ` ${c.usage}` : ""}`);
   return `Coupler's commands: ${list.join(", ")}. ${p}${p} sends a line starting with ${p} to the game.`;
 }
+
+/**
+ * `#add`'s words: the table (its name or the start of it, one word, or
+ * any words in quotes) and the row's cells, split by `|`.
+ */
+export function addWords(rest: string): { table: string; cells: string[] } | null {
+  const quoted = /^"([^"]+)"\s*([\s\S]*)$/.exec(rest.trim()) ?? /^(\S+)\s*([\s\S]*)$/.exec(rest.trim());
+  if (!quoted) return null;
+  const cells = quoted[2].split("|").map((c) => c.trim());
+  return cells.some((c) => c !== "") ? { table: quoted[1], cells } : null;
+}
+
+/** LOOK LOOT, as the game's LOOK is typed (L, LO, LOO, LOOK): answered by Coupler from the Loot table, never sent. */
+export const isLookLoot = (line: string) => /^\s*l(o(ok?)?)?\s+loot\s*$/i.test(line);
 
 /** Commands that start with `name`, when it's ambiguous: for the error. */
 export const candidates = (name: string) => COMMANDS.filter((c) => c.name.startsWith(name)).map((c) => c.name);

@@ -40,6 +40,7 @@ mod effects;
 mod first_run;
 pub mod foley;
 mod hidden;
+mod loot;
 #[cfg(target_os = "macos")]
 mod moved;
 #[doc(hidden)]
@@ -67,6 +68,7 @@ mod songbook;
 pub mod soundbank;
 mod speech;
 mod storage;
+mod tables;
 mod stretch;
 mod synth;
 mod telnet;
@@ -259,6 +261,30 @@ fn fights_list(session: State<'_, Session>) -> Vec<fight_log::Overview> {
 #[tauri::command]
 fn fight_page(id: i64, session: State<'_, Session>) -> Option<fight_log::Page> {
     session.fight_page(id)
+}
+
+/// The tables of the world last played (tables.rs): Coupler's and the player's.
+#[tauri::command]
+fn tables_list(session: State<'_, Session>) -> Vec<tables::Overview> {
+    session.tables_list()
+}
+
+/// One table, every row.
+#[tauri::command]
+fn table_get(id: String, session: State<'_, Session>) -> Option<tables::Table> {
+    session.table(&id)
+}
+
+/// A table made, deleted or cleared, a row added or deleted: a new table's id.
+#[tauri::command]
+fn table_change(app: AppHandle, change: tables::Change, session: State<'_, Session>) -> Result<Option<String>, String> {
+    session.table_change(&app, &change)
+}
+
+/// What `#check <table>` says of it.
+#[tauri::command]
+fn table_check(name: String, session: State<'_, Session>) -> Result<String, String> {
+    session.table_check(&name)
 }
 
 /// Everything the Bestiary knows of a creature.
@@ -1108,6 +1134,10 @@ pub fn run() {
             bestiary_mob,
             fights_list,
             fight_page,
+            tables_list,
+            table_get,
+            table_change,
+            table_check,
             bestiary_items,
             bestiary_item,
             bestiary_auto_look,

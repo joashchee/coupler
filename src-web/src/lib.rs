@@ -62,6 +62,8 @@ mod hooks;
 mod item_art;
 #[path = "../../src-tauri/src/journal.rs"]
 mod journal;
+#[path = "../../src-tauri/src/loot.rs"]
+mod loot;
 mod journal_store;
 #[path = "../../src-tauri/src/mapper.rs"]
 mod mapper;
@@ -85,6 +87,8 @@ mod soundbank;
 #[path = "../../src-tauri/src/speech.rs"]
 mod speech;
 mod synth;
+#[path = "../../src-tauri/src/tables.rs"]
+mod tables;
 #[path = "../../src-tauri/src/telnet.rs"]
 mod telnet;
 #[path = "../../src-tauri/src/trigger.rs"]

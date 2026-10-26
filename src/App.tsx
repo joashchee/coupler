@@ -37,6 +37,7 @@ import { loadPictures, pictureShows, savePictures, type PictureSettings } from "
 import { followGamePalette, usePalette } from "./lib/palette";
 import { BestiaryDialog } from "./components/BestiaryDialog";
 import { CombatSummaryDialog } from "./components/CombatSummaryDialog";
+import { TablesDialog } from "./components/TablesDialog";
 import { CastDialog } from "./components/CastDialog";
 import { StorageDialog } from "./components/StorageDialog";
 import { JournalDialog } from "./components/JournalDialog";
@@ -527,6 +528,7 @@ const ALL_SHORTCUTS: [string, string][] = [
   ["Show the log: OOC, INFO and the other channels", "Cmd+Shift+K"],
   ["Show the Bestiary: the creatures and items you've come across", "Cmd+Shift+B"],
   ["Show Combat Summary: every fight, blow by blow", "Cmd+Shift+Y"],
+  ["Show the tables: your loot and your own", "Cmd+Shift+T"],
   ["Review the output: the line before, the line after", "Option+Up, Option+Down"],
   ["Review from the oldest line", "Option+Home"],
   ["Back to live output", "Option+End"],
@@ -678,6 +680,9 @@ function App() {
   /** Combat Summary, and the fight to show at once ("next": the one being kept now). */
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryFirst, setSummaryFirst] = useState<number | "next" | null>(null);
+  const [tablesOpen, setTablesOpen] = useState(false);
+  /** The tablet pad's Open or Close, waiting for the way to open or close (`tabletControls`). */
+  const [doorWord, setDoorWord] = useState<"open" | "close" | null>(null);
   const [automationOpen, setAutomationOpen] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -1459,6 +1464,35 @@ function App() {
         case "help":
           tell(commands.helpText(p, !WEB));
           return;
+        case "check": {
+          if (!c.rest.trim()) {
+            const all = await mud.tablesList();
+            tell(`Tables: ${all.map((t) => `${t.name}, ${t.rows === 1 ? "1 row" : `${t.rows} rows`}`).join("; ")}. ${p}check and a table's name says it.`);
+            return;
+          }
+          tell(await mud.tableCheck(c.rest));
+          return;
+        }
+        case "add": {
+          const words = commands.addWords(c.rest);
+          if (!words) {
+            fail(`${p}add, a table of yours, then its cells split by |: ${p}add notes the mayor | a lost ring.`);
+            return;
+          }
+          const all = await mud.tablesList();
+          const want = words.table.toLowerCase();
+          // Its name, or the start of only one.
+          const starting = all.filter((t) => t.id.startsWith(want) || t.name.toLowerCase().startsWith(want));
+          const table = all.find((t) => t.id === want || t.name.toLowerCase() === want) ?? (starting.length === 1 ? starting[0] : undefined);
+          if (!table) {
+            fail(`There's no one table called ${words.table}. Gear → Tables… makes one.`);
+            return;
+          }
+          await mud.tableChange({ kind: "add", id: table.id, cells: words.cells });
+          earcons.commandDone();
+          tell(`Added to ${table.name}.`);
+          return;
+        }
         case "prefix": {
           const next = c.rest.trim();
           if (!commands.isPrefix(next)) {
@@ -1599,6 +1633,13 @@ function App() {
     historyAt.current = history.current.length;
     // What's said next answers it: the ping while it renders, if it has to be.
     voice.asked();
+    // LOOK LOOT is answered from the Loot table: what the last fight brought (src-tauri/src/tables.rs).
+    if (!secret && commands.isLookLoot(line)) {
+      const answer = await mud.tableCheck(mud.LOOT_TABLE).catch((e: unknown) => String(e));
+      note(`*** ${answer}`);
+      if (narratedRef.current) voice.speak(answer, true);
+      return;
+    }
     // A channel's LAST (OOC LAST 10) is answered from the log, not the game.
     if (!secret && LAST_LIKE.test(line.trim())) {
       const answer = await mud.journalLast(line.trim()).catch(() => null);
@@ -2352,7 +2393,7 @@ function App() {
     };
   }, [hear]);
 
-  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || summaryOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
+  const anyDialogOpen = sheetDown || aboutOpen || licensesOpen || keysOpen || clearMapOpen || usualLayoutOpen || hooksOpen || mixerOpen || appTestingOpen || workshopOpen || cuesOpen || echoesOpen || priorityOpen || artisanOpen || speechOpen || tutorialOpen || guideOpen || accountOpen || displayOpen || picturesOpen || castOpen || storageOpen || bestiaryOpen || summaryOpen || tablesOpen || automationOpen || journalOpen || logOpen || shrinkOffer !== null || restoreOffer !== null || musicOpen;
 
   /** The phone's carousel (lib/phoneSections.ts): the section `by` steps round, said where it is. */
   const turnPhone = useCallback(
@@ -2450,10 +2491,12 @@ function App() {
   const raiseKeyboard = () => (keysField() ?? inputRef.current)?.focus();
   /**
    * The tablet's controls (components/TabletControls.tsx), while no field
-   * has the focus: the ways at the left, Look in their middle; the keyboard,
-   * the last command and Quiet under them; and rows of what's typed most.
-   * A command ending "…" is begun on the command line for the keyboard to
-   * finish.
+   * has the focus: the ways at the left, Look in their middle, Open and
+   * Close in the corners at the left (pressed, the next way pressed opens
+   * or closes the door that way: Open then W sends OPEN WEST); the
+   * keyboard, the last command and Quiet under them; and rows of what's
+   * typed most. A command ending "…" is begun on the command line for the
+   * keyboard to finish.
    */
   const tabletControls = (): TabletControl[] => {
     const exits = new Set((snapshot?.room?.exits ?? []).map((e) => e.dir.toUpperCase()));
@@ -2461,12 +2504,30 @@ function App() {
     const way = (dir: string, name: string, column: number, row: number): TabletControl => ({
       id: name.toLowerCase(),
       label: dir,
-      name: exits.has(dir) ? `${name}, an exit` : name,
+      name: `${doorWord ? `${doorWord === "open" ? "Open" : "Close"} ` : ""}${name}${exits.has(dir) ? ", an exit" : ""}`,
       lit: exits.has(dir),
       column,
       row,
       disabled: off,
-      onPress: () => sendKey(name.toLowerCase()),
+      onPress: () => {
+        setDoorWord(null);
+        sendKey(doorWord ? `${doorWord} ${name.toLowerCase()}` : name.toLowerCase());
+      },
+    });
+    /** Open or Close: pressed, it waits for a way; pressed again (or the other), it doesn't. */
+    const door = (word: "open" | "close", label: string, row: number): TabletControl => ({
+      id: word,
+      label,
+      name: doorWord === word ? `${label}, waiting: press a way` : `${label}, then a way`,
+      pressed: doorWord === word,
+      column: 0,
+      row,
+      disabled: off,
+      onPress: () => {
+        const next = doorWord === word ? null : word;
+        setDoorWord(next);
+        setStatus(next ? `${label} which way? Press a way.` : `${label} let go.`);
+      },
     });
     const send = (label: string, command: string) => ({ label, name: label, disabled: off, onPress: () => sendKey(command) });
     const started = (label: string) => ({ label: `${label}…`, name: `${label}, finished on the keyboard`, disabled: off, onPress: () => begin(label.toLowerCase()) });
@@ -2501,11 +2562,13 @@ function App() {
       ],
     ];
     const pad = [
+      door("open", "Open", 0),
       way("N", "North", 6, 0),
       way("U", "Up", 12, 0),
       way("W", "West", 0, 1),
       { id: "look", label: "Look", name: "Look", column: 6, row: 1, disabled: off, onPress: () => sendKey("look") },
       way("E", "East", 12, 1),
+      door("close", "Close", 2),
       way("S", "South", 6, 2),
       way("D", "Down", 12, 2),
     ];
@@ -2563,6 +2626,7 @@ function App() {
       { id: "pictures", label: "Pictures…", onPress: () => setPicturesOpen(true) },
       { id: "bestiary", label: "Bestiary…", onPress: () => setBestiaryOpen(true) },
       { id: "fights", label: "Combat Summary…", onPress: () => openSummary(null) },
+      { id: "tables", label: "Tables…", onPress: () => setTablesOpen(true) },
     ],
     heard: [
       { id: "journal", label: "Journal…", onPress: () => setJournalOpen(true) },
@@ -2641,6 +2705,9 @@ function App() {
       } else if (chord && key === "y") {
         e.preventDefault();
         openSummary(null);
+      } else if (chord && key === "t") {
+        e.preventDefault();
+        setTablesOpen(true);
       } else if (chord && key === "l") {
         e.preventDefault();
         whereAmI();
@@ -3257,6 +3324,18 @@ function App() {
               >
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Combat Summary… (Cmd+Shift+Y)")}</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="tables-menu"
+                onClick={() => {
+                  setGearOpen(false);
+                  setTablesOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>{keys.keys("Tables… (Cmd+Shift+T)")}</span>
               </button>
               <button
                 type="button"
@@ -3919,6 +3998,7 @@ function App() {
       )}
       <BestiaryDialog open={bestiaryOpen} onClose={() => setBestiaryOpen(false)} onStatus={showStatus} onError={showError} />
       <CombatSummaryDialog open={summaryOpen} showFirst={summaryFirst} onClose={() => setSummaryOpen(false)} onStatus={showStatus} onError={showError} />
+      <TablesDialog open={tablesOpen} onClose={() => setTablesOpen(false)} onStatus={showStatus} onError={showError} />
 
       {!WEB && (
       <ShrinkDialog offers={shrinkOffer} onKeep={keepWavs} onShrink={() => void makeSmaller()} />

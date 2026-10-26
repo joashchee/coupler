@@ -210,7 +210,7 @@ fn call(input: &[u8]) -> Result<Value, String> {
     }
     with(|app| match cmd.as_str() {
         "server_info" => json(app.server_info()),
-        "mud_connect" => app.connect(&s("portId"), &s("map"), &s("cast"), &s("looks"), &s("fights")).map(Value::String),
+        "mud_connect" => app.connect(&s("portId"), &s("map"), &s("cast"), &s("looks"), &s("fights"), &s("tables")).map(Value::String),
         "save_now" => {
             app.save_now();
             Ok(Value::Null)
@@ -241,6 +241,13 @@ fn call(input: &[u8]) -> Result<Value, String> {
         }
         "cast_list" => json(app.cast_list()),
         "fights_list" => serde_json::to_value(app.fights_list()).map_err(|e| e.to_string()),
+        "tables_list" => serde_json::to_value(app.tables_list()).map_err(|e| e.to_string()),
+        "table_get" => serde_json::to_value(app.table(&s("id"))).map_err(|e| e.to_string()),
+        "table_change" => {
+            let change: crate::tables::Change = serde_json::from_value(args.get("change").cloned().unwrap_or_default()).map_err(|e| e.to_string())?;
+            app.table_change(&change).map(|made| made.map_or(Value::Null, Value::String))
+        }
+        "table_check" => app.table_check(&s("name")).map(Value::String),
         "fight_page" => serde_json::to_value(app.fight_page(args.get("id").and_then(Value::as_i64).unwrap_or(0))).map_err(|e| e.to_string()),
         "cast_set_voice" => {
             let voice: crate::cast::Voice = serde_json::from_value(args.get("voice").cloned().unwrap_or_default()).map_err(|e| e.to_string())?;

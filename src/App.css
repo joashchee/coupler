@@ -584,6 +584,14 @@ button.icontext-btn .btn-icon { display: inline-flex; width: 14px; height: 14px;
 /* Combat Summary (CombatSummaryDialog.tsx): Show, against whom, the
    result, when. One fight's page is headings and lines, scrolling inside
    the frame; its health charts in cells, on black as the game output is. */
+/* Tables: Delete, then a column each (--table-columns), then when. */
+.hooks-head.tables-row,
+.hooks-list.tables-list li { display: grid; grid-template-columns: 64px repeat(var(--table-columns), 176px) minmax(0, 1fr); gap: 0 12px; align-items: start; }
+.tables-choose { margin: 12px 0 0; }
+.dialog-hooks .hooks-list.tables-list-own { height: 200px; }
+.tables-add { margin: 12px 0 0; }
+.tables-add-cells { display: grid; grid-template-columns: repeat(var(--table-columns), 176px); gap: 0 12px; margin: 0 0 12px; }
+.tables-add-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .hooks-head.fights-row,
 .hooks-list.fights-list li { display: grid; grid-template-columns: 64px 280px 160px minmax(0, 1fr); gap: 0 12px; align-items: start; }
 .summary-page { height: 400px; overflow-y: auto; margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--text); user-select: text; }
