@@ -25,22 +25,22 @@ interface Engine {
   };
   roomSeed(world: string, room: string, again?: number): string;
   toSpans(cells: unknown): { columns: number; rows: number; lines: { text: string; fg: number | null; bg: number | null; blink: boolean }[][] };
+  VERSION: string;
   TERRAINS: string[];
   TIMES: string[];
   WEATHER_KINDS: string[];
 }
 
 // A glob, so a checkout without the copy still builds and just has no engine.
-const found = import.meta.glob<Engine>("../vendor/art-sprites/engine.js");
-const versions = import.meta.glob<string>("../vendor/art-sprites/VERSION", { query: "?raw", import: "default" });
+const found = import.meta.glob("../vendor/art-sprites/engine.js") as Record<string, () => Promise<Engine>>;
 
 /** Whether this build has the engine's copy. */
 export const engineAvailable = Object.keys(found).length > 0;
 
 /** The engine's release, or null without the copy. */
 export const engineVersion = async (): Promise<string | null> => {
-  const load = Object.values(versions)[0];
-  return load ? (await load()).trim() : null;
+  const load = Object.values(found)[0];
+  return load ? (await load()).VERSION : null;
 };
 
 let loading: Promise<Engine> | null = null;

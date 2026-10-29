@@ -35,6 +35,6 @@ for (const f of seen) {
 }
 const { version } = JSON.parse(readFileSync(join(src, 'package.json'), 'utf8'));
 writeFileSync(join(dest, 'VERSION'), `${version}\n`);
-writeFileSync(join(dest, 'engine.js'), `// Written by scripts/painter-sync.sh: the engine's entry for Coupler.\nexport { drawVista, roomSeed, TERRAINS, TIMES, WEATHER_KINDS } from './recipes/vista.js';\nexport { toSpans } from './ansi.js';\n`);
+writeFileSync(join(dest, 'engine.js'), `// Written by scripts/painter-sync.sh: the engine's entry for Coupler.\nexport { drawVista, roomSeed, TERRAINS, TIMES, WEATHER_KINDS } from './recipes/vista.js';\nexport { toSpans } from './ansi.js';\nexport const VERSION = '${version}';\n`);
 console.log(`art-sprites ${version}: ${seen.size} modules`);
 JS
