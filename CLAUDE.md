@@ -229,6 +229,14 @@ on the desktop works in `src-web` too or joins `DESKTOP_ONLY`**
 - `session.rs`: the socket, reader thread and every event; feeds all the
   readers below; saves `maps/<world>.json`; walks routes one confirmed
   step at a time. `lib.rs`: the commands. `lib/mud.ts`: typed wrappers.
+- `src/vendor/art-sprites/`, `lib/sprites.ts`: **the Painter engine**
+  (ansiapps' own, Apache-2.0, the `painter` repo: change it there and
+  copy with `scripts/painter-sync.sh`, never only here; the script
+  refuses a Painter not licensed Apache-2.0). Draws the room picture in
+  the webview when gear → Pictures… says so (Coupler's `painter.rs`
+  stays the default until it is judged by eye); gear → Eyetest
+  (`EyetestDialog.tsx`, dev builds) compares the two. Only the game's
+  own words reach it. Nothing else uses it yet.
 - `ports.rs` (`HOST`, `PORTS`, `web_socket_url`), `trigger.rs`,
   `clock.rs`: split out so the web build can share them.
 - `mssp.rs`: the launch greeting (players online, version vs

@@ -5,7 +5,9 @@
  * character in the IBM VGA font whatever the theme, as ANSI art is.
  *
  * The player's own ART trigger for the room (`scene.art`) wins over the
- * painting: an image fitted to the box, or ANSI art cut to it.
+ * painting: an image fitted to the box, or ANSI art cut to it. With
+ * gear → Pictures… "Painter engine" the webview draws it instead
+ * (lib/sprites.ts), the same in the desktop, web and phone builds.
  *
  * Hidden from screen readers (rule 10): it says nothing the room's own
  * words don't, and it's never announced. A sighted player sees under it
@@ -16,6 +18,7 @@ import * as sound from "../lib/assets";
 import * as mud from "../lib/mud";
 import { usePalette } from "../lib/palette";
 import { sceneWords, type PictureSettings } from "../lib/pictures";
+import { paintRoom } from "../lib/sprites";
 
 interface RoomPictureProps {
   scene: mud.Scene;
@@ -32,6 +35,9 @@ export function RoomPicture({ scene, settings, rows }: RoomPictureProps) {
   /** The box's size in cells. */
   const [cells, setCells] = useState<{ columns: number; rows: number } | null>(null);
   const [art, setArt] = useState<mud.AnsiArt | null>(null);
+  /** The Painter engine's words for what it drew (settings.engine "sprites"), or that it couldn't draw. */
+  const [engineSays, setEngineSays] = useState<string | null>(null);
+  const [engineFailed, setEngineFailed] = useState(false);
   /** The player's own picture for the room, when there is one and it's an image. */
   const [own, setOwn] = useState<string | null>(null);
 
@@ -73,19 +79,42 @@ export function RoomPicture({ scene, settings, rows }: RoomPictureProps) {
         });
     } else {
       setOwn(null);
-      mud
-        .picturePaint(scene, settings.style, cells.columns, cells.rows, scene.look)
-        .then((painted) => !stale && setArt(painted))
-        .catch(() => !stale && setArt(null));
+      if (settings.engine === "sprites") {
+        // Nothing here waits on a sound, and a failure leaves the picture out, in words.
+        paintRoom(scene, settings.style, cells.columns, cells.rows)
+          .then(({ art: painted, says }) => {
+            if (stale) return;
+            setArt(painted);
+            setEngineSays(says);
+            setEngineFailed(false);
+          })
+          .catch(() => {
+            if (stale) return;
+            setArt(null);
+            setEngineSays(null);
+            setEngineFailed(true);
+          });
+      } else {
+        setEngineFailed(false);
+        setEngineSays(null);
+        mud
+          .picturePaint(scene, settings.style, cells.columns, cells.rows, scene.look)
+          .then((painted) => !stale && setArt(painted))
+          .catch(() => !stale && setArt(null));
+      }
     }
     return () => {
       stale = true;
     };
-  }, [scene, settings.style, cells, colors]);
+  }, [scene, settings.style, settings.engine, cells, colors]);
 
   const caption = scene.art
     ? `${mud.assetTitle(scene.art)}, your picture for this room`
-    : `${sceneWords(scene)}, by Coupler's painter${scene.look > 0 ? `, look ${scene.look + 1}` : ""}`;
+    : settings.engine === "sprites"
+      ? engineFailed
+        ? `${sceneWords(scene)}: the Painter engine couldn't draw this room`
+        : `${engineSays ?? sceneWords(scene)} By the Painter engine${scene.look > 0 ? `, look ${scene.look + 1}` : ""}`
+      : `${sceneWords(scene)}, by Coupler's painter${scene.look > 0 ? `, look ${scene.look + 1}` : ""}`;
 
   return (
     <div ref={boxRef} className={`room-picture${rows === undefined ? " room-picture-fill" : ""}`} aria-hidden="true" data-testid="room-picture">

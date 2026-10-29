@@ -3078,3 +3078,151 @@ pub(crate) mod look {
         sheet(&small, moments.len() + 1, &std::env::var("OUT_SMALL").unwrap_or_else(|_| "faces-small.ppm".into()));
     }
 }
+
+#[cfg(test)]
+mod export {
+    use super::*;
+    use serde_json::{json, Value};
+
+    /// A canvas as rows: colors as hex digits (`.` clear), parts as letters, and glyphs.
+    fn grid(c: &Canvas) -> Value {
+        let letter = |p: Part| match p {
+            Part::Back => 'k',
+            Part::Body => 'b',
+            Part::Hair => 'h',
+            Part::Eye => 'e',
+            Part::Mouth => 'm',
+            Part::Worn => 'w',
+            Part::Brow => 'r',
+            Part::Detail => 'd',
+        };
+        let (mut colors, mut parts) = (Vec::new(), Vec::new());
+        for y in 0..c.h {
+            let (mut a, mut b) = (String::new(), String::new());
+            for x in 0..c.w {
+                let v = c.get(x, y);
+                a.push(if v == CLEAR { '.' } else { char::from_digit(u32::from(v), 16).unwrap_or('?') });
+                b.push(letter(c.part(x, y)));
+            }
+            colors.push(a);
+            parts.push(b);
+        }
+        json!({ "w": c.w, "h": c.h, "colors": colors, "parts": parts, "colorKey": "hex digit = VGA index 0-f; . = clear", "partKey": "k back, b body, h hair, e eye, m mouth, w worn, r brow, d detail" })
+    }
+
+    fn sitter(name: &str, race: &str, category: &str, sex: &str, description: &str) -> Sitter {
+        Sitter { name: name.into(), race: Some(race.into()), category: Some(category.into()), sex: (!sex.is_empty()).then(|| sex.into()), description: (!description.is_empty()).then(|| description.into()), ..Sitter::default() }
+    }
+
+    /// The `match` arms of a source function that map words to colors: `["a", "b"] => (X, Y)`.
+    fn color_rows() -> Vec<Value> {
+        let src = include_str!("face.rs");
+        let start = src.find("pub(crate) fn color_word").unwrap();
+        let body = &src[start..src[start..].find("\n}\n").unwrap() + start];
+        let names = ["BLACK", "RED", "GREEN", "BROWN", "BLUE", "MAGENTA", "CYAN", "LIGHTGRAY", "DARKGRAY", "LIGHTRED", "LIGHTGREEN", "YELLOW", "LIGHTBLUE", "LIGHTMAGENTA", "LIGHTCYAN", "WHITE"];
+        body.lines()
+            .filter_map(|l| {
+                let (words, colors) = l.trim().split_once("=> (")?;
+                let (plain, bright) = colors.trim_end_matches("),").split_once(", ")?;
+                let id = |n: &str| names.iter().position(|x| *x == n.trim()).map(|i| i as u8);
+                let ws: Vec<&str> = words.split('|').map(|w| w.trim().trim_matches('"')).collect();
+                Some(json!({ "words": ws, "plain": id(plain)?, "bright": id(bright)? }))
+            })
+            .collect()
+    }
+
+    /// Writes B3 (`docs/coupler-handoff.md`) into `OUT` (default `../painter-data`):
+    /// `cargo test --lib face::export -- --ignored`. Sitters are synthetic (written here
+    /// from the race table), never the player's Bestiary, so no game text or player
+    /// data is in the files.
+    #[test]
+    #[ignore]
+    fn painter_data() {
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+        let source = "face.rs; CoffeeMUD 720aec6 (2026-10-03, 5.11.0.4); races.tsv, effect_looks.tsv";
+        let made = "2026-10-29";
+        let races: Vec<(String, String)> = include_str!("races.tsv").lines().skip(1).filter_map(|l| l.split_once('\t')).map(|(r, c)| (r.to_string(), c.to_string())).collect();
+
+        // shapes.json: every race's category and the shape it gets.
+        let rows: Vec<Value> = races.iter().map(|(r, c)| json!({ "race": r, "category": c, "shape": format!("{:?}", shape(c, r)) })).collect();
+        let sh = json!({
+            "source": source, "made": made,
+            "size": { "full": { "columns": SIZE.0, "rows": SIZE.1, "pixels": [PIXELS.0, PIXELS.1] }, "small": { "columns": SMALL.0, "rows": SMALL.1, "pixels": [SMALL.0, SMALL.1 * 2] } },
+            "head": { "oval": { "cx": HEAD.0, "cy": HEAD.1, "rx": HEAD.2, "ry": HEAD.3 }, "note": "the person's head; other shapes' numbers are in the golden grids (`faces.json`)" },
+            "personRaces": PEOPLE, "thinkingRaces": THINKING,
+            "rule": "category key (letters only, lower case) picks the shape: canine, mustelid, feline Beast(Pointed); ursine, rodent, primate, seamammal, animal, pachyderm Beast(Round; Wide for elephant or mammoth); pteropine Beast(Wide); equine Beast(Long); bovine, porcine Beast(Horned); ovine Beast(Curled); avian Bird; reptile Scaled(Lizard); ophidian Scaled(Snake); amphibian Scaled(Frog); fish Scaled(Fish); dragon Scaled(Dragon); insect Bug(Insect); arachnid Bug(Spider); worm Bug(Worm); undead Skull unless the race has zombie, ghoul, ghast, vampire, ghost, spectre, wraith or banshee in its key; elemental Stuff(Fire, Water, Air by the race's key, else Earth); the golems Stuff(Golem); slime Stuff(Slime); vegetation Stuff(Plant); anything else Person. PEOPLE races are always Person.",
+            "sapient": "Person, or a THINKING race, or a Beast, Bird or Scaled(Lizard, Snake, Frog, Dragon) with two of: wears something, has skills, 'arm' or 'arms' in the description",
+            "animal": "not sapient and a Beast, Bird or Scaled except Fish: laid at offset (3, 2) full, (2, 1) small, back running off the right side",
+            "races": rows,
+        });
+        std::fs::write(out.join("shapes.json"), serde_json::to_string_pretty(&sh).unwrap() + "\n").unwrap();
+
+        // words.json
+        let wj = json!({
+            "source": source, "made": made,
+            "colorWords": color_rows(),
+            "colorWordNote": "plain is for skin, hair, fur; bright is for eyes and glows. Colors are VGA indexes.",
+            "nouns": { "hair": HAIR, "skin": SKIN, "eyes": EYES, "coat": COAT },
+            "colorRule": "the color said of a noun: a color word up to three words before it ('long, flowing red hair'), the first such; for skin on a Person, 'pale/pallid/ghostly/ashen/wan' is lightgray and 'tanned/swarthy/dusky/bronzed' brown first",
+            "itemColor": { "metalWords": ["plate", "chain", "chainmail", "mail", "steel", "iron", "metal", "mithril", "silver", "scale"], "rule": "the first color named in an item's name; a metal word with no other color but gray gives lightgray" },
+            "stopWords": "words(): split on anything not alphanumeric, lower case, empty dropped; key(): letters only, lower case",
+            "cues": {
+                "old": ["old", "elderly", "aged", "ancient", "wrinkled", "wizened", "grizzled", "venerable"],
+                "bald": ["bald", "hairless", "shaven", "shaved"], "beard": ["beard", "bearded", "whiskered"], "clean": ["beardless", "clean shaven", "shaven face", "shaven chin"],
+                "mustache": ["mustache", "moustache"], "scar": ["scar", "scars", "scarred", "scarring"], "patch": ["eyepatch", "eye patch", "one eye", "one eyed"],
+                "freckles": ["freckles", "freckled"], "horns": ["horn", "horns", "horned"], "hornRaces": ["tiefling", "demon", "devil", "minotaur", "satyr", "imp"], "hornCategory": "demon",
+                "tusks": ["tusk", "tusks", "tusked"], "fangs": ["fang", "fangs", "fanged"], "fangRace": "vampire", "halo": ["halo"], "haloCategory": "celestial",
+                "tattoo": ["tattoo", "tattoos", "tattooed", "warpaint"], "longHair": ["long", "flowing", "braided", "lustrous", "braid", "braids", "ponytail", "tresses"], "shortHair": ["short", "cropped"],
+                "glowEyes": ["glowing", "burning", "blazing", "fiery", "luminous", "shining", "glow", "burn", "blaze", "shine", "gleam"], "kind": ["kind", "gentle"],
+                "ghostlyRaces": ["ghost", "spectre", "specter", "spirit", "shadow", "wraith", "banshee", "phantom"],
+            },
+            "worn": { "slots": { "head": ["helmet", "helm", "hood", "cowl", "crown", "tiara", "circlet", "hat", "cap", "turban", "headband", "bandana"], "neck": ["amulet", "necklace", "pendant", "medallion", "torc", "collar", "scarf"], "ears": ["earring", "earrings"], "eyes": ["spectacles", "glasses", "goggles", "monocle", "blindfold"], "back": ["cloak", "cape", "mantle"] }, "wornPlaces": "a worn item's place text containing head, neck, ear, eye, mouth, torso, back or 'about body'; the first of each wins" },
+            "randomDraws": "Rng(seed(\"face\", key(name), 0)), drawn in this order while reading: shape skin (Pointed beast [brown, darkgray, lightgray, yellow], Bird [brown, white, darkgray, blue, red], Bug [brown, red, green]); hair fallback [brown, darkgray, yellow, red]; beard 30% for a male; eyes by shape (Person [blue, brown, green, darkgray]; Pointed beast [yellow, lightgreen, brown]); backdrop [blue, magenta, cyan, green, red, brown, darkgray]; long hair 80% for a female. See the grids for ground truth.",
+        });
+        std::fs::write(out.join("words.json"), serde_json::to_string_pretty(&wj).unwrap() + "\n").unwrap();
+
+        // Fixtures: one race per distinct shape, plus described variants (all written here).
+        let mut seen = std::collections::BTreeSet::new();
+        let mut fixtures: Vec<Sitter> = Vec::new();
+        for (r, c) in &races {
+            if seen.insert(format!("{:?}", shape(c, r))) {
+                fixtures.push(sitter(&format!("a {}", r.to_lowercase()), r, c, "", ""));
+            }
+        }
+        fixtures.push(sitter("an old dwarven smith", "Dwarf", "Humanoid", "male", "An old dwarf with a long red beard and a scar. He has blue eyes."));
+        fixtures.push(sitter("a pale elven maiden", "Elf", "Humanoid", "female", "A pale elf with long silver hair and green eyes."));
+        fixtures.push(sitter("a bald orc", "Orc", "Porcine", "male", "A bald, tusked orc with glowing red eyes and a tattoo."));
+        fixtures.push(sitter("a black wolf", "Wolf", "Canine", "", "A black wolf with yellow eyes."));
+        fixtures.push(sitter("a demon", "Demon", "Demon", "", "A horned demon with fangs and burning eyes."));
+        fixtures.push(sitter("an angel", "Angel", "Celestial", "", "A radiant being with a halo."));
+        fixtures.push(Sitter { wears: vec![("worn on head".into(), "a steel helmet".into()), ("worn around neck".into(), "a gold amulet".into()), ("worn about body".into(), "a black cloak".into())], terrain: Some("woods".into()), alignment: Some("evil".into()), skilled: true, ..sitter("a dark knight", "Human", "Humanoid", "male", "A grim man.") });
+        fixtures.push(Sitter { terrain: Some("underwater".into()), ..sitter("a silver trout", "Trout", "Fish", "", "") });
+        fixtures.push(Sitter { terrain: Some("city".into()), ..sitter("a stray dog", "Dog", "Canine", "", "A brown dog.") });
+
+        let sitters: Vec<Value> = fixtures.iter().map(|s| { let l = read(s); json!({ "name": s.name, "race": s.race, "category": s.category, "sex": s.sex, "description": s.description, "body": s.body, "wears": s.wears, "terrain": s.terrain, "alignment": s.alignment, "skilled": s.skilled, "shape": format!("{:?}", l.shape), "sapient": l.sapient, "animal": l.animal, "wounds": format!("{:?}", wounds(&l)), "skin": l.skin, "hair": l.hair, "eyes": l.eyes, "backdrop": l.backdrop, "flags": { "beard": l.beard, "mustache": l.mustache, "longHair": l.long_hair, "scar": l.scar, "patch": l.patch, "freckles": l.freckles, "old": l.old, "horns": l.horns, "tusks": l.tusks, "fangs": l.fangs, "halo": l.halo, "tattoo": l.tattoo, "glow": l.glow, "evil": l.evil, "ghostly": l.ghostly } }) }).collect();
+        std::fs::write(out.join("sitters.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "note": "synthetic: written by the exporter, one race per shape plus described variants; no Bestiary entry, no game text, no player data. `read` is what face.rs read from each.", "sitters": sitters })).unwrap() + "\n").unwrap();
+
+        // faces.json: the golden grids, calm, for each fixture, full and small (moods: moods.json).
+        let calm = Moment::default();
+        let faces: Vec<Value> = fixtures.iter().map(|s| json!({ "name": s.name, "full": grid(&standing(s, &calm, Size::Full)), "small": grid(&standing(s, &calm, Size::Small)) })).collect();
+        std::fs::write(out.join("faces.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "note": "ground truth: each fixture drawn on a clear canvas, unlit, calm, unhurt, no effects (`standing`). The small faces are their own strokes (small-face.json lists their shapes).", "faces": faces })).unwrap() + "\n").unwrap();
+        let small: Vec<Value> = fixtures.iter().map(|s| json!({ "name": s.name, "shape": format!("{:?}", read(s).shape), "grid": grid(&standing(s, &calm, Size::Small)) })).collect();
+        std::fs::write(out.join("small-face.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "size": { "columns": SMALL.0, "rows": SMALL.1, "pixels": [16, 16] }, "rule": "drawn again by its own strokes per shape, never the big face scaled; less is drawn: head, eyes, neck worn, beard, horns, tusks, fangs; no freckles, tattoo or earrings", "faces": small })).unwrap() + "\n").unwrap();
+
+        // moods.json and hurt.json: three shapes' worth of grids, every mood and every step.
+        let reps: Vec<&Sitter> = ["a dark knight", "a black wolf"].iter().filter_map(|n| fixtures.iter().find(|s| s.name == *n)).chain(["Skull", "Stuff(Slime)", "Stuff(Fire)", "Bird", "Scaled(Fish)", "Bug(Spider)", "Stuff(Golem)"].iter().filter_map(|sh| fixtures.iter().find(|s| format!("{:?}", read(s).shape) == *sh))).collect();
+        let moods = [Mood::Calm, Mood::Angry, Mood::Pain, Mood::Afraid, Mood::Asleep, Mood::Dead];
+        let mj: Vec<Value> = reps.iter().map(|s| json!({ "name": s.name, "moods": moods.iter().map(|m| json!({ "mood": format!("{m:?}"), "grid": grid(&standing(s, &Moment { mood: *m, ..Moment::default() }, Size::Full)) })).collect::<Vec<_>>() })).collect();
+        std::fs::write(out.join("moods.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "moods": ["Calm", "Angry", "Pain", "Afraid", "Asleep", "Dead"], "effectsSetMood": { "Asleep": "Asleep", "Afraid": "Afraid", "Raging": "Angry" }, "note": "a mood is drawn at each shape's eye, brow and mouth anchors; Calm draws a sneer on one side for an evil sapient creature; Asleep also draws z and Z beside the head", "reps": mj })).unwrap() + "\n").unwrap();
+        let hj: Vec<Value> = reps.iter().map(|s| json!({ "name": s.name, "wounds": format!("{:?}", wounds(&read(s))), "steps": (0..=5u8).map(|h| json!({ "hurt": h, "grid": grid(&standing(s, &Moment { hurt: h, ..Moment::default() }, Size::Full)) })).collect::<Vec<_>>() })).collect();
+        std::fs::write(out.join("hurt.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "steps": "0 unhurt, 1 scratches, 2 cuts, 3 bruises (fur matted), 4 bleeding, 5 near death; CoffeeMUD's ten healthText lines map to 0..5 in the session's health reading", "classes": { "Bleed(RED)": "person, scaled; Bleed(GREEN) bugs", "Mat": "beasts and birds", "Crack": "skulls, golems, earth, plants", "Fade": "ghosts, fire, water, air", "Shrink": "slimes" }, "wherePlaced": "Rng(seed(\"wounds\", key(name), 0)), 8 spots among the body pixels that stay seen once laid", "reps": hj })).unwrap() + "\n").unwrap();
+
+        // effects.json
+        let tsv: Vec<Value> = include_str!("effect_looks.tsv").lines().skip(1).filter_map(|l| l.split_once('\t')).map(|(n, l)| json!({ "effect": n, "look": l })).collect();
+        let human = fixtures.iter().find(|s| s.name == "a dark knight").unwrap();
+        let looks = ["halo", "poisoned", "sick", "burning", "frozen", "blind", "invisible", "outlined", "webbed", "stone", "bark", "asleep", "afraid", "raging", "glowing"];
+        let drawn_looks: Vec<Value> = looks.iter().filter_map(|look| { let name = include_str!("effect_looks.tsv").lines().skip(1).find_map(|l| l.split_once('\t').filter(|(_, v)| v == look).map(|(n, _)| n.to_string()))?; Some(json!({ "look": look, "example": name, "grid": grid(&standing(human, &Moment { effects: vec![name.clone()], ..Moment::default() }, Size::Full)) })) }).collect();
+        std::fs::write(out.join("effects.json"), serde_json::to_string_pretty(&json!({ "source": source, "made": made, "effectLooks": tsv, "nameRule": "the name trimmed of ( ) and a ' spell' suffix, lower case, looked up in effectLooks", "looks": drawn_looks, "note": "effects that change the figure's own pixels are in the grids (a tint, a skin, the eyes); halo, web, fire and the like drawn around it are laid by `around` on the finished picture and are not in a clear-canvas grid" })).unwrap() + "\n").unwrap();
+    }
+}

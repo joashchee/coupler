@@ -332,3 +332,68 @@ mod tests {
         face::look::sheet(&arts, 3, &out);
     }
 }
+
+#[cfg(test)]
+mod export {
+    use super::*;
+    use crate::ansi::Color;
+    use crate::face::Mood;
+    use serde_json::{json, Value};
+
+    fn rows(art: &Art) -> Vec<Vec<String>> {
+        let idx = |c: Option<Color>| match c {
+            Some(Color::Index { index }) => i32::from(index),
+            _ => -1,
+        };
+        art.lines.iter().map(|l| l.iter().flat_map(|s| s.text.chars().map(move |ch| format!("{ch},{},{}", idx(s.style.fg), idx(s.style.bg)))).collect()).collect()
+    }
+
+    /// Writes `fight.json` (B5, `docs/coupler-handoff.md`) into `OUT` (default
+    /// `../painter-data`): `cargo test --lib fight_art::export -- --ignored`. The fighters
+    /// are synthetic: a player of a made-up name and a foe known by its name alone.
+    #[test]
+    #[ignore]
+    fn painter_data() {
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+        let you = face::player("Ada", Some("Human"));
+        let foe = face::sitter_named("a large wolf");
+        let (calm, angry) = (Moment::default(), Moment { mood: Mood::Angry, hurt: 2, ..Moment::default() });
+        let scene = Scene { world: "test".into(), room: "1".into(), terrain: "woods".into(), time: Some("day".into()), ..Scene::default() };
+        let fighters = Fighters { you: (&you, &calm), foe: (&foe, &angry) };
+        let one = |f: Frame, size: Size, columns: usize| rows(&frames(Some(&scene), Style::Fantasy, &fighters, columns, &[f], size, Colors::Sixteen).remove(0));
+        let blow: Vec<Value> = [("still", Frame::default()), ("foe hit, flash", Frame { foe: Pose { shift: 1, flash: true }, ..Frame::default() }), ("foe hit, jolt alone", Frame { foe: Pose { shift: 1, flash: false }, ..Frame::default() }), ("you hit, flash", Frame { you: Pose { shift: -1, flash: true }, ..Frame::default() })]
+            .into_iter()
+            .map(|(n, f)| json!({ "frame": n, "you": f.you.shift, "youFlash": f.you.flash, "foe": f.foe.shift, "foeFlash": f.foe.flash, "picture": one(f, Size::Full, 64) }))
+            .collect();
+        let slide: Vec<Value> = [24, 12, 0].iter().map(|&s| json!({ "foeShift": s, "picture": one(Frame { foe: Pose { shift: s, flash: false }, ..Frame::default() }, Size::Full, 64) })).collect();
+        let doc = json!({
+            "source": "fight_art.rs and lib/fight.ts; CoffeeMUD 720aec6 (2026-10-03, 5.11.0.4)", "made": "2026-10-29",
+            "layout": {
+                "columns": { "least": { "full": LEAST_COLUMNS, "small": 2 * face::SMALL.0 }, "most": MOST_COLUMNS, "note": "the panel's width, clamped" },
+                "faceCells": { "full": [face::SIZE.0, face::SIZE.1], "small": [face::SMALL.0, face::SMALL.1] },
+                "room": "figure::room at columns by face rows, the room's own look (scene.look), a shade darker (recede); with no room: a gradient [black, black, darkgray] top to bottom",
+                "you": "the player's standing face, mirrored left for right, stamped at x = you.shift (left edge); narrower than both faces the two overlap in the middle, the foe in front",
+                "foe": "the foe's standing face, stamped at x = columns - faceColumns + foe.shift (right edge)",
+                "light": "after both are stamped, figure::light on the whole picture (rim light by day, dimming at night)",
+                "words": "names, bars, clock are the frontend's, in bands of their own; no text on the picture",
+                "phone": "a strip of eight rows: the room 8 rows tall, the two small faces at its ends, the words between; four rows of words with pictures off",
+                "mirror": "Canvas::mirrored: each row reversed; the part and the lit flag go with the pixel",
+            },
+            "flash": "flashed(): every non-clear pixel of that fighter becomes lighter(color) and gives its own light (lit), so neither the rim nor the night touches it; the same part",
+            "frames": {
+                "type": "each Frame is { you: Pose, foe: Pose }, Pose = { shift: cells, flash: bool }; the room and the faces are drawn once for all frames; no frames means one still",
+                "bigBlow": "a fall of health of BIG_HIT (15) out of 100 at once jolts and flashes the one hit",
+                "blow": "frame 1: the one hit shifted a cell back from the other (you -1, foe +1) and flashed (when the flash is allowed); frame 2 (not with reduced motion): the jolt alone, no flash; BLOW_MS = 100 each",
+                "slide": "a new foe slides in from the right, one cell a frame: foe.shift = width - 1 down to 0, where width is 25 (small 16); SLIDE_MS = 24 each; the last frame is the foe in place; when slid fully out (shift = width) the foe is gone",
+                "examples": { "blow": blow, "slide": slide },
+            },
+            "limits": {
+                "flashAtMostOncePerBlow": true, "neverMoreThanThreePerSecond": "flashes no closer than FLASH_GAP_MS = 334 ms",
+                "reducedMotion": "no jolt and no slide; a blow gives the flash alone (if allowed) or nothing: blowFrames(you, foe, flash, reduced) returns [] when reduced and not flash; slideFrames(reduced) returns []",
+                "forPainter": "take `reduced: boolean` as a param of the recipe, so a reduced clip is a still or a flash alone, since Coupler cannot post-filter a clip",
+            },
+        });
+        std::fs::write(out.join("fight.json"), serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
+    }
+}

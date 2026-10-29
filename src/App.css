@@ -1048,3 +1048,10 @@ html[data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
 .palette-badge { display: flex; align-items: stretch; height: 16px; margin: 0 0 16px; }
 .palette-badge-name { padding: 0 8px; background: #000000; color: #ffff55; line-height: 16px; white-space: pre; }
 .palette-badge-swatch { width: 128px; background-color: #000000; background-repeat: no-repeat; background-size: 100% 8px; background-position: left top, left bottom; }
+
+/* Eyetest (components/EyetestDialog.tsx, dev only): two pictures side by side and the buttons to judge them. */
+.dialog-box.dialog-eyetest { width: 1240px; max-width: none; }
+.eyetest-controls, .eyetest-buttons, .eyetest-depths { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.eyetest-pictures { display: flex; gap: 16px; align-items: flex-start; margin: 8px 0; }
+.eyetest-pane p { margin: 0; }
+.eyetest-note input { width: 640px; }

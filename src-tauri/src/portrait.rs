@@ -109,12 +109,10 @@ fn bulk(inches: i32, pounds: i32) -> i32 {
     ((10.0 * against_human.sqrt()).round() as i32).clamp(6, 15)
 }
 
-/// How each player race looks: its skin, hair, clothes and feature; its
-/// size from `SIZES`.
-pub(crate) fn race(name: &str) -> Build {
+/// The skin, hair, clothes and feature of a race the painter knows, by its key.
+fn race_look(k: &str) -> Option<(u8, Option<u8>, u8, Feature)> {
     use Feature::*;
-    let k = key(name);
-    let look: Option<(u8, Option<u8>, u8, Feature)> = match k.as_str() {
+    match k {
         "human" => Some((LIGHTRED, Some(BROWN), BLUE, None)),
         "elf" => Some((LIGHTGRAY, Some(YELLOW), GREEN, PointedEars)),
         "halfelf" => Some((LIGHTRED, Some(BROWN), CYAN, PointedEars)),
@@ -150,7 +148,15 @@ pub(crate) fn race(name: &str) -> Build {
         "ghast" | "ghoul" => Some((LIGHTGRAY, Option::None, BROWN, None)),
         "ghost" | "spectre" => Some((LIGHTCYAN, Option::None, LIGHTGRAY, None)),
         _ => Option::None,
-    };
+    }
+}
+
+/// How each player race looks: its skin, hair, clothes and feature; its
+/// size from `SIZES`.
+pub(crate) fn race(name: &str) -> Build {
+    use Feature::*;
+    let k = key(name);
+    let look = race_look(&k);
     let size = SIZES.iter().find(|(n, ..)| *n == k).map(|&(_, inches, pounds, dark)| (inches, bulk(inches, pounds), dark));
     // Made from the name: the same each time.
     let mut rng = Rng::new(seed("race", &k, 0));
@@ -185,8 +191,20 @@ enum Kind {
 /// CoffeeMUD's classes (`CharClasses/*.java`), each its kind and colors:
 /// its clothes, then its trim (a robe's hem, a staff's glow, a symbol).
 fn class(name: &str) -> (Kind, u8, u8) {
+    let k = key(name);
+    class_known(&k).unwrap_or_else(|| {
+        use Kind::*;
+        let mut rng = Rng::new(seed("class", &k, 0));
+        let kinds = [Warrior, Caster, Rogue, Priest, Nature, Bard, Monk, Crafter];
+        let colors = [BLUE, GREEN, BROWN, MAGENTA, RED, CYAN, DARKGRAY, LIGHTGRAY];
+        (kinds[rng.below(8) as usize], colors[rng.below(8) as usize], [YELLOW, WHITE, LIGHTCYAN, LIGHTGREEN][rng.below(4) as usize])
+    })
+}
+
+/// The kind and colors of a class the painter knows, by its key.
+fn class_known(k: &str) -> Option<(Kind, u8, u8)> {
     use Kind::*;
-    match key(name).as_str() {
+    Some(match k {
         "fighter" => (Warrior, LIGHTGRAY, WHITE),
         "barbarian" => (Warrior, BROWN, LIGHTGRAY),
         "paladin" => (Warrior, WHITE, YELLOW),
@@ -218,13 +236,8 @@ fn class(name: &str) -> (Kind, u8, u8) {
         "artisan" | "apprentice" | "gaoler" => (Crafter, BROWN, LIGHTGRAY),
         "scholar" => (Crafter, BLUE, WHITE),
         "sailor" => (Crafter, BLUE, WHITE),
-        other => {
-            let mut rng = Rng::new(seed("class", other, 0));
-            let kinds = [Warrior, Caster, Rogue, Priest, Nature, Bard, Monk, Crafter];
-            let colors = [BLUE, GREEN, BROWN, MAGENTA, RED, CYAN, DARKGRAY, LIGHTGRAY];
-            (kinds[rng.below(8) as usize], colors[rng.below(8) as usize], [YELLOW, WHITE, LIGHTCYAN, LIGHTGREEN][rng.below(4) as usize])
-        }
-    }
+        _ => return None,
+    })
 }
 
 /// Letters only, lower case: "Half Elf" is "halfelf".
@@ -613,5 +626,177 @@ mod look {
         let mut out = format!("P6 {w} {h} 255\n").into_bytes();
         out.extend(px);
         std::fs::write(std::env::var("OUT").unwrap_or_else(|_| "portraits.ppm".into()), out).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod export {
+    use super::*;
+    use serde_json::{json, Value};
+
+    const NAMES: [&str; 16] = [
+        "black", "red", "green", "brown", "blue", "magenta", "cyan", "lightgray", "darkgray", "lightred", "lightgreen", "yellow", "lightblue", "lightmagenta", "lightcyan", "white",
+    ];
+
+    fn color(c: u8) -> Value {
+        json!({ "index": c, "name": NAMES[usize::from(c)] })
+    }
+
+    fn feature(f: Feature) -> Value {
+        match f {
+            Feature::None => json!({ "kind": "none" }),
+            Feature::PointedEars => json!({ "kind": "PointedEars" }),
+            Feature::BeardAndHelmet => json!({ "kind": "BeardAndHelmet" }),
+            Feature::TallHat => json!({ "kind": "TallHat" }),
+            Feature::BareFeet => json!({ "kind": "BareFeet" }),
+            Feature::Tusks => json!({ "kind": "Tusks" }),
+            Feature::Wings(c) => json!({ "kind": "Wings", "color": color(c) }),
+        }
+    }
+
+    fn kind(k: Kind) -> &'static str {
+        match k {
+            Kind::Warrior => "warrior: helmet, belt, sword raised in the right hand, shield on the left arm",
+            Kind::Caster => "caster: robe, pointed hat, staff with a glowing head",
+            Kind::Rogue => "rogue: hood, dagger low in the right hand",
+            Kind::Priest => "priest: robe, holy symbol on the chest, mace in the right hand",
+            Kind::Nature => "nature: robe, hood of leaves, a staff still growing",
+            Kind::Bard => "bard: feathered cap, lute across the body",
+            Kind::Monk => "monk: robe, bald, sash, bare hands",
+            Kind::Crafter => "crafter: apron, hammer (or a book, a rope: the trim's color)",
+        }
+    }
+
+    fn rng_first(seed_of: u64) -> Vec<String> {
+        let mut rng = Rng::new(seed_of);
+        (0..6).map(|_| rng.next().to_string()).collect()
+    }
+
+    fn names(of: &str) -> Vec<String> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../public/creation-art.json");
+        let json: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        json[of].as_object().unwrap().keys().cloned().collect()
+    }
+
+    /// Writes `races.json`, `classes.json` and `portrait.json` for the Painter
+    /// engine (`docs/coupler-handoff.md`, B2) into `OUT` (default `painter-data`):
+    /// `OUT=painter-data cargo test portrait::export -- --ignored`.
+    #[test]
+    #[ignore]
+    fn painter_data() {
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+        let made = "2026-10-29";
+        let source = "portrait.rs; CoffeeMUD 720aec6 (2026-10-03, 5.11.0.4); names from public/creation-art.json";
+
+        let races: Vec<Value> = names("races")
+            .iter()
+            .map(|name| {
+                let k = key(name);
+                let b = race(name);
+                let sized = SIZES.iter().find(|(n, ..)| *n == k);
+                json!({
+                    "name": name,
+                    "key": k,
+                    "inches": b.inches,
+                    "pounds": sized.map(|s| s.2),
+                    "darkvision": b.infravision,
+                    "sizeKnown": sized.is_some(),
+                    "lookKnown": race_look(&k).is_some(),
+                    "bulk": b.bulk,
+                    "skin": color(b.skin),
+                    "hair": b.hair.map(color),
+                    "clothes": color(b.clothes),
+                    "feature": feature(b.feature),
+                })
+            })
+            .collect();
+        let players: Vec<Value> = SIZES.iter().map(|&(name, inches, pounds, dark)| json!({ "name": name, "inches": inches, "pounds": pounds, "darkvision": dark })).collect();
+        let fixtures: Vec<Value> = ["Kobold", "Troll", "Dragon Born", "Treant", "Sprite"]
+            .iter()
+            .map(|name| {
+                let b = race(name);
+                json!({
+                    "name": name, "key": key(name), "seed": seed("race", &key(name), 0).to_string(),
+                    "inches": b.inches, "bulk": b.bulk, "darkvision": b.infravision,
+                    "skin": color(b.skin), "hair": b.hair.map(color), "clothes": color(b.clothes), "feature": feature(b.feature),
+                })
+            })
+            .collect();
+        let races = json!({
+            "source": source, "made": made,
+            "players": players,
+            "bulk": "tenths of a human's width: round(10 * sqrt((pounds / inches) / (175 / 74))), clamped 6..15; a centaur's horse half is left out",
+            "fallback": {
+                "when": "a race with no row in `players` has no size; a race with no look has no colors; each is made independently",
+                "key": "letters only, lower case: \"Half Elf\" is \"halfelf\"",
+                "seed": "FNV-1a 64 as paint::seed(\"race\", key, 0): hash from 0xcbf29ce484222325; bytes of \"race\", then 0, then the key's bytes, then 0u32 as 4 little-endian bytes; each byte: hash ^= byte; hash *= 0x100000001b3 (wrapping)",
+                "rng": "xorshift64*: state = seed | 1; next(): s ^= s >> 12; s ^= s << 25; s ^= s >> 27; return s * 0x2545f4914f6cdd1d (wrapping). below(n) = (next() >> 33) as i32 % n (0 when n <= 0); between(a, b) = a + below(b - a + 1); chance(p) = below(100) < p",
+                "order": [
+                    "the rng starts fresh for each race; only when the SIZE is unknown: inches = between(40, 96); bulk = between(8, 14); darkvision = chance(50)",
+                    "only when the LOOK is unknown (the draws continue after the size's, or start fresh when the size was known): skin = skins[below(5)]; hair = Some(hairs[below(5)]) (never bald); clothes = clothes[below(6)]; feature = features[below(4)]",
+                ],
+                "skins": ["lightred", "brown", "green", "lightgray", "cyan"],
+                "hairs": ["brown", "yellow", "white", "red", "darkgray"],
+                "clothes": ["blue", "green", "brown", "magenta", "red", "cyan"],
+                "features": ["none", "PointedEars", "TallHat", "Tusks"],
+                "fixtures": fixtures,
+                "rngFirstSixOfRaceKobold": rng_first(seed("race", "kobold", 0)),
+            },
+            "races": races,
+        });
+        std::fs::write(out.join("races.json"), serde_json::to_string_pretty(&races).unwrap() + "\n").unwrap();
+
+        let classes: Vec<Value> = names("classes")
+            .iter()
+            .map(|name| {
+                let k = key(name);
+                let (kind_of, clothes, trim) = class(name);
+                json!({
+                    "name": name, "key": k, "known": class_known(&k).is_some(),
+                    "kind": format!("{kind_of:?}").to_lowercase(), "draws": kind(kind_of),
+                    "clothes": color(clothes), "trim": color(trim),
+                    "robed": matches!(kind_of, Kind::Caster | Kind::Priest | Kind::Nature | Kind::Monk),
+                })
+            })
+            .collect();
+        let classes = json!({
+            "source": source, "made": made,
+            "fallback": {
+                "when": "a class with no row (`known` false)",
+                "seed": "paint::seed(\"class\", key, 0) as for a race",
+                "order": "rng = Rng(seed); kind = kinds[below(8)]; clothes = colors[below(8)]; trim = trims[below(4)]",
+                "kinds": ["warrior", "caster", "rogue", "priest", "nature", "bard", "monk", "crafter"],
+                "colors": ["blue", "green", "brown", "magenta", "red", "cyan", "darkgray", "lightgray"],
+                "trims": ["yellow", "white", "lightcyan", "lightgreen"],
+                "rngFirstSixOfClassKnight": rng_first(seed("class", "knight", 0)),
+                "knight": { "kind": format!("{:?}", class("Knight").0).to_lowercase(), "clothes": color(class("Knight").1), "trim": color(class("Knight").2) },
+            },
+            "bulkByKind": { "warrior": 12, "caster": 9, "rogue": 9, "priest": 10, "nature": 10, "bard": 10, "monk": 10, "crafter": 10 },
+            "robedKinds": ["caster", "priest", "nature", "monk"],
+            "robedRule": "robed: legs in the clothes' color and a hem row in the trim along the feet; otherwise breeches in darkgray",
+            "classes": classes,
+        });
+        std::fs::write(out.join("classes.json"), serde_json::to_string_pretty(&classes).unwrap() + "\n").unwrap();
+
+        let portrait = json!({
+            "source": source, "made": made,
+            "size": { "least": { "columns": LEAST.0, "rows": LEAST.1 }, "most": { "columns": MOST.0, "rows": MOST.1 }, "unit": "cells; two square pixels a cell (the painter's half block), so pixel height = 2 * rows" },
+            "ground": "pixel row = h - max(h / 10, 2); below it brown with every second pixel of its top row green (backdrop)",
+            "race": {
+                "foot": "max((ground - 1) * 12 / 101, 1) pixels: six feet is most of the picture, so a half ogre over eight feet fits",
+                "stick": "x = w / 6; a darkgray line from ground - 6 * foot to ground; a lightgray tick 3 pixels wide (x-1..x+2) at every foot 1..6",
+                "tall": "min(inches * foot / 12, ground - 1)",
+                "cx": "w * 9 / 16",
+                "legs": "the skin color for Tusks, else darkgray",
+                "marks": "the stick marks every foot up to six",
+            },
+            "class": { "tall": "ground - 3", "cx": "w / 2", "skin": "lightred", "eyes": "black, never glowing" },
+            "figure": "head = max(tall / 6, 2); head_half = max((head * bulk + 9) / 20, 1); half = max(tall * bulk / 50, head_half + 1); shoulders = head_bottom + 1; hips = head_top + tall * 11 / 20; torso narrows 1/4 of half toward the hips; legs from the hips to the feet in two blocks with a one pixel gap, each hip_half = max(half * 3 / 4, 1) wide; arms arm = max(half / 3, 1) wide down the sides to hand_y = hips + (feet - hips) / 4, the hand pixel in skin",
+            "eyes": "at the head's middle row; gap = max(head_half / 2, 1) either side of cx; glowing: a lit lightred pixel (canvas.light); otherwise black",
+            "paintOrder": "backdrop, wings (race), figure, hair (race), eyes, feature or kind's tools",
+            "rimLight": "`canvas.light(x, y, c)` sets a pixel that gives its own light: it stays bright at night and under snow (see painter-tables.json)",
+        });
+        std::fs::write(out.join("portrait.json"), serde_json::to_string_pretty(&portrait).unwrap() + "\n").unwrap();
     }
 }

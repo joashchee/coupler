@@ -56,3 +56,7 @@ src-tauri/vendor/neumetik-midi/Cargo.lock
 CLAUDE.local.md
 # Claude Code settings for this checkout only (the notes folder made writable).
 .claude/settings.local.json
+
+# Data made for the Painter engine by examples/painter_reference.rs and
+# scripts/painter-reference-png.py: regenerable, so never committed.
+painter-data/

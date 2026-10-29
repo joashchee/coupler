@@ -196,3 +196,62 @@ mod tests {
         assert_eq!(q.part(24, 21), Part::Body);
     }
 }
+
+#[cfg(test)]
+mod export {
+    use super::*;
+    use serde_json::json;
+
+    const NAMES: [&str; 16] = ["black", "red", "green", "brown", "blue", "magenta", "cyan", "lightgray", "darkgray", "lightred", "lightgreen", "yellow", "lightblue", "lightmagenta", "lightcyan", "white"];
+
+    fn grid(c: &Canvas) -> serde_json::Value {
+        let rows: Vec<String> = (0..c.h).map(|y| (0..c.w).map(|x| { let v = c.get(x, y); if v == CLEAR { '.' } else { char::from_digit(u32::from(v), 16).unwrap() } }).collect()).collect();
+        let lit: Vec<String> = (0..c.h).map(|y| (0..c.w).map(|x| if c.is_lit(x, y) { '1' } else { '0' }).collect()).collect();
+        json!({ "colors": rows, "lit": lit })
+    }
+
+    /// Writes `figure.json` (B5, `docs/coupler-handoff.md`) into `OUT` (default
+    /// `../painter-data`): `cargo test --lib figure::export -- --ignored`.
+    #[test]
+    #[ignore]
+    fn painter_data() {
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+        let pair = |f: fn(u8) -> u8| (0..16u8).map(|c| json!({ "from": c, "name": NAMES[usize::from(c)], "to": f(c), "toName": NAMES[usize::from(f(c))] })).collect::<Vec<_>>();
+        // A figure (a red block) on three places: the rim light and the night.
+        let mut laid = Vec::new();
+        for (t, time) in [("plains", None), ("woods", Some("night")), ("stone", None)] {
+            let scene = Scene { terrain: t.into(), time: time.map(Into::into), ..Scene::default() };
+            let (mut c, p) = place("a thing", &scene, 25, 12);
+            let mut f = clear(25, 12);
+            f.pen = Part::Body;
+            f.rect(8, 8, 17, 20, RED);
+            f.pen = Part::Eye;
+            f.rect(11, 12, 13, 13, WHITE);
+            lay(&mut c, &f, (0, 0), &|_, _| false);
+            let before = grid(&c);
+            light(&mut c, &p);
+            laid.push(json!({ "terrain": t, "time": time, "indoors": p.indoors, "night": p.night, "laid": before, "lit": grid(&c) }));
+        }
+        let wilds: Vec<_> = ["city", "spaceport", "seaport", "stone", "plains", "jungle", "mountains", "underwater"].iter().map(|t| json!({ "terrain": t, "key": "a cat", "wild": wild(t, "a cat") })).collect();
+        let doc = json!({
+            "source": "figure.rs; CoffeeMUD 720aec6 (2026-10-03, 5.11.0.4)", "made": "2026-10-29",
+            "clear": CLEAR,
+            "parts": [
+                { "part": "Back", "meaning": "the place; a room's picture is all Back" },
+                { "part": "Body", "meaning": "skin, fur, scales, bone, stone: what a wound marks" },
+                { "part": "Hair" }, { "part": "Eye" }, { "part": "Mouth" },
+                { "part": "Worn", "meaning": "clothes, armor, hats, jewelry" },
+                { "part": "Brow", "meaning": "which a mood moves" },
+                { "part": "Detail", "meaning": "horns, tusks, whiskers, wings, a halo, a wound: neither hurt nor dressed" }
+            ],
+            "place": "the room painter at the picture's size, a shade darker (`recede`); key seeds it (world 'bestiary', room = key); without a time the sun is placed at arc [150, 250, 750, 850][seed('sun', key, 0) % 4], never over a head",
+            "lay": "for each pixel (x, y) of the back: figure pixel (x + offset.x, y - offset.y); a figure past its right edge repeats its last column where that is Body (an animal's back running off the side); skip CLEAR and any pixel `hide` says (an invisible figure hides (x + y) odd); put the pixel with its lit flag and part; remove any glyph there",
+            "light": "outdoors by day: a figure pixel whose pixel above is not the figure's, not an Eye, not lit, becomes lighter(color); at night outdoors every figure pixel that is not lit becomes dim(color, x, y) (painter-tables.json); indoors nothing",
+            "lighter": pair(lighter), "shade": pair(shade),
+            "wild": { "rule": "an outdoors terrain except city, spaceport and seaport stays; anything else is [woods, plains, hills][seed('wild', key, 0) % 3]", "examples": wilds },
+            "fixtures": laid,
+        });
+        std::fs::write(out.join("figure.json"), serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
+    }
+}

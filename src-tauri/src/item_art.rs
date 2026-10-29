@@ -1936,3 +1936,113 @@ mod look {
         crate::face::look::sheet(&arts, per, &std::env::var("OUT").unwrap_or_else(|_| "items.ppm".into()));
     }
 }
+
+#[cfg(test)]
+mod export {
+    use super::*;
+    use crate::ansi::Color;
+    use serde_json::{json, Value};
+
+    /// A finished picture as rows of cells `"char,fg,bg"` (VGA indexes).
+    fn rows(art: &Art) -> Vec<Vec<String>> {
+        let idx = |c: Option<Color>| match c {
+            Some(Color::Index { index }) => i32::from(index),
+            _ => -1,
+        };
+        art.lines.iter().map(|l| l.iter().flat_map(|s| s.text.chars().map(move |ch| format!("{ch},{},{}", idx(s.style.fg), idx(s.style.bg)))).collect()).collect()
+    }
+
+    fn thing(name: &str, material: &str, description: &str, auras: &[&str], worn: &str) -> Thing {
+        Thing { name: name.into(), material: (!material.is_empty()).then(|| material.into()), description: (!description.is_empty()).then(|| description.into()), auras: auras.iter().map(|a| a.to_string()).collect(), worn: (!worn.is_empty()).then(|| worn.into()), ..Thing::default() }
+    }
+
+    /// Every `let name = has(&[...]);` in the source, with the function it is in: the name
+    /// words that set a shape, a color or a wear step.
+    fn cues() -> Vec<Value> {
+        let src = include_str!("item_art.rs");
+        let src = &src[..src.find("#[cfg(test)]").unwrap()];
+        let mut func = String::new();
+        let mut out = Vec::new();
+        for line in src.lines() {
+            if let Some(rest) = line.strip_prefix("fn ").or_else(|| line.strip_prefix("pub fn ")) {
+                func = rest.split('(').next().unwrap_or("").to_string();
+            }
+            let t = line.trim();
+            let Some(rest) = t.strip_prefix("let ") else { continue };
+            let Some((name, tail)) = rest.split_once(" = has(&[") else { continue };
+            let Some((list, _)) = tail.split_once("])") else { continue };
+            let ws: Vec<&str> = list.split(',').map(|w| w.trim().trim_matches('"')).filter(|w| !w.is_empty()).collect();
+            out.push(json!({ "in": func, "cue": name, "words": ws }));
+        }
+        out
+    }
+
+    /// Writes B4 (`docs/coupler-handoff.md`) into `OUT` (default `../painter-data`):
+    /// `cargo test --lib item_art::export -- --ignored`. Things are synthetic (written
+    /// here), never the player's Bestiary: no game text and no player data.
+    #[test]
+    #[ignore]
+    fn painter_data() {
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+        let source = "item_art.rs; CoffeeMUD 720aec6 (2026-10-03, 5.11.0.4); materials.tsv";
+        let made = "2026-10-29";
+        let write = |name: &str, v: Value| std::fs::write(out.join(name), serde_json::to_string_pretty(&v).unwrap() + "\n").unwrap();
+
+        // kinds.json: the first-word table, each kind's slot and its default colors (from a plain thing).
+        let probe = |k: &(Kind, &[&str])| {
+            let t = thing(&format!("a {}", k.1[0]), "", "", &[], "");
+            let mut rng = Rng::new(seed("item", &key(&t.name), 0));
+            let c = colors(&t, k.0, &mut rng);
+            json!({ "kind": format!("{:?}", k.0), "words": k.1, "slot": slot_of(k.0), "main": c.main, "metal": c.metal, "wood": c.wood, "class": format!("{:?}", class_of(&t, k.0)) })
+        };
+        write("kinds.json", json!({
+            "source": source, "made": made,
+            "kinds": KINDS.iter().map(probe).collect::<Vec<_>>(),
+            "rule": "the first word of the name (not a material word if another word names a kind) that names a kind; materialWords only if nothing else does; no word: Bag for a container, else Bundle",
+            "materialWords": MATERIALS_TOO,
+            "slotRule": "where it was seen worn (first letter upper case, cut to 25), else the kind's slot, else Carried; written centered on the bottom row (LABEL = H - 2)",
+            "frame": { "columns": SIZE.0, "rows": SIZE.1, "pixels": [W, H], "label": LABEL, "table": TABLE },
+            "colorNote": "main/metal/wood are the kind's own colors for an item with no color word and no material; `fabric` kinds (Armor, Robe, Legs, Cloak, Hood, Hat, Book, Bundle) pick from [blue, red, green, brown, magenta, cyan, darkgray] by the name's seed",
+            "backdrop": "[blue, magenta, cyan, green, red, brown, darkgray] by the seed, over a table; or the place where it was found, a shade darker",
+        }));
+
+        // materials.json: every row of materials.tsv, and what each class draws.
+        let mats: Vec<Value> = include_str!("materials.tsv").lines().skip(1).filter_map(|l| l.split_once('\t')).map(|(m, c)| json!({ "material": m, "class": c, "color": material_color(m) })).collect();
+        write("materials.json", json!({
+            "source": source, "made": made, "materials": mats,
+            "classes": { "cloth": "woven", "leather": "stitched", "metal": "a band of light", "mithril": "sparkling", "wooden": "grained", "glass": "the backdrop seen through", "rock": "speckled", "precious": "sparkling gems", "plain": "smooth (vegetation, flesh, paper, liquid, energy, gas, plastic)" },
+            "classOf": "EXAMINE's material, else a material word in the name before any 'of' (two-word pairs first), else the kind's own (kinds.json `class`); a handle keeps its wood and a blade its metal",
+        }));
+
+        // shape-numbers.json: the name-word cues, and golden grids for the shape words.
+        let shaped: Vec<Value> = ["a sword", "a long sword", "a scimitar", "a rapier", "a claymore", "a katana", "a dagger", "a kukri", "a stiletto", "a battleaxe", "a hand axe", "a mace", "a club", "a warhammer", "a spear", "a halberd", "a staff", "a wand", "a longbow", "a crossbow", "a round shield", "a kite shield", "a great helm", "an iron cap", "a vial", "a bottle"]
+            .iter()
+            .map(|n| { let t = thing(n, "", "", &[], ""); json!({ "name": n, "kind": format!("{:?}", kind(&t)), "picture": rows(&picture_in(&t, GameColors::Sixteen)) }) })
+            .collect();
+        write("shape-numbers.json", json!({ "source": source, "made": made, "cues": cues(), "rng": "Rng(seed(\"item\", key(name), 0)): drawn in order by colors() (the fabric color), then the backdrop, then the kind's painting; see the pictures for ground truth", "pictures": shaped }));
+
+        // wear.json
+        let steps = ["a sword", "a worn sword", "a dented sword", "a battered sword", "a broken sword", "a rusty sword", "a crude sword", "a fine sword"];
+        let wj: Vec<Value> = steps.iter().map(|n| { let t = thing(n, "iron", "", &[], ""); let w = wear(&t); json!({ "name": n, "wear": format!("{w:?}"), "picture": rows(&picture_in(&t, GameColors::Sixteen)) }) }).collect();
+        let auras = ["glowing", "glowing red", "glowing blue", "glowing purple", "glowing white", "magical aura", "metallic aura", "mithril aura", "invisible", "hidden", "floating", "flying", "bound"];
+        let aj: Vec<Value> = auras.iter().map(|a| { let t = thing("a sword", "iron", "", &[a], ""); json!({ "aura": a, "glow": glow(a), "picture": rows(&picture_in(&t, GameColors::Sixteen)) }) }).collect();
+        write("wear.json", json!({
+            "source": source, "made": made,
+            "steps": "0 sound, 1 worn, 2 damaged (dents in metal, a crack in wood or stone, a frayed cloth edge), 3 battered (notches, holes), 4 broken (split in two); rust on iron; crude: a rough outline; fine: gilt trim and a gem",
+            "cues": cues().into_iter().filter(|c| c["in"] == "wear").collect::<Vec<_>>(),
+            "wear": wj, "auraWords": "glowing (a halo; red, blue, purple, white, or any color word's bright half; yellow otherwise), magical (sparks), metallic or mithril (glints), invisible (half seen through), hidden (in shadow), floating or flying (lifted, its shadow below), bound (a rope)", "auras": aj,
+        }));
+
+        // things.json: one synthetic thing per kind, plus class and aura variants.
+        let mut things: Vec<Thing> = KINDS.iter().map(|(_, ws)| thing(&format!("a {}", ws[0]), "", "", &[], "")).collect();
+        things.extend([
+            thing("a steel helmet", "steel", "", &[], "worn on head"), thing("a pair of leather boots", "leather", "", &[], ""), thing("a bag of gold coins", "", "", &[], ""),
+            thing("a red potion", "glass", "", &["glowing red"], ""), thing("a black wool hood", "wool", "", &[], "worn on head"), thing("an oak staff", "oak", "", &["magical aura"], "wielded"),
+            thing("a mithril ring", "mithril", "", &["metallic aura"], "worn on finger"), thing("a rusty iron key", "iron", "", &[], ""), thing("a dented round shield", "oak", "", &[], "held"),
+            thing("a fine silver goblet", "silver", "", &["invisible"], ""), thing("a ruby", "", "", &["glowing"], ""), thing("a sack", "", "", &["hidden"], ""),
+        ]);
+        let tj: Vec<Value> = things.iter().map(|t| { let k = kind(t); json!({ "name": t.name, "material": t.material, "description": t.description, "container": t.container, "auras": t.auras, "worn": t.worn, "terrain": t.terrain, "kind": format!("{k:?}"), "class": format!("{:?}", class_of(t, k)), "wear": format!("{:?}", wear(t)), "slot": slot(t, k), "picture": rows(&picture_in(t, GameColors::Sixteen)) }) }).collect();
+        write("things.json", json!({ "source": source, "made": made, "note": "synthetic: written by the exporter, one per kind plus variants; no Bestiary entry, no game text, no player data. `picture` is the finished 25 by 12 cell picture with its slot label, as `char,fg,bg` cells (VGA indexes, -1 default).", "things": tj }));
+    }
+}

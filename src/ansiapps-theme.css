@@ -305,6 +305,9 @@
 /* A dialog with a list in it is 100 cells wide, from column 31. */
 :root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-wide) { padding-left: 240px; }
 :root[data-theme="ansiapps"] .dialog-box.dialog-wide { width: 800px; max-width: none; }
+/* Eyetest is a dev tool: the whole stage, off the grid rules' tidy columns. */
+:root[data-theme="ansiapps"] .dialog-overlay:has(.dialog-eyetest) { padding-left: 16px; }
+:root[data-theme="ansiapps"] .dialog-box.dialog-eyetest { width: 1248px; max-width: none; }
 /* The title sits in the frame's top edge: ═══ About Coupler ═══ */
 :root[data-theme="ansiapps"] .dialog-box h2 {
   position: absolute;

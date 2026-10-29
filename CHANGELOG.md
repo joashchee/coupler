@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+- **Eyetest, and the Painter engine beside Coupler's painter** (2026-10-29):
+  gear → **Eyetest** (dev builds only, like App Testing) draws a scene with
+  Coupler's own painter (Rust) and the Painter engine (`art-sprites`
+  1.13.0, `vista`) side by side, in ANSI 16, 256 or TRUE as you pick
+  (the game's own depth is left alone), over every terrain, time,
+  weather, style and size, or a 52-scene sweep. Keys 1 to 4 (Engine
+  better, Same, Coupler's better, Engine broken) judge a scene and move
+  on; Tag buttons (Ground, Sky, Weather, Light, Detail, Colors, Depth,
+  Glitch) and a note stick to it; **Copy Report** and **Save Report…**
+  make a text report (tally, scenes by verdict, where each problem came
+  up). The scenes are made up: no game text or player data is in a report.
+  Gear → Pictures… also offers **Painter engine (trying)** for the room
+  picture, in the webview, in the app and the web build. The engine is
+  ansiapps' own code, **Apache-2.0 like Coupler**: `src/vendor/art-sprites/`
+  (only what `vista` reaches, with its LICENSE and NOTICE, listed in
+  `NOTICE`) is copied by `scripts/painter-sync.sh` from the `painter`
+  repo, which refuses a Painter not licensed Apache-2.0; it loads as its
+  own chunk on the first picture. The Eyetest is dev builds only. Coupler's own
+  painter stays the default and unchanged; nothing else uses the engine.
+  The engine is given only the terrain, time, weather, sun's place and a
+  seed, never a name, zone or ART. If it can't draw, the picture is left
+  out and the line says so. True color shows the 256's drawing for now.
+  `scripts/sprites-check.mjs` draws every terrain, time and weather at
+  both depths and checks the copy.
+- **Reference pictures for the Painter engine** (2026-10-29): the
+  `painter_reference` example writes the painter's own output for a fixed
+  matrix (`.ans`, a manifest and the room seeds) into `painter-data/`,
+  and `scripts/painter-reference-png.py` renders each as a PNG, so the
+  engine's pictures can be judged beside them. `painter` and `create` are
+  now public modules of the library so the example can reach them. Two
+  ignored tests write the races, classes and portrait rules
+  (`portrait::export`) and the painter's own tables (`painter::show`),
+  and the faces (`face::export`), items (`item_art::export`), figure
+  layer and Fight panel (`figure::export`, `fight_art::export`) write
+  their tables, rules and drawn grids from synthetic fixtures (no
+  Bestiary entry, no game text, no player data). `scripts/painter-data.sh` runs all of it. The painter's horizon,
+  sky bands, indoor materials and weather marks moved into small
+  functions so the tables are read from what it draws with; every
+  picture and portrait is byte for byte as before (the 260 references
+  and the portraits' sheet match).
+
 ## 0.49.1 (2026-10-27)
 
 - **The Fight's room in the game's colors** (2026-10-27): with ANSI 256

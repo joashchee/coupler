@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ActivityStatus } from "./components/ActivityStatus";
 import { AppTesting } from "./components/AppTesting";
+import { EyetestDialog } from "./components/EyetestDialog";
 import { Dialog } from "./components/Dialog";
 import { HeardPanel } from "./components/HeardPanel";
 import { HookPicture } from "./components/HookPicture";
@@ -610,6 +611,7 @@ function App() {
   const [keysOpen, setKeysOpen] = useState(false);
   const [clearMapOpen, setClearMapOpen] = useState(false);
   const [appTestingOpen, setAppTestingOpen] = useState(false);
+  const [eyetestOpen, setEyetestOpen] = useState(false);
   const [server, setServer] = useState<mud.ServerInfo | null>(null);
   const [connected, setConnected] = useState(false);
   /** The way to play that's connected, or was chosen last. */
@@ -3508,6 +3510,18 @@ function App() {
                   <button
                     type="button"
                     className="menu-item"
+                    data-testid="eyetest-open"
+                    onClick={() => {
+                      setGearOpen(false);
+                      setEyetestOpen(true);
+                    }}
+                  >
+                    <ChecklistIcon aria-hidden="true" />
+                    <span>Eyetest</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
                     data-testid="grid-check"
                     onClick={devGridCheck}
                   >
@@ -4067,6 +4081,7 @@ function App() {
       )}
 
       {import.meta.env.DEV && <AppTesting open={appTestingOpen} onClose={() => setAppTestingOpen(false)} />}
+      {import.meta.env.DEV && <EyetestDialog open={eyetestOpen} onClose={() => setEyetestOpen(false)} />}
     </div>
     {/* The tablet's lower part (lib/stage.ts): one fixed size under the
         desk, the frame's width. The keyboard while a text field has the

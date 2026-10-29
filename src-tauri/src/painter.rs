@@ -683,14 +683,19 @@ pub(crate) fn draw(scene: &Scene, style: Style, columns: usize, rows: usize, aga
 
 // ---- Outdoors ----
 
+/// How far down the picture the horizon is, in percent, by terrain.
+fn horizon_percent(terrain: &str) -> i32 {
+    match terrain {
+        "air" => 100,
+        "mountains" => 60,
+        "watersurface" | "seaport" => 50,
+        _ => 45,
+    }
+}
+
 fn outdoors(canvas: &mut Canvas, rng: &mut Rng, terrain: &str, light: Light, arc: u16, sky: Sky, high: bool) {
     let (w, h) = (canvas.w, canvas.h);
-    let horizon = match terrain {
-        "air" => h,
-        "mountains" => h * 60 / 100,
-        "watersurface" | "seaport" => h * 50 / 100,
-        _ => h * 45 / 100,
-    };
+    let horizon = h * horizon_percent(terrain) / 100;
     heavens(canvas, rng, horizon, light, arc, sky, high);
     canvas.keep();
     match terrain {
@@ -734,11 +739,9 @@ fn arc_at(w: i32, horizon: i32, r: i32, arc: u16) -> (i32, i32) {
     (x, y)
 }
 
-/// The sky down to the horizon: its colors by the time and the weather,
-/// the sun or the moon and stars, clouds, an aurora.
-fn heavens(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, arc: u16, sky: Sky, high: bool) {
-    let night = light == Light::Night;
-    let stops: &[u8] = match (sky, light) {
+/// The sky's bands of color, top to bottom, by the weather and the time.
+fn sky_stops(sky: Sky, light: Light) -> &'static [u8] {
+    match (sky, light) {
         (Sky::Storm | Sky::Blizzard, Light::Night) => &[BLACK, BLACK, DARKGRAY],
         (Sky::Storm | Sky::Blizzard, _) => &[BLACK, DARKGRAY, DARKGRAY, LIGHTGRAY],
         (Sky::Rain | Sky::Hail | Sky::Sleet | Sky::Snow | Sky::Fog, Light::Dawn | Light::Dusk) => &[BLACK, DARKGRAY, LIGHTGRAY],
@@ -756,7 +759,14 @@ fn heavens(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, arc: 
         (Sky::Hot, Light::Day) => &[LIGHTBLUE, LIGHTCYAN, YELLOW],
         (Sky::Cold, Light::Day) => &[LIGHTBLUE, LIGHTCYAN, WHITE],
         (_, Light::Day) => &[BLUE, LIGHTBLUE, LIGHTCYAN],
-    };
+    }
+}
+
+/// The sky down to the horizon: its colors by the time and the weather,
+/// the sun or the moon and stars, clouds, an aurora.
+fn heavens(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, arc: u16, sky: Sky, high: bool) {
+    let night = light == Light::Night;
+    let stops = sky_stops(sky, light);
     canvas.gradient(0, horizon, stops);
     let (w, sky_h) = (canvas.w, horizon.max(1));
 
@@ -1193,11 +1203,9 @@ fn fog(canvas: &mut Canvas, horizon: i32, light: Light) {
     }
 }
 
-/// What falls or blows: rain, snow, hail, sleet, dust, and a storm's lightning.
-fn weather(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, sky: Sky) {
-    let (w, h) = (canvas.w, canvas.h);
-    let night = light == Light::Night;
-    let (every, marks): (i32, &[(char, u8)]) = match sky {
+/// What falls in each weather: one mark in `every` pixels of half the picture, and the marks.
+fn weather_marks(sky: Sky) -> (i32, &'static [(char, u8)]) {
+    match sky {
         Sky::Rain => (10, &[('/', LIGHTBLUE), ('/', LIGHTCYAN)]),
         Sky::Storm => (5, &[('/', LIGHTBLUE), ('/', LIGHTGRAY)]),
         Sky::Snow => (9, &[('*', WHITE), ('∙', WHITE), ('.', LIGHTGRAY)]),
@@ -1206,7 +1214,14 @@ fn weather(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, sky: 
         Sky::Sleet => (8, &[('/', LIGHTGRAY), ('*', WHITE)]),
         Sky::Dust => (5, &[('∙', YELLOW), ('.', BROWN), ('░', BROWN)]),
         _ => (0, &[]),
-    };
+    }
+}
+
+/// What falls or blows: rain, snow, hail, sleet, dust, and a storm's lightning.
+fn weather(canvas: &mut Canvas, rng: &mut Rng, horizon: i32, light: Light, sky: Sky) {
+    let (w, h) = (canvas.w, canvas.h);
+    let night = light == Light::Night;
+    let (every, marks) = weather_marks(sky);
     if every > 0 {
         for _ in 0..(w * h / 2 / every).max(1) {
             let (x, y) = (rng.below(w), rng.below(h));
@@ -1288,20 +1303,25 @@ enum Laid {
     Runes,
 }
 
-fn indoors(canvas: &mut Canvas, rng: &mut Rng, terrain: &str, high: bool) {
+/// What an indoor room is made of, by terrain.
+fn material_of(terrain: &str) -> Material {
     match terrain {
-        "cave" | "cavelakesurface" | "caveseaport" => return cave(canvas, rng, terrain, high),
-        "gap" => return gap(canvas, rng),
-        _ => {}
-    }
-    let material = match terrain {
         "wooden" => Material { wall: BROWN, joint: RED, side: RED, floor: BROWN, floor_joint: BLACK, ceiling: BLACK, laid: Laid::Planks },
         "metal" => Material { wall: LIGHTGRAY, joint: DARKGRAY, side: DARKGRAY, floor: DARKGRAY, floor_joint: BLACK, ceiling: BLACK, laid: Laid::Panels },
         "magic" => Material { wall: MAGENTA, joint: LIGHTMAGENTA, side: BLUE, floor: BLUE, floor_joint: MAGENTA, ceiling: BLACK, laid: Laid::Runes },
         "in_underwater" => Material { wall: BLUE, joint: CYAN, side: BLUE, floor: CYAN, floor_joint: BLUE, ceiling: BLACK, laid: Laid::Bricks },
         // Stone, and the sea ports' halls.
         _ => Material { wall: DARKGRAY, joint: LIGHTGRAY, side: DARKGRAY, floor: LIGHTGRAY, floor_joint: DARKGRAY, ceiling: BLACK, laid: Laid::Bricks },
-    };
+    }
+}
+
+fn indoors(canvas: &mut Canvas, rng: &mut Rng, terrain: &str, high: bool) {
+    match terrain {
+        "cave" | "cavelakesurface" | "caveseaport" => return cave(canvas, rng, terrain, high),
+        "gap" => return gap(canvas, rng),
+        _ => {}
+    }
+    let material = material_of(terrain);
     let (w, h) = (canvas.w, canvas.h);
     let (bx0, bx1) = (w / 5, w - w / 5);
     let (by0, by1) = (h / 6, h * 7 / 10);
@@ -1902,5 +1922,72 @@ mod show {
         if let Ok(out) = std::env::var("OUT") {
             std::fs::write(out, ppm(&canvases, colors)).unwrap();
         }
+    }
+
+    /// Writes `painter-tables.json` for the Painter engine (`docs/coupler-handoff.md`,
+    /// B6) into `OUT` (default `../painter-data`), read from the functions the
+    /// painter draws with: `cargo test painter::show::painter_tables -- --ignored`.
+    #[test]
+    #[ignore]
+    fn painter_tables() {
+        use serde_json::{json, Value};
+        const TERRAINS: [&str; 24] = [
+            "city", "woods", "rocky", "plains", "underwater", "air", "watersurface", "jungle", "swamp", "desert", "hills", "mountains", "spaceport", "seaport", "stone", "wooden", "cave", "magic", "in_underwater", "gap", "cavelakesurface", "metal", "innerseaport", "caveseaport",
+        ];
+        const NAMES: [&str; 16] = ["black", "red", "green", "brown", "blue", "magenta", "cyan", "lightgray", "darkgray", "lightred", "lightgreen", "yellow", "lightblue", "lightmagenta", "lightcyan", "white"];
+        let color = |c: u8| json!({ "index": c, "name": NAMES[usize::from(c)] });
+        let colors = |cs: &[u8]| cs.iter().map(|&c| color(c)).collect::<Vec<_>>();
+        let skies = [Sky::Clear, Sky::Cloudy, Sky::Windy, Sky::Rain, Sky::Storm, Sky::Snow, Sky::Blizzard, Sky::Hail, Sky::Sleet, Sky::Fog, Sky::Dust, Sky::Hot, Sky::Cold];
+        let lights = [Light::Dawn, Light::Day, Light::Dusk, Light::Night];
+        let kind = |c: Sky| format!("{c:?}").to_lowercase();
+        let out = std::path::PathBuf::from(std::env::var("OUT").unwrap_or_else(|_| "../painter-data".into()));
+        std::fs::create_dir_all(&out).unwrap();
+
+        let horizon: Vec<Value> = TERRAINS[..24].iter().map(|t| json!({ "terrain": t, "percent": horizon_percent(t), "indoors": ambient::room_type(t) == Some("indoors"), "sky": ambient::has_sky(t) })).collect();
+        let stops: Vec<Value> = skies.iter().flat_map(|&sky| lights.iter().map(move |&light| (sky, light))).map(|(sky, light)| json!({ "sky": kind(sky), "time": format!("{light:?}").to_lowercase(), "stops": colors(sky_stops(sky, light)) })).collect();
+        let weather: Vec<Value> = skies
+            .iter()
+            .map(|&sky| {
+                let (every, marks) = weather_marks(sky);
+                json!({ "sky": kind(sky), "overcast": sky.overcast(), "every": every, "marks": marks.iter().map(|&(c, fg)| json!({ "glyph": c.to_string(), "color": color(fg) })).collect::<Vec<_>>() })
+            })
+            .collect();
+        let tone = |c: u8| -> Value {
+            // A dither shows as one of two colors by the position: look at a whole 4 by 4.
+            let all: Vec<u8> = (0..16).map(|i| dim(c, i % 4, i / 4)).collect();
+            if all.iter().all(|&v| v == all[0]) { json!({ "to": color(all[0]) }) } else { json!({ "dither": { "a": color(c), "b": color(BLACK), "of16": 8 } }) }
+        };
+        let dim_table: Vec<Value> = (0..16u8).map(|c| json!({ "from": color(c), "atNight": tone(c) })).collect();
+        let recede: Vec<Value> = (0..16u8).map(|c| json!({ "from": color(c), "to": color(back(c)) })).collect();
+        let materials: Vec<Value> = TERRAINS[14..24]
+            .iter()
+            .map(|t| match *t {
+                "cave" | "cavelakesurface" | "caveseaport" => json!({ "terrain": t, "drawnBy": "cave()" }),
+                "gap" => json!({ "terrain": t, "drawnBy": "gap()" }),
+                _ => {
+                    let m = material_of(t);
+                    json!({ "terrain": t, "wall": color(m.wall), "joint": color(m.joint), "side": color(m.side), "floor": color(m.floor), "floorJoint": color(m.floor_joint), "ceiling": color(m.ceiling), "laid": format!("{:?}", match m.laid { Laid::Bricks => "bricks", Laid::Planks => "planks", Laid::Panels => "panels", Laid::Runes => "runes" }) .trim_matches('"') })
+                }
+            })
+            .collect();
+        let mut rng = Rng::new(seed("standard", "Midgaard#3001", 0));
+        let rng_first: Vec<String> = (0..6).map(|_| rng.next().to_string()).collect();
+        let doc = json!({
+            "source": "painter.rs at this checkout (functions the painter draws with), exported by painter_tables",
+            "coffeemud": "720aec6 (2026-10-03, CoffeeMUD 5.11.0.4)", "made": "2026-10-29",
+            "vga": VGA, "vgaNames": NAMES,
+            "bayer": { "matrix": BAYER, "rule": "mix(x, y, a, b, t) = b when BAYER[y & 3][x & 3] < t (t in sixteenths), else a" },
+            "rng": { "algorithm": "xorshift64*: state = seed | 1; next(): s ^= s >> 12; s ^= s << 25; s ^= s >> 27; return s * 0x2545f4914f6cdd1d (wrapping)", "below": "(next() >> 33) as i32 % n; 0 when n <= 0", "between": "a + below(b - a + 1)", "chance": "below(100) < percent", "seed": "paint::seed (FNV-1a 64, world, 0, room, again as 4 LE bytes)", "firstSixOfStandardMidgaard3001Look0": rng_first },
+            "size": { "columns": [LEAST_COLUMNS, MOST_COLUMNS], "rows": [LEAST_ROWS, MOST_ROWS], "pixels": "two square pixels a cell (the half block: top pixel the foreground, bottom the background)" },
+            "horizon": { "rule": "horizon pixel row = h * percent / 100; air has none (100: all sky is the whole picture); a room's terrain unknown to the painter is plains at 45", "terrains": horizon },
+            "defaults": { "light": "day when unknown", "weather": "clear when unknown", "arc": "when absent: dawn 60, dusk 940, otherwise 500", "weatherOnlyWhereThereIsASky": "indoors and underwater are Clear whatever the weather" },
+            "skyStops": { "rule": "canvas.gradient(0, horizon, stops): bands from the top; solid, dithered (Bayer, t from the position within the band: t = clamp((at % 16 - 5) * 16 / 6, 0, 16), at = (y - y0) * (stops - 1) * 16 / (y1 - y0)) only where one meets the next", "stops": stops },
+            "underwaterStops": colors(&[CYAN, BLUE, BLUE, BLACK]),
+            "dim": { "rule": "a color at night (Canvas::darken): bright colors go to their dark self (c - 8), darkgray dithers with black at 8 of 16, the other dark colors dither with black at 8 of 16, black stays", "table": dim_table },
+            "recede": { "rule": "a step back (Canvas::recede, for places behind a face or item)", "table": recede },
+            "weather": { "rule": "for `every` > 0: (w * h / 2 / every).max(1) marks, each a random pixel and a random mark of the list; at night a white mark shows lightgray; snow and blizzard also whiten the land that is not lit; a thunderstorm draws a lightning bolt from the top to the horizon", "kinds": weather },
+            "materials": { "rule": "indoor rooms: back wall in bricks, planks, panels or runes; stone and the sea ports' halls take the stone row; caves and the gap have their own drawing", "indoorsDefaultIsStone": true, "rows": materials },
+        });
+        std::fs::write(out.join("painter-tables.json"), serde_json::to_string_pretty(&doc).unwrap() + "\n").unwrap();
     }
 }

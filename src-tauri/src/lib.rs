@@ -29,7 +29,7 @@ mod character;
 mod clock;
 mod combat;
 mod compose;
-mod create;
+pub mod create;
 mod daytime;
 mod disconnect;
 mod creation;
@@ -56,7 +56,7 @@ mod music;
 #[doc(hidden)]
 pub mod paint;
 mod ports;
-mod painter;
+pub mod painter;
 mod portrait;
 mod face;
 mod fight_art;

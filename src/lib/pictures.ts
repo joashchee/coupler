@@ -10,9 +10,11 @@
  */
 import { keys } from "./keys";
 import type { PictureStyle, Scene } from "./mud";
+import { engineAvailable } from "./sprites";
 import { terrainWords } from "./terrain";
 
-export type PictureEngine = "painter" | "none";
+/** `sprites` is the Painter engine (lib/sprites.ts), being tried beside Coupler's own painter. */
+export type PictureEngine = "painter" | "sprites" | "none";
 
 /** When a room's picture shows: in every room, at landmarks only, or only when asked for by key (Cmd+Shift+P). */
 export type PictureWhen = "every" | "landmarks" | "key";
@@ -34,10 +36,12 @@ export const PORTRAIT_SOURCES: { id: PortraitSource; name: string; summary: stri
   { id: "coffeemud", name: "CoffeeMUD's pictures", summary: "The game's own portraits from its web pages, made into the same blocky colors." },
 ];
 
+/** The Painter engine is offered wherever this build has its copy (lib/sprites.ts). */
 export const PICTURE_ENGINES: { id: PictureEngine; name: string; summary: string }[] = [
   { id: "painter", name: "Coupler's painter", summary: "Draws each room in characters from its terrain, the time of day and the weather. Instant, and a room looks the same each visit." },
+  { id: "sprites", name: "Painter engine (trying)", summary: "A newer painter, still being compared with Coupler's. Same rooms, drawn here in your colors, never fetched. If it can't draw a room, the picture is left out and says so." },
   { id: "none", name: "None", summary: "No pictures." },
-];
+].filter((e) => e.id !== "sprites" || engineAvailable) as { id: PictureEngine; name: string; summary: string }[];
 
 export const PICTURE_STYLES: { id: PictureStyle; name: string; summary: string }[] = [
   { id: "fantasy", name: "Fantasy", summary: "Plain medieval landscapes and halls." },

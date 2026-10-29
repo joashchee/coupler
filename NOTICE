@@ -25,6 +25,12 @@ Coupler includes:
   Abilities/**/*.java) by scripts/coffeemud-bestiary.py into
   src-tauri/src/races.tsv and abilities.tsv for the Bestiary, Copyright
   2000-2026 Bo Zimmerman (Apache License 2.0).
+- The Painter engine (`art-sprites`, src/vendor/art-sprites/), ansiapps'
+  own drawing engine, Copyright 2026 ansiapps (Apache License 2.0, with
+  its own LICENSE and NOTICE beside it), copied from the `painter`
+  repository by scripts/painter-sync.sh. It holds data taken from
+  CoffeeMUD's races and their categories, Copyright 2000-2026 Bo
+  Zimmerman (Apache License 2.0).
 - IBM VGA 8x16 from The Ultimate Oldschool PC Font Pack by VileR
   (int10h.org/oldschool-pc-fonts), CC BY-SA 4.0, included unmodified
   with its license in public/fonts/ansiapps/.

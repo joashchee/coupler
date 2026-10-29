@@ -7,7 +7,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { parseColor, readable, rgbCss, type GameColors } from "./display";
 import type { FaceMoment } from "./fight";
-import { palette } from "./palette";
+import { palette, type Palette } from "./palette";
 
 export type Color = { kind: "index"; index: number } | { kind: "rgb"; r: number; g: number; b: number };
 
@@ -1326,8 +1326,9 @@ export const pictureForgetLooks = () => invoke<void>("picture_forget_looks");
 /** Coupler's painter's picture of a room, at a size in cells (src-tauri/src/painter.rs). */
 /** A race's or a class's portrait by Coupler's painter (src-tauri/src/portrait.rs). */
 export const portraitPaint = (kind: "race" | "class", name: string, columns: number, rows: number) => invoke<AnsiArt>("portrait_paint", { kind, name, columns, rows, colors: palette() });
-export const picturePaint = (scene: Scene, style: PictureStyle, columns: number, rows: number, again = 0) =>
-  invoke<AnsiArt>("picture_paint", { scene, style, columns, rows, again, colors: palette() });
+/** In the game's colors, or `colors` (gear → Eyetest compares each depth). */
+export const picturePaint = (scene: Scene, style: PictureStyle, columns: number, rows: number, again = 0, colors: Palette = palette()) =>
+  invoke<AnsiArt>("picture_paint", { scene, style, columns, rows, again, colors });
 /** A new room, weather or time of day for the picture; null once the player's nowhere. */
 export const onPicture = (f: (scene: Scene | null) => void): Promise<UnlistenFn> => listen<Scene | null>("picture", (e) => f(e.payload));
 
