@@ -257,6 +257,10 @@
 :root[data-theme="ansiapps"] .gear-menu .menu-item:hover,
 :root[data-theme="ansiapps"] .gear-menu .menu-item:focus-within { background: var(--dos-green); }
 :root[data-theme="ansiapps"] .gear-menu .menu-item svg { color: var(--dos-black); }
+/* A branch: its heading's arrow in one cell, its items one cell in. */
+:root[data-theme="ansiapps"] .gear-menu .menu-item-head { font-weight: normal; }
+:root[data-theme="ansiapps"] .gear-menu .menu-arrow { width: 8px; color: var(--dos-black); }
+:root[data-theme="ansiapps"] .gear-menu .menu-nest-body { gap: 0; padding-left: 8px; }
 /* A rule through the middle of its own row. */
 :root[data-theme="ansiapps"] .gear-menu .menu-sep { background: var(--dos-black); height: 2px; margin: 7px 0; }
 

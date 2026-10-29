@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { ActivityStatus } from "./components/ActivityStatus";
 import { AppTesting } from "./components/AppTesting";
 import { EyetestDialog } from "./components/EyetestDialog";
+import { GearGroup } from "./components/GearGroup";
 import { Dialog } from "./components/Dialog";
 import { HeardPanel } from "./components/HeardPanel";
 import { HookPicture } from "./components/HookPicture";
@@ -601,6 +602,9 @@ function App() {
   const [startupPending, setStartupPending] = useState<StartupStep[]>([...STARTUP_STEPS]);
   const [theme, setTheme] = useState<Theme>(loadTheme);
   const [gearOpen, setGearOpen] = useState(false);
+  /** The gear menu's open branch (components/GearGroup.tsx), one at a time; kept while the menu is closed. */
+  const [gearGroup, setGearGroup] = useState<string | null>(null);
+  const toggleGearGroup = (id: string) => setGearGroup((open) => (open === id ? null : id));
   /** The phone's section (lib/phoneSections.ts), and its sheet of options pulled down. */
   const [phoneSection, setPhoneSection] = useState<PhoneSection>(storedSection);
   /** Which way the last turn went, so the new section slides in from that side. */
@@ -3049,6 +3053,7 @@ function App() {
                   <div className="menu-sep" />
                 </>
               )}
+              <GearGroup id="screen" title="Screen and Look" open={gearGroup === "screen"} onToggle={toggleGearGroup}>
               <label className="menu-item menu-item-checkbox">
                 <input
                   type="checkbox"
@@ -3093,18 +3098,6 @@ function App() {
                 <span>{keys.keys("Full screen (Ctrl+Cmd+F)")}</span>
               </label>
               )}
-              <div className="menu-sep" />
-              {/* Making a character: Coupler's guide or CoffeeMUD's own way (lib/creation.ts). */}
-              <div role="radiogroup" aria-label="Making a character" className="menu-group">
-                <label className="menu-item menu-item-checkbox">
-                  <input type="radio" name="creation-mode" data-testid="creation-mode-guide" checked={creationMode === "guide"} onChange={() => chooseCreationMode("guide")} />
-                  <span>Make characters with Coupler's guide</span>
-                </label>
-                <label className="menu-item menu-item-checkbox">
-                  <input type="radio" name="creation-mode" data-testid="creation-mode-standard" checked={creationMode === "standard"} onChange={() => chooseCreationMode("standard")} />
-                  <span>Make characters CoffeeMUD's way</span>
-                </label>
-              </div>
               {ux === "workshop" && !PHONE && (
                 <>
                   <label className="menu-item menu-item-checkbox">
@@ -3137,9 +3130,34 @@ function App() {
                   </button>
                 </>
               )}
-              {/* Coupler's cues and voice play in every way to play: their settings are in each. */}
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="display-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setDisplayOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Display…</span>
+              </button>
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="pictures-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setPicturesOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Pictures…</span>
+              </button>
+              </GearGroup>
+              <GearGroup id="sound" title="Sound and Voice" open={gearGroup === "sound"} onToggle={toggleGearGroup}>
               {!PHONE && (
-                <>
+              <>
               <button
                 type="button"
                 className="menu-item"
@@ -3167,18 +3185,6 @@ function App() {
               <button
                 type="button"
                 className="menu-item"
-                data-testid="automation-button"
-                onClick={() => {
-                  setGearOpen(false);
-                  setAutomationOpen(true);
-                }}
-              >
-                <ChecklistIcon aria-hidden="true" />
-                <span>Triggers, Gags, Aliases and Tickers…</span>
-              </button>
-              <button
-                type="button"
-                className="menu-item"
                 data-testid="priority-button"
                 onClick={() => {
                   setGearOpen(false);
@@ -3188,22 +3194,7 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>Priority Audio…</span>
               </button>
-                </>
-              )}
-              <div className="menu-sep" />
-              {!connected && (
-                <button
-                  type="button"
-                  className="menu-item"
-                  data-testid="tutorial-menu"
-                  onClick={() => {
-                    setGearOpen(false);
-                    setTutorialOpen(true);
-                  }}
-                >
-                  <ChecklistIcon aria-hidden="true" />
-                  <span>Before You Play: a Tutorial…</span>
-                </button>
+              </>
               )}
               <button
                 type="button"
@@ -3216,42 +3207,6 @@ function App() {
               >
                 <ChecklistIcon aria-hidden="true" />
                 <span>Speech…</span>
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                data-testid="display-button"
-                onClick={() => {
-                  setGearOpen(false);
-                  setDisplayOpen(true);
-                }}
-              >
-                <ChecklistIcon aria-hidden="true" />
-                <span>Display…</span>
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                data-testid="artisan-button"
-                onClick={() => {
-                  setGearOpen(false);
-                  setArtisanOpen(true);
-                }}
-              >
-                <ChecklistIcon aria-hidden="true" />
-                <span>{keys.keys("Artisan Skills and Mentor (Cmd+Shift+A)…")}</span>
-              </button>
-              <button
-                type="button"
-                className="menu-item"
-                data-testid="pictures-button"
-                onClick={() => {
-                  setGearOpen(false);
-                  setPicturesOpen(true);
-                }}
-              >
-                <ChecklistIcon aria-hidden="true" />
-                <span>Pictures…</span>
               </button>
               {/* The hooks, their sounds and music, in every way to play: the
                   ways differ only in what's on the screen, so each has these
@@ -3296,6 +3251,59 @@ function App() {
                 <span>Music Editor…</span>
               </button>
               )}
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="cast-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setCastOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Characters' Voices…</span>
+              </button>
+              </GearGroup>
+              <GearGroup id="play" title="Play" open={gearGroup === "play"} onToggle={toggleGearGroup}>
+              {/* Making a character: Coupler's guide or CoffeeMUD's own way (lib/creation.ts). */}
+              <div role="radiogroup" aria-label="Making a character" className="menu-group">
+                <label className="menu-item menu-item-checkbox">
+                  <input type="radio" name="creation-mode" data-testid="creation-mode-guide" checked={creationMode === "guide"} onChange={() => chooseCreationMode("guide")} />
+                  <span>Make characters with Coupler's guide</span>
+                </label>
+                <label className="menu-item menu-item-checkbox">
+                  <input type="radio" name="creation-mode" data-testid="creation-mode-standard" checked={creationMode === "standard"} onChange={() => chooseCreationMode("standard")} />
+                  <span>Make characters CoffeeMUD's way</span>
+                </label>
+              </div>
+              {!PHONE && (
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="automation-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setAutomationOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>Triggers, Gags, Aliases and Tickers…</span>
+              </button>
+              )}
+              <button
+                type="button"
+                className="menu-item"
+                data-testid="artisan-button"
+                onClick={() => {
+                  setGearOpen(false);
+                  setArtisanOpen(true);
+                }}
+              >
+                <ChecklistIcon aria-hidden="true" />
+                <span>{keys.keys("Artisan Skills and Mentor (Cmd+Shift+A)…")}</span>
+              </button>
+              </GearGroup>
+              <GearGroup id="records" title="Records" open={gearGroup === "records"} onToggle={toggleGearGroup}>
               <button
                 type="button"
                 className="menu-item"
@@ -3356,18 +3364,9 @@ function App() {
                 <ChecklistIcon aria-hidden="true" />
                 <span>{keys.keys("Tables… (Cmd+Shift+T)")}</span>
               </button>
-              <button
-                type="button"
-                className="menu-item"
-                data-testid="cast-button"
-                onClick={() => {
-                  setGearOpen(false);
-                  setCastOpen(true);
-                }}
-              >
-                <ChecklistIcon aria-hidden="true" />
-                <span>Characters' Voices…</span>
-              </button>
+              </GearGroup>
+              {!(WEB && PHONE) && (
+              <GearGroup id="data" title="Data and Updates" open={gearGroup === "data"} onToggle={toggleGearGroup}>
               {/* What Coupler keeps on this computer, and making room. Not on
                   the web, which keeps its few files in the browser. */}
               {!WEB && (
@@ -3389,7 +3388,6 @@ function App() {
                   the web it's a download, and a file chosen or dropped. */}
               {!PHONE && (
                 <>
-                  <div className="menu-sep" />
                   <button
                     type="button"
                     className="menu-item"
@@ -3414,7 +3412,6 @@ function App() {
                     <ChecklistIcon aria-hidden="true" />
                     <span>Restore Coupler Backup…</span>
                   </button>
-                  <div className="menu-sep" />
                 </>
               )}
               {/* A newer Coupler (lib/updates.ts): asked of GitHub only by the
@@ -3455,8 +3452,24 @@ function App() {
                       <span>{`Get Coupler ${newRelease}… (opens the browser)`}</span>
                     </button>
                   )}
-                  <div className="menu-sep" />
                 </>
+              )}
+              </GearGroup>
+              )}
+              <div className="menu-sep" />
+              {!connected && (
+                <button
+                  type="button"
+                  className="menu-item"
+                  data-testid="tutorial-menu"
+                  onClick={() => {
+                    setGearOpen(false);
+                    setTutorialOpen(true);
+                  }}
+                >
+                  <ChecklistIcon aria-hidden="true" />
+                  <span>Before You Play: a Tutorial…</span>
+                </button>
               )}
               {!PHONE && (
               <button
@@ -3493,9 +3506,9 @@ function App() {
                   </button>
                 </>
               )}
+              {import.meta.env.DEV && <div className="menu-sep" />}
               {import.meta.env.DEV && (
-                <>
-                  <div className="menu-sep" />
+              <GearGroup id="dev" title="Developer" open={gearGroup === "dev"} onToggle={toggleGearGroup}>
                   <button
                     type="button"
                     className="menu-item"
@@ -3532,7 +3545,7 @@ function App() {
                     <ChecklistIcon aria-hidden="true" />
                     <span>Copy the Layout</span>
                   </button>
-                </>
+              </GearGroup>
               )}
             </div>
           </div>

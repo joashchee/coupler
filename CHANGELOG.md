@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The gear menu branches** (2026-10-29): its twenty-odd items are under
+  five headings (Screen and Look, Sound and Voice, Play, Records, Data
+  and Updates; Developer in a dev build) that open in place, one at a
+  time, with Before You Play, Keyboard, About and Quit and the way to
+  play kept on top, so the menu rarely needs a scroll. Each heading is a
+  button saying whether it is expanded (`GearGroup.tsx`); on the phone and
+  tablet the groups a build has no items for aren't shown.
 - **Eyetest, and the Painter engine beside Coupler's painter** (2026-10-29):
   gear → **Eyetest** (dev builds only, like App Testing) draws a scene with
   Coupler's own painter (Rust) and the Painter engine (`art-sprites`

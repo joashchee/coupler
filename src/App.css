@@ -1055,3 +1055,8 @@ html[data-size="small"] .tutorial-offer { grid-template-columns: 1fr; gap: 0; }
 .eyetest-pictures { display: flex; gap: 16px; align-items: flex-start; margin: 8px 0; }
 .eyetest-pane p { margin: 0; }
 .eyetest-note input { width: 640px; }
+
+/* The gear menu's branches (components/GearGroup.tsx): a heading with an arrow, its items indented under it. */
+.gear-menu .menu-item-head { font-weight: 600; }
+.gear-menu .menu-arrow { width: 12px; flex-shrink: 0; color: var(--muted); }
+.gear-menu .menu-nest-body { display: flex; flex-direction: column; gap: 2px; padding-left: 14px; }
